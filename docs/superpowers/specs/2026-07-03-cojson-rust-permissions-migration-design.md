@@ -96,9 +96,14 @@ New `core/node.rs` in `cojson-core`:
   pending local transactions on a `queueMicrotask` that reads the registry,
   so synchronous eviction would break the final flush of a
   deleted-with-pending-tx CoValue; microtask FIFO guarantees the flush runs
-  first. Shutdown evicts synchronously after the sync-manager drain, for
-  the same reason. `nodeCore.hasCoValue(id)` therefore reads true until the
-  next microtask turn after eviction.
+  first. `nodeCore.hasCoValue(id)` therefore reads true until the next
+  microtask turn after eviction. **Node shutdown does NOT evict**: a closing
+  node must stay readable for in-flight handoff work (peer LOADs, final
+  sync) after `gracefulShutdown` resolves — eagerly emptying the registry
+  made those reads throw (found via a jazz-tools auth-flow regression). The
+  registry, and every native session map it owns, is released when the
+  `LocalNode` itself is dropped, so shutdown eviction is unnecessary for
+  memory reclamation.
 
 ### Acceptance
 
