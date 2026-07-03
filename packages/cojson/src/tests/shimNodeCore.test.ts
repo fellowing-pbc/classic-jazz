@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import { NapiCrypto } from "../crypto/NapiCrypto.js";
 import { ShimNodeCore } from "../crypto/ShimNodeCore.js";
-import type { CryptoProvider } from "../crypto/crypto.js";
+import type { CryptoProvider, SessionMapImpl } from "../crypto/crypto.js";
 import type { RawCoID } from "../ids.js";
 
 let crypto: CryptoProvider;
@@ -68,6 +68,73 @@ describe("ShimNodeCore", () => {
       id: coId,
       header: true,
       sessions: {},
+    });
+  });
+
+  describe("dispose semantics", () => {
+    function makeFakeShim() {
+      let disposed = 0;
+      let shouldThrow = false;
+      const shim = new ShimNodeCore(() => {
+        if (shouldThrow) {
+          throw new Error("factory failed");
+        }
+        return {
+          dispose: () => {
+            disposed++;
+          },
+        } as unknown as SessionMapImpl;
+      });
+      return {
+        shim,
+        getDisposedCount: () => disposed,
+        setShouldThrow: (value: boolean) => {
+          shouldThrow = value;
+        },
+      };
+    }
+
+    test("dispose-once-on-remove: removeCoValue disposes exactly once, double-remove is a no-op", () => {
+      const { shim, getDisposedCount } = makeFakeShim();
+      const { coId, headerJson } = makeHeaderAndId();
+
+      shim.createCoValue(coId, headerJson);
+      expect(getDisposedCount()).toBe(0);
+
+      shim.removeCoValue(coId);
+      expect(getDisposedCount()).toBe(1);
+
+      // Second remove must not double-dispose.
+      shim.removeCoValue(coId);
+      expect(getDisposedCount()).toBe(1);
+    });
+
+    test("dispose-of-replaced-on-recreate: recreating the same coId disposes only the replaced entry", () => {
+      const { shim, getDisposedCount } = makeFakeShim();
+      const { coId, headerJson } = makeHeaderAndId();
+
+      shim.createCoValue(coId, headerJson);
+      expect(getDisposedCount()).toBe(0);
+
+      shim.createCoValue(coId, headerJson);
+      expect(getDisposedCount()).toBe(1);
+      expect(shim.hasCoValue(coId)).toBe(true);
+    });
+
+    test("no-dispose-when-factory-throws: throwing factory leaves the existing entry undisposed", () => {
+      const { shim, getDisposedCount, setShouldThrow } = makeFakeShim();
+      const { coId, headerJson } = makeHeaderAndId();
+
+      shim.createCoValue(coId, headerJson);
+      expect(getDisposedCount()).toBe(0);
+
+      setShouldThrow(true);
+      expect(() => shim.createCoValue(coId, headerJson)).toThrow(
+        "factory failed",
+      );
+
+      expect(getDisposedCount()).toBe(0);
+      expect(shim.hasCoValue(coId)).toBe(true);
     });
   });
 });
