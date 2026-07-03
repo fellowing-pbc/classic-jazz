@@ -74,6 +74,8 @@ pub struct SessionMap {
   internal: SessionMapImpl,
 }
 
+// NOTE: a parallel copy of every method body below lives in `impl NodeCore`
+// (co_id-first). When editing a method here, update its NodeCore twin too.
 #[napi]
 impl SessionMap {
   /// Create a new SessionMap for a CoValue.
@@ -132,6 +134,7 @@ impl SessionMap {
   /// Create new private transaction (for local writes)
   /// Returns JSON: { signature: string, transaction: Transaction }
   #[napi]
+  #[allow(clippy::too_many_arguments)]
   pub fn make_new_private_transaction(
     &mut self,
     session_id: String,
@@ -430,6 +433,7 @@ impl NodeCore {
   /// Create new private transaction (for local writes)
   /// Returns JSON: { signature: string, transaction: Transaction }
   #[napi]
+  #[allow(clippy::too_many_arguments)]
   pub fn make_new_private_transaction(
     &mut self,
     co_id: String,
