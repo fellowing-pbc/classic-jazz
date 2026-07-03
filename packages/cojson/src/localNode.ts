@@ -32,7 +32,7 @@ import {
   secretSeedFromInviteSecret,
 } from "./coValues/group.js";
 import { CO_VALUE_LOADING_CONFIG } from "./config.js";
-import { AgentSecret, CryptoProvider } from "./crypto/crypto.js";
+import { AgentSecret, CryptoProvider, NodeCoreImpl } from "./crypto/crypto.js";
 import { AgentID, RawCoID, SessionID, isAgentID, isRawCoID } from "./ids.js";
 import { logger } from "./logger.js";
 import { StorageAPI } from "./storage/index.js";
@@ -63,6 +63,8 @@ const { localNode } = useJazz();
 export class LocalNode {
   /** @internal */
   crypto: CryptoProvider;
+  /** @internal */
+  readonly nodeCore: NodeCoreImpl;
   /** @internal */
   private readonly coValues = new Map<RawCoID, CoValueCore>();
 
@@ -96,6 +98,7 @@ export class LocalNode {
     this.agentSecret = agentSecret;
     this.currentSessionID = currentSessionID;
     this.crypto = crypto;
+    this.nodeCore = crypto.createNodeCore();
     if (enableFullStorageReconciliation) {
       this.syncManager.fullStorageReconciliationEnabled = true;
     }

@@ -591,6 +591,7 @@ export class CoValueCore {
       this._verified = new VerifiedState(
         this.id,
         this.node.crypto,
+        this.node.nodeCore,
         header,
         streamingKnownState,
         skipVerify,
