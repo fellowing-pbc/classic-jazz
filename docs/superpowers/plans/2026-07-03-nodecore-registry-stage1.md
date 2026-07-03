@@ -24,26 +24,39 @@
 **Files:**
 - Create: `crates/cojson-core/src/core/node.rs`
 - Modify: `crates/cojson-core/src/lib.rs` (register module)
-- Modify: `crates/cojson-core/src/core/error.rs` (new error variant)
+- Modify: `crates/cojson-core/src/core/session_map.rs` (new error variant)
+
+Error-type note: `SessionMapImpl::new_with_skip_verify` returns
+`Result<Self, SessionMapError>` (session_map.rs:339-345), and `SessionMapError`
+has `#[from] CoJsonCoreError` (session_map.rs:270) — the reverse conversion
+does NOT exist. All `NodeCore` fallible methods therefore use
+`SessionMapError`, and the new variant goes on `SessionMapError`.
 
 - [ ] **Step 1: Add the `UnknownCoValue` error variant**
 
-In `crates/cojson-core/src/core/error.rs`, add to the `CoJsonCoreError` enum (alongside the existing variants):
+In `crates/cojson-core/src/core/session_map.rs`, add to the `SessionMapError` enum (declared at line 247, alongside the existing variants):
 
 ```rust
-  #[error("Unknown CoValue: {0}")]
-  UnknownCoValue(String),
+    #[error("Unknown CoValue: {0}")]
+    UnknownCoValue(String),
 ```
 
-- [ ] **Step 2: Write failing tests for the registry**
+- [ ] **Step 2: Write failing tests for the registry (and register the module)**
 
-Create `crates/cojson-core/src/core/node.rs` containing only the test module for now (the tests reference `NodeCore`, which doesn't exist yet). Reuse the header-construction helper style from `session_map.rs`'s tests — look at how existing tests in that file build a valid `(co_id, header_json)` pair (they use fixtures / `compute_co_id_from_header`); copy the same helper into this test module:
+Immediately register the module so the red step actually compiles the file: in `crates/cojson-core/src/lib.rs`, inside `pub mod core { ... }`, add after the `session_map` lines:
+
+```rust
+    pub mod node;
+    pub use node::*;
+```
+
+Then create `crates/cojson-core/src/core/node.rs` containing only the test module for now (the tests reference `NodeCore`, which doesn't exist yet). Reuse the header-construction helper style from `session_map.rs`'s tests — look at how existing tests in that file build a valid `(co_id, header_json)` pair (they use fixtures / `compute_co_id_from_header`); copy the same helper into this test module:
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session_map::SessionMapImpl;
+    use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
     // Build a valid header + matching co_id the same way session_map.rs tests do:
     // create a SessionMapImpl via an existing test fixture header, then reuse its
@@ -87,7 +100,7 @@ mod tests {
     fn get_unknown_covalue_errors() {
         let node = NodeCore::new();
         match node.get("co_zDoesNotExist") {
-            Err(CoJsonCoreError::UnknownCoValue(id)) => assert_eq!(id, "co_zDoesNotExist"),
+            Err(SessionMapError::UnknownCoValue(id)) => assert_eq!(id, "co_zDoesNotExist"),
             other => panic!("expected UnknownCoValue, got {other:?}"),
         }
     }
@@ -126,8 +139,7 @@ Add above the test module in `crates/cojson-core/src/core/node.rs`:
 ```rust
 use std::collections::HashMap;
 
-use crate::core::error::CoJsonCoreError;
-use crate::core::session_map::SessionMapImpl;
+use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
 /// Node-level registry owning one SessionMapImpl per CoValue, keyed by CoID.
 /// One instance per LocalNode. Stage 2+ builds cross-CoValue features
@@ -152,7 +164,7 @@ impl NodeCore {
         header_json: &str,
         max_tx_size: Option<u32>,
         skip_verify: bool,
-    ) -> Result<(), CoJsonCoreError> {
+    ) -> Result<(), SessionMapError> {
         let session_map =
             SessionMapImpl::new_with_skip_verify(co_id, header_json, max_tx_size, skip_verify)?;
         self.covalues.insert(co_id.to_string(), session_map);
@@ -172,16 +184,16 @@ impl NodeCore {
         self.covalues.len()
     }
 
-    pub fn get(&self, co_id: &str) -> Result<&SessionMapImpl, CoJsonCoreError> {
+    pub fn get(&self, co_id: &str) -> Result<&SessionMapImpl, SessionMapError> {
         self.covalues
             .get(co_id)
-            .ok_or_else(|| CoJsonCoreError::UnknownCoValue(co_id.to_string()))
+            .ok_or_else(|| SessionMapError::UnknownCoValue(co_id.to_string()))
     }
 
-    pub fn get_mut(&mut self, co_id: &str) -> Result<&mut SessionMapImpl, CoJsonCoreError> {
+    pub fn get_mut(&mut self, co_id: &str) -> Result<&mut SessionMapImpl, SessionMapError> {
         self.covalues
             .get_mut(co_id)
-            .ok_or_else(|| CoJsonCoreError::UnknownCoValue(co_id.to_string()))
+            .ok_or_else(|| SessionMapError::UnknownCoValue(co_id.to_string()))
     }
 }
 
@@ -194,24 +206,15 @@ impl Default for NodeCore {
 
 Note: bindings resolve the entry via `get`/`get_mut` and call `SessionMapImpl` methods directly — `NodeCore` does not re-wrap the whole per-CoValue surface (that double delegation would be ~300 lines of noise; stage 2 adds cross-CoValue logic here instead).
 
-- [ ] **Step 5: Register the module**
-
-In `crates/cojson-core/src/lib.rs`, inside `pub mod core { ... }` add after the `session_map` lines:
-
-```rust
-    pub mod node;
-    pub use node::*;
-```
-
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `cd crates && cargo test -p cojson-core`
 Expected: all tests pass, including the 5 new `node::tests`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add crates/cojson-core/src/core/node.rs crates/cojson-core/src/core/error.rs crates/cojson-core/src/lib.rs
+git add crates/cojson-core/src/core/node.rs crates/cojson-core/src/core/session_map.rs crates/cojson-core/src/lib.rs
 git commit -m "feat(cojson-core): NodeCore registry owning SessionMapImpls by CoID"
 ```
 
@@ -367,7 +370,7 @@ git commit -m "feat(cojson-core-napi): NodeCore registry binding with lifted Ses
 
 - [ ] **Step 1: Define `NodeCoreImpl` in crypto.ts**
 
-Add after the `SessionMapImpl` interface (crypto.ts:390). It is the `SessionMapImpl` surface with `coId` as first parameter plus registry methods (`Transaction` is already imported in this file's module graph via the providers; import it here from `../coValueCore/verifiedState.js` the way NapiCrypto.ts does):
+Add after the `SessionMapImpl` interface (crypto.ts:390). It is the `SessionMapImpl` surface with `coId` as first parameter plus registry methods (`Transaction` is already imported in crypto.ts at line 13 — do NOT add a duplicate import):
 
 ```ts
 /**
@@ -1037,7 +1040,7 @@ becomes the same call with `this.node.nodeCore` inserted as the third argument (
 - [ ] **Step 4: Update direct constructions in tests**
 
 Run: `grep -rn "new VerifiedState" packages/cojson/src packages/jazz-tools/src 2>/dev/null`
-For every test hit, insert a registry as the third argument. Where the test has a `LocalNode`, use `node.nodeCore`; where it only has a crypto provider, use `crypto.createNodeCore()` (one per test is fine).
+Expected: exactly one hit — coValueCore.ts:591, already updated in Step 3. This step is a verification guard: if any other hits appear (e.g. tests added since this plan was written), insert a registry as the third argument (`node.nodeCore` where a LocalNode exists, else `crypto.createNodeCore()`).
 
 - [ ] **Step 5: Typecheck and run the full cojson suite**
 
@@ -1085,24 +1088,40 @@ describe("NodeCore eviction", () => {
     node.internalDeleteCoValue(map.id);
   });
 
-  test("internalUnmountCoValue removes the entry and reload re-registers it", async () => {
+  test("internalUnmountCoValue removes the registry entry", async () => {
+    // Unmount preconditions (no listeners, no in-memory dependants, synced):
+    // mirror the EXACT setup of the existing unmount test at
+    // src/tests/sync.concurrentLoad.test.ts:1074 (client/server pair, synced
+    // map, then client.node.internalUnmountCoValue(map.id)). Copy its helpers.
+    // ... setup copied from that test ...
+
+    const unmounted = client.node.internalUnmountCoValue(map.id);
+    expect(unmounted).toBe(true);
+    expect(client.node.nodeCore.hasCoValue(map.id)).toBe(false);
+    // The shell left in node.coValues must not resurrect a registry entry
+    client.node.getCoValue(map.id);
+    expect(client.node.nodeCore.hasCoValue(map.id)).toBe(false);
+  });
+
+  test("re-registration after unmount goes through VerifiedState creation", async () => {
+    // Same setup as above, then reload the CoValue's content from the peer
+    // the way the existing unmount test does (e.g. node.load(map.id) /
+    // loadCoValueCore — copy the reload mechanism from
+    // sync.concurrentLoad.test.ts's post-unmount assertions).
+    // After the reload completes, the header was re-provided, a new
+    // VerifiedState was constructed, and the registry entry must be back:
+    // expect(client.node.nodeCore.hasCoValue(map.id)).toBe(true);
+  });
+
+  test("gracefulShutdown evicts all registry entries", async () => {
     const { node } = setupTestNode();
     const group = node.createGroup();
-    const map = group.createMap();
-    map.set("k", "v");
-    const id = map.id;
+    group.createMap();
+    expect(node.nodeCore.coValueCount()).toBeGreaterThan(0);
 
-    // unmount preconditions: no listeners, no in-memory dependants, synced.
-    // If isSyncedToServerPeers blocks unmount in a storage-less test node,
-    // mirror how existing unmount tests satisfy it (grep tests for
-    // internalUnmountCoValue usage and copy their setup).
-    const unmounted = node.internalUnmountCoValue(id);
-    expect(unmounted).toBe(true);
-    expect(node.nodeCore.hasCoValue(id)).toBe(false);
+    await node.gracefulShutdown();
 
-    // Recreating state for the same id must work (createCoValue replaces/re-registers)
-    const reloaded = node.getCoValue(id);
-    expect(reloaded).toBeDefined();
+    expect(node.nodeCore.coValueCount()).toBe(0);
   });
 });
 ```
@@ -1133,7 +1152,18 @@ In `packages/cojson/src/localNode.ts`:
     this.nodeCore.removeCoValue(id);
 ```
 
-(No change to `gracefulShutdown`: dropping the node drops its single `nodeCore` binding object, whose native finalizer frees the whole registry at once.)
+`gracefulShutdown` (line 999) — the spec lists node shutdown as an eviction
+path; deterministic eviction also covers the wasm shim, whose per-entry
+`free()` otherwise waits for GC. Add at the start of the method:
+
+```ts
+  async gracefulShutdown(): Promise<unknown> {
+    for (const id of this.coValues.keys()) {
+      this.nodeCore.removeCoValue(id);
+    }
+    this.garbageCollector?.stop();
+    // ...existing body...
+```
 
 - [ ] **Step 4: Run the eviction test and the full suite**
 
