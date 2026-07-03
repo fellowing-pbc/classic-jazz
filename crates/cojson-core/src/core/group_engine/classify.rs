@@ -55,6 +55,11 @@ pub fn is_child_extension(key: &str) -> bool {
 /// shape; find the first of `_for_` / `_sealedFor_`, take the prefix as the
 /// candidate keyID, and check it against the member's recorded write-only
 /// key.
+///
+/// Deliberate deviation: TS falls through to comparing `key.slice(0, -1)`
+/// when neither `_for_` nor `_sealedFor_` is present; this port returns
+/// false instead — behaviorally identical for all real key shapes, do not
+/// "fix" back.
 pub fn is_own_write_key_revelation(
     key: &str,
     member_key: &str,

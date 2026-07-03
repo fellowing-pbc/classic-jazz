@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 /// A member's role in a group. Mirrors TS `Role` (permissions.ts:28-57).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Role {
     #[serde(rename = "admin")]
     Admin,
@@ -179,7 +179,7 @@ pub fn is_more_permissive_and_should_inherit(
 /// A parent-group reference role — `ParentGroupReferenceRole`, group.ts:92-98.
 /// Parsed from the `parent_<id>` change value: `"extend"` | a capped role
 /// string | `"revoked"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParentRoleMapping {
     Extend,
     Capped(Role),
@@ -391,6 +391,10 @@ mod tests {
         assert!(is_higher_role(Role::Writer, Some(Role::Reader)));
         assert!(!is_higher_role(Role::Reader, Some(Role::Writer)));
         assert!(!is_higher_role(Role::Writer, Some(Role::WriteOnly)));
+
+        // Literal, TS-derived spot check independent of `expected`: b ==
+        // manager falls through to the `false` branch (permissions.ts:171-181).
+        assert!(!is_higher_role(Role::Writer, Some(Role::Manager)));
     }
 
     // Table-driven test of is_more_permissive_and_should_inherit over every
@@ -485,6 +489,23 @@ mod tests {
         assert!(!is_more_permissive_and_should_inherit(
             Role::WriteOnly,
             None
+        ));
+
+        // Literal, TS-derived spot checks independent of `expected`, pinning
+        // group.ts:1693-1727 branch by branch.
+        assert!(is_more_permissive_and_should_inherit(
+            Role::Manager,
+            Some(Role::Writer)
+        ));
+        assert!(is_more_permissive_and_should_inherit(
+            Role::Admin,
+            Some(Role::Writer)
+        ));
+        assert!(is_more_permissive_and_should_inherit(Role::Reader, None));
+        // invite fallthrough -> false
+        assert!(!is_more_permissive_and_should_inherit(
+            Role::AdminInvite,
+            Some(Role::Reader)
         ));
     }
 
