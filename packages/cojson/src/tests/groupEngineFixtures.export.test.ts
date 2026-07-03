@@ -1,0 +1,1051 @@
+/**
+ * Group-engine fixture exporter.
+ *
+ * This vitest suite builds real cojson group/permission state through the public
+ * APIs and captures, per scenario:
+ *   - the raw wire form of every touched CoValue (header + sessions + transactions
+ *     + signerId + lastSignature) so a Rust `SessionMapImpl` can ingest them via
+ *     `addTransactions(..., skipVerify)`.
+ *   - the permission verdict (valid + reason) for every transaction of the
+ *     verdict-bearing CoValues, straight from `determineValidTransactions`.
+ *   - time-indexed role queries resolved by `roleOfInternal` / `atTime`.
+ *
+ * The fixtures are the executable spec for the Rust port of the permission system.
+ *
+ * When `EXPORT_GROUP_ENGINE_FIXTURES=1` the fixtures are written to
+ * `crates/cojson-core/data/group_engine/<scenario>.json`. Regardless of export,
+ * the suite always asserts internal consistency so it has value in CI.
+ */
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, test, vi } from "vitest";
+import { expectMap } from "../coValue.js";
+import { ControlledAgent } from "../coValues/account.js";
+import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import type { RawCoID } from "../ids.js";
+import { LocalNode } from "../localNode.js";
+import { expectGroup } from "../typeUtils/expectGroup.js";
+import {
+  createAccountInNode,
+  importContentIntoNode,
+  newGroupHighLevel,
+} from "./testUtils.js";
+
+const Crypto = await WasmCrypto.create();
+
+const EXPORT = process.env.EXPORT_GROUP_ENGINE_FIXTURES === "1";
+const OUT_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../../crates/cojson-core/data/group_engine",
+);
+
+// ---------------------------------------------------------------------------
+// Fixture types
+// ---------------------------------------------------------------------------
+
+type SessionFixture = {
+  sessionId: string;
+  signerId: string;
+  transactions: string[];
+  lastSignature: string;
+};
+
+type CoValueFixture = {
+  coId: string;
+  headerJson: string;
+  sessions: SessionFixture[];
+};
+
+type Verdict = {
+  sessionId: string;
+  txIndex: number;
+  valid: boolean;
+  reason: string | null;
+};
+
+type RoleQueryInput = {
+  groupId: RawCoID;
+  member: string;
+  atTime: number | null;
+};
+
+type RoleQueryResult = RoleQueryInput & { expectedRole: string | null };
+
+type Fixture = {
+  description: string;
+  covalues: CoValueFixture[];
+  verdicts: Record<string, Verdict[]>;
+  roleQueries: RoleQueryResult[];
+};
+
+// ---------------------------------------------------------------------------
+// Readers
+// ---------------------------------------------------------------------------
+
+function readCoValue(node: LocalNode, id: RawCoID): CoValueFixture {
+  const core = node.getCoValue(id);
+  if (!core.verified) {
+    throw new Error(`CoValue ${id} is not available`);
+  }
+  // Force parsing so verified state / session logs are fully materialised.
+  core.getValidTransactions({ ignorePrivateTransactions: false });
+
+  const nc = node.nodeCore;
+  const headerJson = nc.getHeader(id);
+
+  const sessions: SessionFixture[] = nc.getSessionIds(id).map((sessionId) => {
+    const rawTxs = nc.getSessionTransactions(id, sessionId, 0) ?? [];
+    const transactions = rawTxs.map((tx) => JSON.stringify(tx));
+    const lastSignature = nc.getLastSignature(id, sessionId);
+    // signerID is served from the in-memory session-log cache, which is
+    // populated when transactions are authored/imported in this same node.
+    const signerId = core.verified!.getSession(sessionId as any)?.signerID;
+
+    if (transactions.length === 0) {
+      throw new Error(`Session ${sessionId} of ${id} has no transactions`);
+    }
+    if (!signerId) {
+      throw new Error(`Missing signerId for ${id} / ${sessionId}`);
+    }
+    if (!lastSignature) {
+      throw new Error(`Missing lastSignature for ${id} / ${sessionId}`);
+    }
+
+    return { sessionId, signerId, transactions, lastSignature };
+  });
+
+  return { coId: id, headerJson, sessions };
+}
+
+function readVerdicts(node: LocalNode, id: RawCoID): Verdict[] {
+  const core = node.getCoValue(id);
+  core.getValidTransactions({ ignorePrivateTransactions: false });
+
+  return core.verifiedTransactions.map((t) => ({
+    sessionId: t.currentTxID.sessionID,
+    txIndex: t.currentTxID.txIndex,
+    valid: t.isValid,
+    reason: t.validationErrorMessage ?? null,
+  }));
+}
+
+function readRoleQueries(
+  node: LocalNode,
+  queries: RoleQueryInput[],
+): RoleQueryResult[] {
+  return queries.map((q) => {
+    const core = node.expectCoValueLoaded(q.groupId);
+    const g = expectGroup(core.getCurrentContent());
+    const view = q.atTime === null ? g : g.atTime(q.atTime);
+    const expectedRole = view.roleOfInternal(q.member as any) ?? null;
+    return { ...q, expectedRole };
+  });
+}
+
+function exportScenario(
+  name: string,
+  node: LocalNode,
+  opts: {
+    description: string;
+    covalueIds: RawCoID[];
+    verdictIds: RawCoID[];
+    roleQueries: RoleQueryInput[];
+  },
+): Fixture {
+  const covalues = opts.covalueIds.map((id) => readCoValue(node, id));
+
+  const verdicts: Record<string, Verdict[]> = {};
+  for (const id of opts.verdictIds) {
+    verdicts[id] = readVerdicts(node, id);
+  }
+
+  const roleQueries = readRoleQueries(node, opts.roleQueries);
+
+  const fixture: Fixture = {
+    description: opts.description,
+    covalues,
+    verdicts,
+    roleQueries,
+  };
+
+  // --- ALWAYS-ON internal consistency assertions (value in CI) ---
+  expect(covalues.length).toBeGreaterThan(0);
+  const covIds = new Set(covalues.map((c) => c.coId));
+  for (const id of opts.verdictIds) {
+    expect(verdicts[id]!.length).toBeGreaterThan(0);
+    expect(covIds.has(id)).toBe(true);
+  }
+  for (const q of roleQueries) {
+    expect(covIds.has(q.groupId)).toBe(true);
+  }
+  // every session must round-trip the pieces a Rust SessionMap needs
+  for (const c of covalues) {
+    expect(c.headerJson.length).toBeGreaterThan(0);
+    for (const s of c.sessions) {
+      expect(s.transactions.length).toBeGreaterThan(0);
+      expect(s.signerId.length).toBeGreaterThan(0);
+      expect(s.lastSignature.length).toBeGreaterThan(0);
+    }
+  }
+
+  if (EXPORT) {
+    mkdirSync(OUT_DIR, { recursive: true });
+    writeFileSync(
+      join(OUT_DIR, `${name}.json`),
+      JSON.stringify(fixture, null, 2),
+    );
+  }
+
+  return fixture;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function freshAgent() {
+  const secret = Crypto.newRandomAgentSecret();
+  const id = Crypto.getAgentID(secret);
+  return { secret, id, controlled: new ControlledAgent(secret, Crypto) };
+}
+
+function keyId() {
+  return Crypto.newRandomKeySecret().id;
+}
+
+/**
+ * Runs `fn` against the group content as authored by `account` (a different
+ * account/agent), then imports the resulting session(s) back into `node` so the
+ * master node accumulates every session of every author on one CoValue.
+ */
+async function actAs(
+  node: LocalNode,
+  coId: RawCoID,
+  account: ControlledAgent | any,
+  fn: (group: ReturnType<typeof expectGroup>) => void,
+) {
+  const core = node.getCoValue(coId);
+  const content = await core.contentInClonedNodeWithDifferentAccount(account);
+  const group = expectGroup(content);
+  fn(group);
+  importContentIntoNode(group.core, node);
+}
+
+function verdictReasons(fixture: Fixture, id: string): (string | null)[] {
+  return (fixture.verdicts[id] ?? []).map((v) => v.reason);
+}
+
+function hasInvalid(fixture: Fixture, id: string, reason: string) {
+  expect(verdictReasons(fixture, id)).toContain(reason);
+}
+
+function hasValid(fixture: Fixture, id: string) {
+  expect((fixture.verdicts[id] ?? []).some((v) => v.valid)).toBe(true);
+}
+
+// A group node whose admin is a plain agent (no admin account CoValue).
+function newLowLevelGroup() {
+  const adminSecret = Crypto.newRandomAgentSecret();
+  const sessionID = Crypto.newRandomSessionID(Crypto.getAgentID(adminSecret));
+  const node = new LocalNode(adminSecret, sessionID, Crypto);
+  const groupCore = node.createCoValue({
+    type: "comap",
+    ruleset: { type: "group", initialAdmin: node.getCurrentAgent().id },
+    meta: null,
+    ...Crypto.createdNowUnique(),
+  });
+  return { node, groupCore, adminID: node.getCurrentAgent().id };
+}
+
+// ===========================================================================
+// Scenarios
+// ===========================================================================
+
+describe("group engine fixtures", () => {
+  // 1. basic_roles ----------------------------------------------------------
+  test("basic_roles", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+
+      const reader = createAccountInNode(node);
+      const writer = createAccountInNode(node);
+      const writeOnly = createAccountInNode(node);
+      const manager = createAccountInNode(node);
+
+      vi.setSystemTime(1_700_000_010_000);
+      group.addMember(reader, "reader" as any);
+      const tReader = Date.now();
+
+      vi.setSystemTime(1_700_000_020_000);
+      group.addMember(writer, "writer" as any);
+      const tWriter = Date.now();
+
+      vi.setSystemTime(1_700_000_030_000);
+      group.addMember(writeOnly, "writeOnly" as any);
+      const tWriteOnly = Date.now();
+
+      vi.setSystemTime(1_700_000_040_000);
+      group.addMember(manager, "manager" as any);
+      const tManager = Date.now();
+
+      // role change over time: reader is promoted to writer later
+      vi.setSystemTime(1_700_000_050_000);
+      group.addMember(reader, "writer" as any);
+      const tReaderPromoted = Date.now();
+
+      const fixture = exportScenario("basic_roles", node, {
+        description:
+          "admin adds reader/writer/writeOnly/manager; a role changes over time",
+        covalueIds: [group.id, reader.id, writer.id, writeOnly.id, manager.id],
+        verdictIds: [group.id],
+        roleQueries: [
+          // between reader-add and reader-promotion → reader
+          { groupId: group.id, member: reader.id, atTime: tWriter },
+          // after promotion → writer
+          { groupId: group.id, member: reader.id, atTime: tReaderPromoted },
+          // latest → writer
+          { groupId: group.id, member: reader.id, atTime: null },
+          { groupId: group.id, member: writer.id, atTime: tWriter },
+          { groupId: group.id, member: writeOnly.id, atTime: tWriteOnly },
+          { groupId: group.id, member: manager.id, atTime: tManager },
+          // before any membership existed → undefined
+          { groupId: group.id, member: writer.id, atTime: tReader },
+        ],
+      });
+
+      hasValid(fixture, group.id);
+      // reader was reader at tWriter, writer after promotion
+      const q = fixture.roleQueries;
+      expect(q[0]!.expectedRole).toBe("reader");
+      expect(q[1]!.expectedRole).toBe("writer");
+      expect(q[2]!.expectedRole).toBe("writer");
+      expect(q[3]!.expectedRole).toBe("writer");
+      expect(q[4]!.expectedRole).toBe("writeOnly");
+      expect(q[5]!.expectedRole).toBe("manager");
+      expect(q[6]!.expectedRole).toBe(null);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 2. initial_admin_self_promotion ----------------------------------------
+  test("initial_admin_self_promotion", async () => {
+    const { node, groupCore, adminID } = newLowLevelGroup();
+    const group = expectGroup(groupCore.getCurrentContent());
+
+    // first transaction of the group is the initial-admin self-promotion
+    group.set(adminID as any, "admin", "trusting");
+
+    // a non-initialAdmin attempting the very same self-promotion → invalid
+    const other = freshAgent();
+    await actAs(node, groupCore.id, other.controlled, (g) => {
+      g.set(other.id as any, "admin", "trusting");
+    });
+
+    const fixture = exportScenario("initial_admin_self_promotion", node, {
+      description:
+        "fresh group whose first tx is the initial-admin self-promotion; a non-initialAdmin self-promotion is rejected",
+      covalueIds: [groupCore.id],
+      verdictIds: [groupCore.id],
+      roleQueries: [
+        { groupId: groupCore.id, member: adminID, atTime: null },
+        { groupId: groupCore.id, member: other.id, atTime: null },
+      ],
+    });
+
+    hasValid(fixture, groupCore.id);
+    hasInvalid(
+      fixture,
+      groupCore.id,
+      "Group transaction must be made by current admin, manager, or invite",
+    );
+    expect(fixture.roleQueries[0]!.expectedRole).toBe("admin");
+    expect(fixture.roleQueries[1]!.expectedRole).toBe(null);
+  });
+
+  // 3. self_revoke ----------------------------------------------------------
+  test("self_revoke", async () => {
+    const { node, group } = newGroupHighLevel();
+    const reader = createAccountInNode(node);
+    group.addMember(reader, "reader" as any);
+
+    // reader revokes themselves — valid even without admin role
+    await actAs(node, group.id, reader, (g) => {
+      g.set(reader.id as any, "revoked", "trusting");
+    });
+
+    const fixture = exportScenario("self_revoke", node, {
+      description:
+        "a member revokes their own access (valid without admin role)",
+      covalueIds: [group.id, reader.id],
+      verdictIds: [group.id],
+      roleQueries: [{ groupId: group.id, member: reader.id, atTime: null }],
+    });
+
+    // the self-revoke tx (authored by reader) must be valid
+    const readerVerdicts = fixture.verdicts[group.id]!.filter((v) =>
+      v.sessionId.startsWith(reader.id),
+    );
+    expect(readerVerdicts.some((v) => v.valid)).toBe(true);
+    expect(fixture.roleQueries[0]!.expectedRole).toBe(null);
+  });
+
+  // 4. all_invites ----------------------------------------------------------
+  test("all_invites", async () => {
+    const { node, group } = newGroupHighLevel();
+
+    const cases: {
+      kind: string;
+      correct: string;
+      wrong: string;
+      wrongReason: string;
+    }[] = [
+      {
+        kind: "adminInvite",
+        correct: "admin",
+        wrong: "manager",
+        wrongReason: "AdminInvites can only create admins.",
+      },
+      {
+        kind: "managerInvite",
+        correct: "manager",
+        wrong: "writer",
+        wrongReason: "managerInvite can only create managers.",
+      },
+      {
+        kind: "writerInvite",
+        correct: "writer",
+        wrong: "reader",
+        wrongReason: "WriterInvites can only create writers.",
+      },
+      {
+        kind: "readerInvite",
+        correct: "reader",
+        wrong: "writer",
+        wrongReason: "ReaderInvites can only create reader.",
+      },
+      {
+        kind: "writeOnlyInvite",
+        correct: "writeOnly",
+        wrong: "reader",
+        wrongReason: "WriteOnlyInvites can only create writeOnly.",
+      },
+    ];
+
+    for (const c of cases) {
+      const invite = freshAgent();
+      group.set(invite.id as any, c.kind, "trusting");
+
+      const correctTarget = freshAgent();
+      const wrongTarget = freshAgent();
+
+      await actAs(node, group.id, invite.controlled, (g) => {
+        g.set(correctTarget.id as any, c.correct, "trusting"); // valid
+        g.set(wrongTarget.id as any, c.wrong, "trusting"); // invalid
+      });
+    }
+
+    const fixture = exportScenario("all_invites", node, {
+      description:
+        "each invite kind accepts exactly its role (valid) and rejects any other role (invalid, with exact reason)",
+      covalueIds: [group.id],
+      verdictIds: [group.id],
+      roleQueries: [],
+    });
+
+    for (const c of cases) {
+      hasInvalid(fixture, group.id, c.wrongReason);
+    }
+    hasValid(fixture, group.id);
+  });
+
+  // 5. admin_demotion_rules -------------------------------------------------
+  test("admin_demotion_rules", async () => {
+    const { node, group, admin } = newGroupHighLevel();
+    const otherAdmin = createAccountInNode(node);
+    const writer = createAccountInNode(node);
+
+    group.addMember(otherAdmin, "admin" as any);
+    group.addMember(writer, "writer" as any);
+
+    // admin demotes another admin → invalid
+    group.set(otherAdmin.id as any, "writer", "trusting");
+    // admin demotes a writer → valid
+    group.set(writer.id as any, "reader", "trusting");
+    // admin demotes self → valid (must be last, self loses admin afterwards)
+    group.set(admin.id as any, "writer", "trusting");
+
+    const fixture = exportScenario("admin_demotion_rules", node, {
+      description:
+        "admin cannot demote another admin, but can demote a writer and demote self",
+      covalueIds: [group.id, otherAdmin.id, writer.id],
+      verdictIds: [group.id],
+      roleQueries: [
+        { groupId: group.id, member: otherAdmin.id, atTime: null },
+        { groupId: group.id, member: writer.id, atTime: null },
+      ],
+    });
+
+    hasInvalid(fixture, group.id, "Admins can't demote admins.");
+    // other admin stays admin (demotion rejected), writer became reader
+    expect(fixture.roleQueries[0]!.expectedRole).toBe("admin");
+    expect(fixture.roleQueries[1]!.expectedRole).toBe("reader");
+  });
+
+  // 6. manager_rules --------------------------------------------------------
+  test("manager_rules", async () => {
+    const { node, group } = newGroupHighLevel();
+    const manager = createAccountInNode(node);
+    const otherAdmin = createAccountInNode(node);
+    group.addMember(manager, "manager" as any);
+    group.addMember(otherAdmin, "admin" as any);
+
+    const promoteTarget = freshAgent();
+    const adminInviteTarget = freshAgent();
+    const managerInviteTarget = freshAgent();
+    const writerTarget = freshAgent();
+
+    await actAs(node, group.id, manager, (g) => {
+      g.set(otherAdmin.id as any, "writer", "trusting"); // demote admin → invalid
+      g.set(promoteTarget.id as any, "admin", "trusting"); // promote to admin → invalid
+      g.set(adminInviteTarget.id as any, "adminInvite", "trusting"); // invite admin → invalid
+      g.set(managerInviteTarget.id as any, "managerInvite", "trusting"); // invite manager → invalid
+      g.set(writerTarget.id as any, "writer", "trusting"); // add writer → valid
+    });
+
+    const fixture = exportScenario("manager_rules", node, {
+      description:
+        "manager cannot demote admins, promote to admin, or invite admins/managers, but can add a writer",
+      covalueIds: [group.id, manager.id, otherAdmin.id],
+      verdictIds: [group.id],
+      roleQueries: [
+        { groupId: group.id, member: writerTarget.id, atTime: null },
+      ],
+    });
+
+    hasInvalid(fixture, group.id, "Managers can't demote admins.");
+    hasInvalid(fixture, group.id, "Managers can't promote to admin.");
+    hasInvalid(fixture, group.id, "Managers can't invite admins.");
+    hasInvalid(fixture, group.id, "Managers can't invite managers.");
+    expect(fixture.roleQueries[0]!.expectedRole).toBe("writer");
+  });
+
+  // 7. write_only_keys ------------------------------------------------------
+  test("write_only_keys", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+
+      const writeOnly = freshAgent();
+      const invite = freshAgent();
+
+      const k1 = keyId();
+      const k2 = keyId();
+      const k3 = keyId();
+
+      // give the members roles
+      vi.setSystemTime(1_700_000_001_000);
+      group.set(writeOnly.id as any, "writeOnly", "trusting");
+      vi.setSystemTime(1_700_000_002_000);
+      group.set(invite.id as any, "writeOnlyInvite", "trusting");
+
+      // (a) writeOnly member sets their OWN write key first → valid
+      vi.setSystemTime(1_700_000_003_000);
+      await actAs(node, group.id, writeOnly.controlled, (g) => {
+        g.set(`writeKeyFor_${writeOnly.id}` as any, k1, "trusting");
+      });
+
+      // (b) a writeOnlyInvite tries to override the existing write key → invalid
+      vi.setSystemTime(1_700_000_004_000);
+      await actAs(node, group.id, invite.controlled, (g) => {
+        g.set(`writeKeyFor_${writeOnly.id}` as any, k2, "trusting");
+      });
+
+      // (c) an admin overrides the existing write key → valid
+      vi.setSystemTime(1_700_000_005_000);
+      group.set(`writeKeyFor_${writeOnly.id}` as any, k3, "trusting");
+
+      // (d) writeOnly member reveals their own write key secret → valid
+      vi.setSystemTime(1_700_000_006_000);
+      await actAs(node, group.id, writeOnly.controlled, (g) => {
+        g.set(
+          `${k3}_for_${writeOnly.id}` as any,
+          "revelation_dummy",
+          "trusting",
+        );
+      });
+
+      const fixture = exportScenario("write_only_keys", node, {
+        description:
+          "writeOnly member sets own write key (valid); invite override (invalid); admin override (valid); own write-key revelation (valid)",
+        covalueIds: [group.id],
+        verdictIds: [group.id],
+        roleQueries: [
+          { groupId: group.id, member: writeOnly.id, atTime: null },
+        ],
+      });
+
+      hasInvalid(
+        fixture,
+        group.id,
+        "Write key already exists and can't be overridden by invite",
+      );
+      hasValid(fixture, group.id);
+      expect(fixture.roleQueries[0]!.expectedRole).toBe("writeOnly");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 8. key_revelations ------------------------------------------------------
+  test("key_revelations", async () => {
+    const { node, group } = newGroupHighLevel();
+    const writer = createAccountInNode(node);
+    group.addMember(writer, "writer" as any);
+
+    const targetAcct = createAccountInNode(node);
+    const rk = keyId();
+
+    // admin can set the group-level key fields
+    group.set("readKey", rk, "trusting");
+    group.set("groupSealer", "sealer_zDUMMYGROUPSEALER", "trusting");
+    group.set("profile", "co_zDUMMYPROFILE", "trusting");
+    group.set("root", "co_zDUMMYROOT", "trusting");
+    // admin can reveal a key_for field
+    group.set(
+      `${rk}_for_${targetAcct.id}` as any,
+      "revelation_admin",
+      "trusting",
+    );
+
+    // writer cannot set any of the admin-only key fields
+    await actAs(node, group.id, writer, (g) => {
+      g.set("readKey", keyId(), "trusting");
+      g.set("groupSealer", "sealer_zDUMMY2", "trusting");
+      g.set("profile", "co_zDUMMY2", "trusting");
+      g.set("root", "co_zDUMMY2", "trusting");
+    });
+
+    // each invite kind can reveal key_for fields
+    for (const kind of [
+      "adminInvite",
+      "managerInvite",
+      "writerInvite",
+      "readerInvite",
+      "writeOnlyInvite",
+    ]) {
+      const invite = freshAgent();
+      group.set(invite.id as any, kind, "trusting");
+      const revealTarget = freshAgent();
+      await actAs(node, group.id, invite.controlled, (g) => {
+        g.set(
+          `${rk}_for_${revealTarget.id}` as any,
+          `revelation_${kind}`,
+          "trusting",
+        );
+      });
+    }
+
+    const fixture = exportScenario("key_revelations", node, {
+      description:
+        "readKey/groupSealer/profile/root and key_for reveals: admin & invites allowed, writer rejected",
+      covalueIds: [group.id, writer.id, targetAcct.id],
+      verdictIds: [group.id],
+      roleQueries: [],
+    });
+
+    hasInvalid(fixture, group.id, "Only admins can set readKeys");
+    hasInvalid(fixture, group.id, "Only admins can set groupSealer");
+    hasInvalid(fixture, group.id, "Only admins can set profile");
+    hasInvalid(fixture, group.id, "Only admins can set root");
+    hasValid(fixture, group.id);
+  });
+
+  // 9. everyone_roles -------------------------------------------------------
+  test("everyone_roles", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+      const plainMember = createAccountInNode(node);
+
+      vi.setSystemTime(1_700_000_001_000);
+      group.set("everyone", "reader", "trusting");
+      const tReader = Date.now();
+
+      vi.setSystemTime(1_700_000_002_000);
+      group.set("everyone", "writer", "trusting");
+      const tWriter = Date.now();
+
+      vi.setSystemTime(1_700_000_003_000);
+      group.set("everyone", "writeOnly", "trusting");
+
+      vi.setSystemTime(1_700_000_004_000);
+      group.set("everyone", "revoked", "trusting");
+      const tRevoked = Date.now();
+
+      // invalid: everyone can't be admin
+      vi.setSystemTime(1_700_000_005_000);
+      group.set("everyone", "admin", "trusting");
+
+      const fixture = exportScenario("everyone_roles", node, {
+        description:
+          "everyone set to reader/writer/writeOnly/revoked (valid) and admin (invalid); everyone fallback for non-members",
+        covalueIds: [group.id, plainMember.id],
+        verdictIds: [group.id],
+        roleQueries: [
+          // plainMember has no direct role → falls back to everyone at that time
+          { groupId: group.id, member: plainMember.id, atTime: tReader },
+          { groupId: group.id, member: plainMember.id, atTime: tWriter },
+          // after everyone is revoked → no fallback → undefined
+          { groupId: group.id, member: plainMember.id, atTime: tRevoked },
+          // querying "everyone" itself never uses the fallback branch
+          { groupId: group.id, member: "everyone", atTime: tWriter },
+          { groupId: group.id, member: "everyone", atTime: tRevoked },
+        ],
+      });
+
+      hasInvalid(
+        fixture,
+        group.id,
+        "Everyone can only be set to reader, writer, writeOnly or revoked",
+      );
+      const q = fixture.roleQueries;
+      expect(q[0]!.expectedRole).toBe("reader");
+      expect(q[1]!.expectedRole).toBe("writer");
+      expect(q[2]!.expectedRole).toBe(null);
+      expect(q[3]!.expectedRole).toBe("writer");
+      // "everyone" direct role at revoked time → revoked collapses to null via get? pinned below
+      // (recorded as whatever roleOfInternal("everyone") returns)
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 10. parent_extend -------------------------------------------------------
+  test("parent_extend", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node } = newGroupHighLevel();
+      const parent = node.createGroup();
+      const child = node.createGroup();
+
+      vi.setSystemTime(1_700_000_001_000);
+      child.extend(parent);
+      const tExtended = Date.now();
+
+      const member = createAccountInNode(node);
+      vi.setSystemTime(1_700_000_002_000);
+      parent.addMember(member, "writer" as any);
+      const tMemberAdded = Date.now();
+
+      const fixture = exportScenario("parent_extend", node, {
+        description:
+          "child group extends a parent; a parent member inherits their role in the child",
+        covalueIds: [child.id, parent.id, member.id],
+        verdictIds: [child.id, parent.id],
+        roleQueries: [
+          // before member was added to parent → no inherited role
+          { groupId: child.id, member: member.id, atTime: tExtended },
+          // after member added → inherits writer through the parent
+          { groupId: child.id, member: member.id, atTime: tMemberAdded },
+          { groupId: child.id, member: member.id, atTime: null },
+          { groupId: parent.id, member: member.id, atTime: null },
+        ],
+      });
+
+      const q = fixture.roleQueries;
+      expect(q[0]!.expectedRole).toBe(null);
+      expect(q[1]!.expectedRole).toBe("writer");
+      expect(q[2]!.expectedRole).toBe("writer");
+      expect(q[3]!.expectedRole).toBe("writer");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11. parent_capped -------------------------------------------------------
+  test("parent_capped", async () => {
+    const { node } = newGroupHighLevel();
+    const parent = node.createGroup();
+    const child = node.createGroup();
+
+    const member = createAccountInNode(node);
+    parent.addMember(member, "admin" as any);
+
+    // cap the inherited role to writer
+    child.extend(parent, "writer");
+
+    const fixture = exportScenario("parent_capped", node, {
+      description:
+        "parent extension caps the inherited role: a parent admin is capped to writer in the child",
+      covalueIds: [child.id, parent.id, member.id],
+      verdictIds: [child.id, parent.id],
+      roleQueries: [
+        { groupId: parent.id, member: member.id, atTime: null },
+        { groupId: child.id, member: member.id, atTime: null },
+      ],
+    });
+
+    expect(fixture.roleQueries[0]!.expectedRole).toBe("admin");
+    expect(fixture.roleQueries[1]!.expectedRole).toBe("writer");
+  });
+
+  // 12. parent_revoked_inheritance -----------------------------------------
+  test("parent_revoked_inheritance", async () => {
+    const { node } = newGroupHighLevel();
+    const parent = node.createGroup();
+    const child = node.createGroup();
+
+    child.extend(parent);
+
+    const member = createAccountInNode(node);
+    // member is reader in the child, revoked in the parent
+    child.addMember(member, "reader" as any);
+    parent.addMember(member, "reader" as any);
+    await parent.removeMember(member); // sets revoked in parent
+
+    const fixture = exportScenario("parent_revoked_inheritance", node, {
+      description:
+        "member is reader in child and revoked in parent (extend mapping); pins the read-side override behaviour",
+      covalueIds: [child.id, parent.id, member.id],
+      verdictIds: [child.id, parent.id],
+      roleQueries: [
+        { groupId: parent.id, member: member.id, atTime: null },
+        { groupId: child.id, member: member.id, atTime: null },
+      ],
+    });
+
+    // pin whatever TS resolves (do not presume) — just assert it is recorded
+    expect(fixture.roleQueries.length).toBe(2);
+  });
+
+  // 13. deep_parent_chain ---------------------------------------------------
+  test("deep_parent_chain", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node } = newGroupHighLevel();
+      const grandparent = node.createGroup();
+      const parent = node.createGroup();
+      const child = node.createGroup();
+
+      vi.setSystemTime(1_700_000_001_000);
+      parent.extend(grandparent);
+      child.extend(parent);
+
+      const member = createAccountInNode(node);
+      vi.setSystemTime(1_700_000_002_000);
+      grandparent.addMember(member, "writer" as any);
+      const tAdded = Date.now();
+
+      // mid-chain revocation: revoke the member in the parent
+      vi.setSystemTime(1_700_000_003_000);
+      parent.addMember(member, "reader" as any);
+      vi.setSystemTime(1_700_000_004_000);
+      await parent.removeMember(member);
+      const tRevoked = Date.now();
+
+      const fixture = exportScenario("deep_parent_chain", node, {
+        description:
+          "3-level chain (grandparent -> parent -> child) with a mid-chain revocation and time-based queries",
+        covalueIds: [child.id, parent.id, grandparent.id, member.id],
+        verdictIds: [child.id, parent.id, grandparent.id],
+        roleQueries: [
+          { groupId: child.id, member: member.id, atTime: tAdded },
+          { groupId: child.id, member: member.id, atTime: tRevoked },
+          { groupId: child.id, member: member.id, atTime: null },
+          { groupId: grandparent.id, member: member.id, atTime: null },
+        ],
+      });
+
+      // pins whatever TS resolves at each point in time
+      expect(fixture.roleQueries.length).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 14. self_extension_cycle ------------------------------------------------
+  test("self_extension_cycle", () => {
+    const { node, group } = newGroupHighLevel();
+
+    // raw self-extension (the high-level extend() short-circuits self-extension)
+    group.set(`parent_${group.id}` as any, "extend", "trusting");
+
+    const fixture = exportScenario("self_extension_cycle", node, {
+      description: "a group cannot extend itself (circular dependency)",
+      covalueIds: [group.id],
+      verdictIds: [group.id],
+      roleQueries: [],
+    });
+
+    hasInvalid(fixture, group.id, "Parent group is a circular dependency");
+  });
+
+  // 15. account_agent_resolution -------------------------------------------
+  test("account_agent_resolution", async () => {
+    const { node, accountID } = await LocalNode.withNewlyCreatedAccount({
+      peers: [],
+      crypto: Crypto,
+      creationProps: { name: "Resolver" },
+    });
+
+    // a CoValue owned directly by the account; its transaction author is the
+    // account id, so validation runs agentInAccountOrMemberInGroup.
+    const owned = node.createCoValue({
+      type: "comap",
+      ruleset: { type: "ownedByGroup", group: accountID! },
+      meta: null,
+      ...Crypto.createdNowUnique(),
+    });
+    const ownedMap = expectMap(owned.getCurrentContent());
+    ownedMap.set("foo", "bar", "trusting");
+
+    const fixture = exportScenario("account_agent_resolution", node, {
+      description:
+        "a CoValue owned by an account: the account-id transactor is resolved to its agent; account self-role is admin",
+      covalueIds: [owned.id, accountID!],
+      verdictIds: [owned.id, accountID!],
+      roleQueries: [{ groupId: accountID!, member: accountID!, atTime: null }],
+    });
+
+    expect(fixture.roleQueries[0]!.expectedRole).toBe("admin");
+    hasValid(fixture, owned.id);
+    await node.gracefulShutdown();
+  });
+
+  // 16. malformed_changes ---------------------------------------------------
+  test("malformed_changes", () => {
+    const { node, group } = newGroupHighLevel();
+    const target = freshAgent();
+
+    // two changes in one transaction
+    group.core.makeTransaction(
+      [
+        { op: "set", key: target.id, value: "reader" },
+        { op: "set", key: freshAgent().id, value: "reader" },
+      ],
+      "trusting",
+    );
+    // an op that isn't "set"
+    group.core.makeTransaction([{ op: "del", key: target.id }], "trusting");
+    // an invalid role value
+    group.core.makeTransaction(
+      [{ op: "set", key: target.id, value: "superadmin" }],
+      "trusting",
+    );
+    // everyone with an invalid role
+    group.core.makeTransaction(
+      [{ op: "set", key: "everyone", value: "admin" }],
+      "trusting",
+    );
+
+    const fixture = exportScenario("malformed_changes", node, {
+      description:
+        "malformed group transactions: multiple changes, non-set op, invalid role value, everyone with invalid role",
+      covalueIds: [group.id],
+      verdictIds: [group.id],
+      roleQueries: [],
+    });
+
+    hasInvalid(
+      fixture,
+      group.id,
+      "Group transaction must have exactly one change",
+    );
+    hasInvalid(
+      fixture,
+      group.id,
+      "Group transaction must set a role or readKey",
+    );
+    hasInvalid(fixture, group.id, "Group transaction must set a valid role");
+    hasInvalid(
+      fixture,
+      group.id,
+      "Everyone can only be set to reader, writer, writeOnly or revoked",
+    );
+  });
+
+  // 17. cross_session_ties --------------------------------------------------
+  test("cross_session_ties", async () => {
+    vi.useFakeTimers();
+    try {
+      // freeze time so every transaction shares the same madeAt
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+
+      const adminA = createAccountInNode(node);
+      const adminB = createAccountInNode(node);
+      group.addMember(adminA, "admin" as any);
+      group.addMember(adminB, "admin" as any);
+
+      const target = freshAgent();
+
+      // two different admins assign conflicting roles at the SAME madeAt
+      await actAs(node, group.id, adminA, (g) => {
+        g.set(target.id as any, "writer", "trusting");
+      });
+      await actAs(node, group.id, adminB, (g) => {
+        g.set(target.id as any, "reader", "trusting");
+      });
+
+      const fixture = exportScenario("cross_session_ties", node, {
+        description:
+          "two sessions of different admins assign conflicting roles with equal madeAt; pins the stable-order outcome",
+        covalueIds: [group.id, adminA.id, adminB.id],
+        verdictIds: [group.id],
+        roleQueries: [{ groupId: group.id, member: target.id, atTime: null }],
+      });
+
+      // both conflicting sets are individually valid; the resolved role is pinned
+      hasValid(fixture, group.id);
+      expect(["writer", "reader"]).toContain(
+        fixture.roleQueries[0]!.expectedRole,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 18. private_tx_in_group -------------------------------------------------
+  test("private_tx_in_group", async () => {
+    const { node, accountID } = await LocalNode.withNewlyCreatedAccount({
+      peers: [],
+      crypto: Crypto,
+      creationProps: { name: "Priv" },
+    });
+
+    const group = node.createGroup();
+    const target = freshAgent();
+
+    // a private transaction on a group → always invalid
+    group.core.makeTransaction(
+      [{ op: "set", key: target.id, value: "reader" }],
+      "private",
+    );
+
+    // a private transaction on the account CoValue → takes the non-group branch
+    const accountCore = node.getCoValue(accountID!);
+    accountCore.makeTransaction(
+      [{ op: "set", key: "profile", value: "co_zDUMMYPROFILE" }],
+      "private",
+    );
+
+    const fixture = exportScenario("private_tx_in_group", node, {
+      description:
+        "a private transaction on a group is rejected; on an account it takes the account/private branch (pinned)",
+      covalueIds: [group.id, accountID!],
+      verdictIds: [group.id, accountID!],
+      roleQueries: [],
+    });
+
+    hasInvalid(fixture, group.id, "Can't make private transactions in groups");
+    await node.gracefulShutdown();
+  });
+});
