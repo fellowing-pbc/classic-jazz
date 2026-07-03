@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import { NapiCrypto } from "../crypto/NapiCrypto.js";
 import { ShimNodeCore } from "../crypto/ShimNodeCore.js";
-import type { CryptoProvider, SessionMapImpl } from "../crypto/crypto.js";
+import type {
+  CryptoProvider,
+  NodeCoreImpl,
+  SessionMapImpl,
+} from "../crypto/crypto.js";
 import type { RawCoID } from "../ids.js";
 
 let crypto: CryptoProvider;
@@ -30,47 +34,62 @@ function makeHeaderAndId() {
   return { coId, headerJson: JSON.stringify(header) };
 }
 
-describe("ShimNodeCore", () => {
-  test("createCoValue / hasCoValue / removeCoValue roundtrip", () => {
-    const shim = makeShim();
-    const { coId, headerJson } = makeHeaderAndId();
+function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
+  describe(name, () => {
+    test("createCoValue / hasCoValue / removeCoValue roundtrip", () => {
+      const shim = makeNodeCore();
+      const { coId, headerJson } = makeHeaderAndId();
 
-    expect(shim.hasCoValue(coId)).toBe(false);
-    expect(shim.coValueCount()).toBe(0);
+      expect(shim.hasCoValue(coId)).toBe(false);
+      expect(shim.coValueCount()).toBe(0);
 
-    shim.createCoValue(coId, headerJson);
-    expect(shim.hasCoValue(coId)).toBe(true);
-    expect(shim.coValueCount()).toBe(1);
-    expect(JSON.parse(shim.getHeader(coId))).toMatchObject({ type: "comap" });
+      shim.createCoValue(coId, headerJson);
+      expect(shim.hasCoValue(coId)).toBe(true);
+      expect(shim.coValueCount()).toBe(1);
+      expect(JSON.parse(shim.getHeader(coId))).toMatchObject({
+        type: "comap",
+      });
 
-    shim.removeCoValue(coId);
-    expect(shim.hasCoValue(coId)).toBe(false);
-    expect(shim.coValueCount()).toBe(0);
-    // double remove is a no-op
-    shim.removeCoValue(coId);
-  });
+      shim.removeCoValue(coId);
+      expect(shim.hasCoValue(coId)).toBe(false);
+      expect(shim.coValueCount()).toBe(0);
+      // double remove is a no-op
+      shim.removeCoValue(coId);
+    });
 
-  test("unknown coId throws with Unknown CoValue message", () => {
-    const shim = makeShim();
-    expect(() => shim.getHeader("co_zNope")).toThrow(
-      /Unknown CoValue: co_zNope/,
-    );
-    expect(() => shim.getSessionIds("co_zNope")).toThrow(/Unknown CoValue/);
-  });
+    test("unknown coId throws with Unknown CoValue message", () => {
+      const shim = makeNodeCore();
+      expect(() => shim.getHeader("co_zNope")).toThrow(
+        /Unknown CoValue: co_zNope/,
+      );
+      expect(() => shim.getSessionIds("co_zNope")).toThrow(/Unknown CoValue/);
+    });
 
-  test("delegates session queries to the underlying session map", () => {
-    const shim = makeShim();
-    const { coId, headerJson } = makeHeaderAndId();
-    shim.createCoValue(coId, headerJson);
-    expect(shim.getSessionIds(coId)).toEqual([]);
-    expect(shim.getTransactionCount(coId, "co_zAnybody_session_z123")).toBe(-1);
-    expect(shim.getKnownState(coId)).toMatchObject({
-      id: coId,
-      header: true,
-      sessions: {},
+    test("delegates session queries to the underlying session map", () => {
+      const shim = makeNodeCore();
+      const { coId, headerJson } = makeHeaderAndId();
+      shim.createCoValue(coId, headerJson);
+      expect(shim.getSessionIds(coId)).toEqual([]);
+      expect(shim.getTransactionCount(coId, "co_zAnybody_session_z123")).toBe(
+        -1,
+      );
+      expect(shim.getKnownState(coId)).toMatchObject({
+        id: coId,
+        header: true,
+        sessions: {},
+      });
     });
   });
+}
 
+nodeCoreSuite("ShimNodeCore", () => makeShim());
+nodeCoreSuite("NapiNodeCore (native)", () => crypto.createNodeCore());
+
+test("NapiCrypto.createNodeCore returns the native adapter", () => {
+  expect(crypto.createNodeCore().constructor.name).toBe("NapiNodeCoreAdapter");
+});
+
+describe("ShimNodeCore", () => {
   describe("dispose semantics", () => {
     function makeFakeShim() {
       let disposed = 0;
