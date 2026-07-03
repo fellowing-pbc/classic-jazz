@@ -263,6 +263,9 @@ pub enum SessionMapError {
     #[error("Cannot add to deleted CoValue: {0}")]
     DeletedCoValue(String),
 
+    #[error("Unknown CoValue: {0}")]
+    UnknownCoValue(String),
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 

@@ -11,6 +11,8 @@ pub mod core {
     pub use nonce::*;
     pub use session_log::*;
     pub use session_map::*;
+    pub mod node;
+    pub use node::*;
     pub mod cache;
     pub use cache::*;
     pub mod error;
