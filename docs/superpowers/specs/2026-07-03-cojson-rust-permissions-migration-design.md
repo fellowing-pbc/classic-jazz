@@ -91,6 +91,14 @@ New `core/node.rs` in `cojson-core`:
   path, `LocalNode` CoValue unmount/teardown, and node shutdown. The wasm
   shim's `Map` entry `free()`s the wrapped object on eviction.
   `removeCoValue` on an absent coId is a no-op (double-eviction safe).
+  As implemented, delete/unmount eviction is **deferred one microtask**
+  (with a skip-if-reloaded guard): `LocalTransactionsSyncQueue` flushes
+  pending local transactions on a `queueMicrotask` that reads the registry,
+  so synchronous eviction would break the final flush of a
+  deleted-with-pending-tx CoValue; microtask FIFO guarantees the flush runs
+  first. Shutdown evicts synchronously after the sync-manager drain, for
+  the same reason. `nodeCore.hasCoValue(id)` therefore reads true until the
+  next microtask turn after eviction.
 
 ### Acceptance
 
