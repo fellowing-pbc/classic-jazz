@@ -201,6 +201,7 @@ export class LocalNode {
    */
   internalDeleteCoValue(id: RawCoID) {
     this.coValues.delete(id);
+    this.scheduleNodeCoreEviction(id);
     this.storage?.onCoValueUnmounted(id);
   }
 
@@ -245,11 +246,39 @@ export class LocalNode {
 
     // Single map update (replacing old with shell)
     this.coValues.set(id, shell);
+    this.scheduleNodeCoreEviction(id);
 
     // Notify storage
     this.storage?.onCoValueUnmounted(id);
 
     return true;
+  }
+
+  /**
+   * Drop the NodeCore registry entry for a CoValue that has just been deleted
+   * or unmounted.
+   *
+   * The removal is deferred to the next microtask so that any already-queued
+   * {@link LocalTransactionsSyncQueue} batch — which reads the registry to
+   * persist and sync local transactions — flushes first (microtasks run in
+   * FIFO order). This matters when a CoValue is garbage-collected (or
+   * force-deleted) before its last local transaction has been synced: the
+   * batch must still be able to read the entry. The guard skips removal when
+   * the CoValue has been (re)loaded in the meantime, so a freshly registered
+   * entry is never dropped.
+   *
+   * {@link gracefulShutdown} evicts synchronously instead, because it drains
+   * in-flight work via `await` before evicting.
+   *
+   * @internal
+   */
+  private scheduleNodeCoreEviction(id: RawCoID) {
+    queueMicrotask(() => {
+      const current = this.coValues.get(id);
+      if (!current || !current.isAvailable()) {
+        this.nodeCore.removeCoValue(id);
+      }
+    });
   }
 
   getCurrentAccountOrAgentID(): RawAccountID | AgentID {
@@ -1002,6 +1031,12 @@ export class LocalNode {
   async gracefulShutdown(): Promise<unknown> {
     this.garbageCollector?.stop();
     await this.syncManager.gracefulShutdown();
+    // Drain in-flight work (e.g. the LocalTransactionsSyncQueue microtask)
+    // before dropping the NodeCore registry entries: those reads target the
+    // registry and would throw once it is empty.
+    for (const id of this.coValues.keys()) {
+      this.nodeCore.removeCoValue(id);
+    }
     return this.storage?.close();
   }
 }
