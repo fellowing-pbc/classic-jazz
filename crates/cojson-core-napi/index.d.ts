@@ -7,6 +7,64 @@ export declare class Blake3Hasher {
   clone(): Blake3Hasher
 }
 
+export declare class NodeCore {
+  /** Create a new empty NodeCore registry (one LocalNode owns one instance). */
+  constructor()
+  /**
+   * Creates or replaces; replacing drops the previous session state.
+   * Mirrors TS semantics where constructing a new VerifiedState for an
+   * already-known id creates a fresh SessionMap.
+   */
+  createCoValue(coId: string, headerJson: string, maxTxSize?: number | undefined | null, skipVerify?: boolean | undefined | null): void
+  hasCoValue(coId: string): boolean
+  removeCoValue(coId: string): boolean
+  coValueCount(): number
+  /** Get the header as JSON */
+  getHeader(coId: string): string
+  /** Add transactions to a session */
+  addTransactions(coId: string, sessionId: string, signerId: string | undefined | null, transactionsJson: string, signature: string, skipVerify: boolean): void
+  /**
+   * Create new private transaction (for local writes)
+   * Returns JSON: { signature: string, transaction: Transaction }
+   */
+  makeNewPrivateTransaction(coId: string, sessionId: string, signerSecret: string, changesJson: string, keyId: string, keySecret: string, metaJson: string | undefined | null, madeAt: number): string
+  /**
+   * Create new trusting transaction (for local writes)
+   * Returns JSON: { signature: string, transaction: Transaction }
+   */
+  makeNewTrustingTransaction(coId: string, sessionId: string, signerSecret: string, changesJson: string, metaJson: string | undefined | null, madeAt: number): string
+  /** Get all session IDs as native array */
+  getSessionIds(coId: string): Array<string>
+  /** Get transaction count for a session (returns -1 if session not found) */
+  getTransactionCount(coId: string, sessionId: string): number
+  /** Get single transaction by index as JSON string (returns undefined if not found) */
+  getTransaction(coId: string, sessionId: string, txIndex: number): string | null
+  /** Get transactions for a session from index as JSON strings (returns undefined if session not found) */
+  getSessionTransactions(coId: string, sessionId: string, fromIndex: number): Array<string> | null
+  /** Get last signature for a session (returns undefined if session not found) */
+  getLastSignature(coId: string, sessionId: string): string | null
+  /** Get signature after specific transaction index */
+  getSignatureAfter(coId: string, sessionId: string, txIndex: number): string | null
+  /** Get the last signature checkpoint index (-1 if no checkpoints, undefined if session not found) */
+  getLastSignatureCheckpoint(coId: string, sessionId: string): number | null
+  /** Get the known state as a native JavaScript object */
+  getKnownState(coId: string): KnownState
+  /** Get the known state with streaming as a native JavaScript object */
+  getKnownStateWithStreaming(coId: string): KnownState | null
+  /** Check whether the CoValue still has pending streaming content. */
+  isStreaming(coId: string): boolean
+  /** Set streaming known state */
+  setStreamingKnownState(coId: string, streamingJson: string): void
+  /** Mark this CoValue as deleted */
+  markAsDeleted(coId: string): void
+  /** Check if this CoValue is deleted */
+  isDeleted(coId: string): boolean
+  /** Decrypt transaction changes */
+  decryptTransaction(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
+  /** Decrypt transaction meta */
+  decryptTransactionMeta(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
+}
+
 export declare class SessionMap {
   /**
    * Create a new SessionMap for a CoValue.
