@@ -684,6 +684,20 @@ impl SessionMapImpl {
         )
     }
 
+    /// Iterate every session in insertion order, yielding `(session_id, raw tx JSON)`
+    /// by reference — no cloning of session ids or transaction strings.
+    ///
+    /// Used by the group engine (`collect_group_txs`) to build transaction views
+    /// straight from stored state without copying whole session logs. The session
+    /// order matches TypeScript `Map` insertion order (this is an `IndexMap`).
+    pub(crate) fn iter_session_transactions(
+        &self,
+    ) -> impl Iterator<Item = (&str, &[String])> {
+        self.sessions
+            .iter()
+            .map(|(sid, log)| (sid.as_str(), log.transactions_json().as_slice()))
+    }
+
     /// Get last signature for a session
     pub fn get_last_signature(&self, session_id: &str) -> Option<String> {
         self.sessions
