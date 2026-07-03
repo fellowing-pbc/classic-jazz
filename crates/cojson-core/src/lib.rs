@@ -19,6 +19,8 @@ pub mod core {
     pub use error::*;
     pub mod config;
     pub use config::*;
+    pub mod group_engine;
+    pub use group_engine::*;
 }
 
 pub mod hash {
