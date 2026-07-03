@@ -11,6 +11,7 @@ import { Stringified, parseJSON, stableStringify } from "../jsonStringify.js";
 import { JsonValue } from "../jsonValue.js";
 import { logger } from "../logger.js";
 import { Transaction } from "../coValueCore/verifiedState.js";
+import { ShimNodeCore } from "./ShimNodeCore.js";
 
 function randomBytes(bytesLength = 32): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(bytesLength));
@@ -297,6 +298,17 @@ export abstract class CryptoProvider<Blake3State = any> {
     maxTxSize?: number,
     skipVerify?: boolean,
   ): SessionMapImpl;
+
+  /**
+   * Node-level registry. Default: TS shim over per-CoValue session maps
+   * (wasm/RN until their native NodeCore ports land). NapiCrypto overrides
+   * this with the native registry.
+   */
+  createNodeCore(): NodeCoreImpl {
+    return new ShimNodeCore((coId, headerJson, maxTxSize, skipVerify) =>
+      this.createSessionMap(coId as RawCoID, headerJson, maxTxSize, skipVerify),
+    );
+  }
 }
 
 export type Hash = `hash_z${string}`;
@@ -383,6 +395,114 @@ export interface SessionMapImpl {
     keySecret: string,
   ): string | undefined;
   decryptTransactionMeta(
+    sessionId: string,
+    txIndex: number,
+    keySecret: string,
+  ): string | undefined;
+
+  /** Optional: free native resources eagerly (wasm). */
+  dispose?(): void;
+}
+
+/**
+ * NodeCoreImpl - node-level registry of per-CoValue session state.
+ * One instance per LocalNode; every method addresses a CoValue by its id.
+ */
+export interface NodeCoreImpl {
+  // === Registry ===
+  createCoValue(
+    coId: string,
+    headerJson: string,
+    maxTxSize?: number,
+    skipVerify?: boolean,
+  ): void;
+  hasCoValue(coId: string): boolean;
+  /** No-op if absent. Frees the CoValue's native memory. */
+  removeCoValue(coId: string): void;
+  coValueCount(): number;
+
+  // === Header ===
+  getHeader(coId: string): string;
+
+  // === Transaction Operations ===
+  addTransactions(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+  ): void;
+  makeNewPrivateTransaction(
+    coId: string,
+    sessionId: string,
+    signerSecret: string,
+    changesJson: string,
+    keyId: string,
+    keySecret: string,
+    metaJson: string | undefined,
+    madeAt: number,
+  ): string;
+  makeNewTrustingTransaction(
+    coId: string,
+    sessionId: string,
+    signerSecret: string,
+    changesJson: string,
+    metaJson: string | undefined,
+    madeAt: number,
+  ): string;
+
+  // === Session Queries ===
+  getSessionIds(coId: string): string[];
+  getTransactionCount(coId: string, sessionId: string): number;
+  getTransaction(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+  ): Transaction | undefined;
+  getSessionTransactions(
+    coId: string,
+    sessionId: string,
+    fromIndex: number,
+  ): Transaction[] | undefined;
+  getLastSignature(coId: string, sessionId: string): string | undefined;
+  getSignatureAfter(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+  ): string | undefined;
+  getLastSignatureCheckpoint(
+    coId: string,
+    sessionId: string,
+  ): number | undefined;
+
+  // === Known State ===
+  getKnownState(coId: string): {
+    id: string;
+    header: boolean;
+    sessions: Record<string, number>;
+  };
+  getKnownStateWithStreaming(
+    coId: string,
+  ):
+    | { id: string; header: boolean; sessions: Record<string, number> }
+    | undefined;
+  isStreaming(coId: string): boolean;
+  setStreamingKnownState(coId: string, streamingJson: string): void;
+
+  // === Deletion ===
+  markAsDeleted(coId: string): void;
+  isDeleted(coId: string): boolean;
+
+  // === Decryption ===
+  decryptTransaction(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+    keySecret: string,
+  ): string | undefined;
+  decryptTransactionMeta(
+    coId: string,
     sessionId: string,
     txIndex: number,
     keySecret: string,

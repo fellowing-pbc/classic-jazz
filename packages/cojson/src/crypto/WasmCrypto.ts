@@ -283,6 +283,10 @@ export class WasmCrypto extends CryptoProvider<Blake3State> {
 class SessionMapAdapter implements SessionMapImpl {
   constructor(private readonly sessionMap: WasmSessionMap) {}
 
+  dispose(): void {
+    this.sessionMap.free();
+  }
+
   // === Header ===
   getHeader(): string {
     return this.sessionMap.getHeader();
