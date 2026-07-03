@@ -79,14 +79,32 @@ describe("NodeCore eviction", () => {
     expect(client.node.nodeCore.hasCoValue(map.id)).toBe(true);
   });
 
-  test("gracefulShutdown evicts all registry entries", async () => {
+  test("gracefulShutdown keeps registry entries readable for in-flight work", async () => {
+    // Regression: gracefulShutdown must NOT empty the NodeCore registry. Sync
+    // messages can still be processed after shutdown begins (a LOAD queued
+    // before shutdown, or one arriving before a peer is fully torn down). The
+    // handler path LOAD -> sendNewContent -> CoValueCore.newContentSince ->
+    // VerifiedState.getSessions -> getSessionIds reads session state out of the
+    // registry; if the entry had been dropped, an otherwise-available
+    // CoValueCore would throw "Unknown CoValue". The per-node registry (and its
+    // native SessionMaps) is released wholesale when the node is dropped, so
+    // eager eviction here is both unnecessary and unsafe.
     const { node } = setupTestNode();
     const group = node.createGroup();
-    group.createMap();
-    expect(node.nodeCore.coValueCount()).toBeGreaterThan(0);
+    const map = group.createMap();
+
+    expect(node.nodeCore.hasCoValue(map.id)).toBe(true);
 
     await node.gracefulShutdown();
 
-    expect(node.nodeCore.coValueCount()).toBe(0);
+    // Entry survives shutdown and session reads still work.
+    expect(node.nodeCore.hasCoValue(map.id)).toBe(true);
+    expect(() => node.nodeCore.getSessionIds(map.id)).not.toThrow();
+
+    // The exact path that regressed: an available CoValueCore serving a LOAD
+    // after shutdown computes newContentSince, which reads its sessions.
+    const core = node.getCoValue(map.id);
+    expect(core.isAvailable()).toBe(true);
+    expect(() => core.newContentSince(undefined)).not.toThrow();
   });
 });

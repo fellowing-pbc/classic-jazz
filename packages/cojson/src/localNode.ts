@@ -267,8 +267,10 @@ export class LocalNode {
    * the CoValue has been (re)loaded in the meantime, so a freshly registered
    * entry is never dropped.
    *
-   * {@link gracefulShutdown} evicts synchronously instead, because it drains
-   * in-flight work via `await` before evicting.
+   * {@link gracefulShutdown} does NOT evict: a shutting-down node's registry is
+   * released wholesale when the node is dropped, and eagerly emptying it while
+   * sync messages are still in flight would make in-flight reads throw
+   * "Unknown CoValue".
    *
    * @internal
    */
@@ -1031,12 +1033,13 @@ export class LocalNode {
   async gracefulShutdown(): Promise<unknown> {
     this.garbageCollector?.stop();
     await this.syncManager.gracefulShutdown();
-    // Drain in-flight work (e.g. the LocalTransactionsSyncQueue microtask)
-    // before dropping the NodeCore registry entries: those reads target the
-    // registry and would throw once it is empty.
-    for (const id of this.coValues.keys()) {
-      this.nodeCore.removeCoValue(id);
-    }
+    // NOTE: NodeCore registry entries are intentionally NOT dropped here.
+    // Emptying the shared registry while sync messages are still in flight
+    // (e.g. a LOAD queued before shutdown, or one that arrives before the peer
+    // is fully torn down) makes a still-available CoValueCore's session reads
+    // throw "Unknown CoValue". The whole registry — and every SessionMap it
+    // owns (native included) — is released when this node is dropped, so
+    // eager removal is unnecessary for reclamation.
     return this.storage?.close();
   }
 }
