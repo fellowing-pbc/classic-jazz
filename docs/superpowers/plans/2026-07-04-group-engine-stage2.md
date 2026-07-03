@@ -27,7 +27,7 @@
 | Validation-side role state | `permissions.ts:183-227` (`MemberRoleResolver`; NOTE `getRoleAtTime` ignores `time` for direct roles — `permissions.ts:207-212`) |
 | Validation-side comparator | `permissions.ts:171-181` (`isHigherRole`; `revoked` is never higher) |
 | Read-side role resolution | `packages/cojson/src/coValues/group.ts:451-488` (`roleOfInternal`) |
-| Read-side comparator | `group.ts:1693-1727` (`isMorePermissiveAndShouldInherit`; NOTE `revoked` in parent returns `true` — an inherited `revoked` OVERRIDES the child role, unlike validation-side) |
+| Read-side comparator | `group.ts:1693-1727` (`isMorePermissiveAndShouldInherit`; its `revoked → true` branch exists but is effectively unreachable via `extend` mappings: `roleOfInternal` collapses a parent's direct `revoked` to `undefined` BEFORE the inheritance check, so parent revocations do NOT propagate — see fixtures `parent_revoked_inheritance` and `deep_parent_chain`, which are authoritative) |
 | Inheritable-role filter | `group.ts:1681-1691` (`isInheritableRole` — includes `revoked`) |
 | Time-indexed entries | `group.ts:254-286` (`TimeBasedEntry`: chronological insert scanning backwards over `> madeAt` — equal-`madeAt` inserts AFTER existing equals; `getAtTime(undefined)` = latest; else `findLast(madeAt <= t)`) |
 | Account overrides | `packages/cojson/src/coValues/account.ts:44-62` (`currentAgentID` = header `initialAdmin`, static) and `account.ts:68-75` (self → `"admin"`) |
