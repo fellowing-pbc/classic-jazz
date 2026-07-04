@@ -721,7 +721,7 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
-  // === Stage 2: Group engine surface ===
+  // === Stage 2/3: Group engine surface ===
   // These two methods are NodeCore-ONLY — there is no SessionMap twin (the
   // group engine is inherently cross-CoValue, so it can't live on a single
   // SessionMap). Do not go looking for a `parallel copy` in `impl SessionMap`
