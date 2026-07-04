@@ -79,9 +79,17 @@ impl NodeCore {
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute
-    /// on the next `validate_transactions` / `role_of`. Mirrors TS
-    /// `CoValueCore.resetValidation`, which the sync layer fires on a CoValue
-    /// AND on every dependant that referenced it.
+    /// on the next `validate_transactions` / `role_of`. The TS analogue is
+    /// `CoValueCore.resetParsedTransactions` (coValueCore.ts:1318), which
+    /// `invalidateDependants` fires on each DEPENDANT of a changed group.
+    ///
+    /// LOAD-BEARING CALLER CONTRACT: the engine cache is keyed ONLY by
+    /// per-session transaction counts — `pending` (decrypted meta / source
+    /// identities) is NOT part of the key. If pending changes without a new
+    /// transaction (e.g. a private tx's meta decrypts later), verdicts stay
+    /// stale until this is called. That mirrors TS exactly (verdicts persist
+    /// until `resetParsedTransactions`), so the TS delegation MUST call this
+    /// wherever TS calls `resetParsedTransactions`, and nowhere else.
     ///
     /// An absent id is a NO-OP (not `UnknownCoValue`): the TS caller invokes
     /// this on dependants that may never have been registered on this node, so
