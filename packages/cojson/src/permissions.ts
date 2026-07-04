@@ -144,7 +144,9 @@ function determineValidTransactionsNative(
   }
 
   // The set of transactions a verdict may be applied to is per-ruleset,
-  // because the TS fallback these verdicts mirror is itself per-ruleset:
+  // preserving the semantics of the original TypeScript engine (deleted in the
+  // cleanup phase; its behavior is frozen in the group_engine fixtures), which
+  // was itself per-ruleset:
   //
   //   • group: the group path re-marks the FULL `verifiedTransactions` history
   //     on every pass. That apply-all is the ONLY carrier of a permission FLIP
@@ -153,7 +155,7 @@ function determineValidTransactionsNative(
   //     not the group itself). So we must mirror it by applying verdicts across
   //     all `verifiedTransactions`; scoping to the delta would leave an
   //     already-settled tx valid after a late revocation that flips it to
-  //     invalid (native grants access TS denies).
+  //     invalid (granting access the permission rules deny).
   //
   //   • ownedByGroup / unsafeAllowAll: the delta this pass owns
   //     (`coValue.toValidateTransactions`). These are the covalues that carry
