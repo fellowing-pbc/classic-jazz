@@ -1048,6 +1048,56 @@ impl NodeCore {
             .map_err(to_wasm_err)
     }
 
+    // === R4a coStream/coFeed materialization (experimental) ===
+    // Mirrors the coMap surface. `streamMaterialize` is the only mutating path;
+    // the read methods operate on the cached per-session entry view.
+
+    /// Materialize (or incrementally refresh) `co_id`'s coStream view; returns
+    /// the current monotonic version.
+    #[wasm_bindgen(js_name = streamMaterialize)]
+    pub fn stream_materialize(&mut self, co_id: String, pending: JsValue) -> Result<f64, JsValue> {
+        let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
+            .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
+        Ok(self
+            .internal
+            .stream_materialize(&co_id, &pending_wire_to_rust(pending))
+            .map_err(to_wasm_err)? as f64)
+    }
+
+    /// Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+    #[wasm_bindgen(js_name = streamSnapshot)]
+    pub fn stream_snapshot(&self, co_id: String) -> Result<String, JsValue> {
+        self.internal.stream_snapshot(&co_id).map_err(to_wasm_err)
+    }
+
+    /// RICH delta `{version, reset, sessions}` since `since_version`, each
+    /// `sessions[sid]` the full `CoStreamItem[]` for a changed session.
+    #[wasm_bindgen(js_name = streamDelta)]
+    pub fn stream_delta(&self, co_id: String, since_version: f64) -> Result<String, JsValue> {
+        self.internal
+            .stream_delta(&co_id, since_version as u64)
+            .map_err(to_wasm_err)
+    }
+
+    /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
+    /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
+    #[wasm_bindgen(js_name = streamSnapshotAtFrontier)]
+    pub fn stream_snapshot_at_frontier(
+        &self,
+        co_id: String,
+        frontier_json: String,
+    ) -> Result<String, JsValue> {
+        self.internal
+            .stream_snapshot_at_frontier(&co_id, &frontier_json)
+            .map_err(to_wasm_err)
+    }
+
+    /// The `KeyID`s `co_id`'s coStream view still needs a secret for.
+    #[wasm_bindgen(js_name = streamMissingKeyIds)]
+    pub fn stream_missing_key_ids(&self, co_id: String) -> Vec<String> {
+        self.internal.stream_missing_key_ids(&co_id)
+    }
+
     /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
     /// them in-crate, and materialize the coMap view in ONE crossing — returning
     /// only the compact `IngestOutcomeWire` (`{generation, count, viewVersion,

@@ -128,6 +128,26 @@ export declare class NodeCore {
    */
   mapSnapshotAtFrontier(coId: string, frontierJson: string): string
   /**
+   * Materialize (or incrementally refresh) `co_id`'s coStream view; returns the
+   * current monotonic version. Call after each ingest batch.
+   */
+  streamMaterialize(coId: string, pending: Array<PendingTx>): number
+  /** Whole materialized stream `{sessionID: [value, ...]}` as a JSON string. */
+  streamSnapshot(coId: string): string
+  /**
+   * RICH delta `{version, reset, sessions}` since `since_version`, each
+   * `sessions[sid]` the full `CoStreamItem[]` for a changed session — the
+   * payload a TS `RawCoStream` rebuilds `items` from.
+   */
+  streamDelta(coId: string, sinceVersion: number): string
+  /**
+   * Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
+   * `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
+   */
+  streamSnapshotAtFrontier(coId: string, frontierJson: string): string
+  /** The `KeyID`s `co_id`'s coStream view still needs a secret for. */
+  streamMissingKeyIds(coId: string): Array<string>
+  /**
    * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
    * them in-crate, and materialize the coMap view in ONE crossing — returning
    * only the compact `IngestOutcome` (no per-transaction verdict array). The raw

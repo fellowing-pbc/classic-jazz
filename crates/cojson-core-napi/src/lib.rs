@@ -1019,6 +1019,63 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
+  // === R4a coStream/coFeed materialization (experimental) ===
+  // Mirrors the coMap surface. `streamMaterialize` is the only mutating path;
+  // the read methods operate on the cached per-session entry view.
+
+  /// Materialize (or incrementally refresh) `co_id`'s coStream view; returns the
+  /// current monotonic version. Call after each ingest batch.
+  #[napi]
+  pub fn stream_materialize(
+    &mut self,
+    co_id: String,
+    pending: Vec<PendingTx>,
+  ) -> napi::Result<f64> {
+    Ok(
+      self
+        .internal
+        .stream_materialize(&co_id, &to_rust_pending(pending))
+        .map_err(to_napi_err)? as f64,
+    )
+  }
+
+  /// Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+  #[napi]
+  pub fn stream_snapshot(&self, co_id: String) -> napi::Result<String> {
+    self.internal.stream_snapshot(&co_id).map_err(to_napi_err)
+  }
+
+  /// RICH delta `{version, reset, sessions}` since `since_version`, each
+  /// `sessions[sid]` the full `CoStreamItem[]` for a changed session — the
+  /// payload a TS `RawCoStream` rebuilds `items` from.
+  #[napi]
+  pub fn stream_delta(&self, co_id: String, since_version: f64) -> napi::Result<String> {
+    self
+      .internal
+      .stream_delta(&co_id, since_version as u64)
+      .map_err(to_napi_err)
+  }
+
+  /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
+  /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
+  #[napi]
+  pub fn stream_snapshot_at_frontier(
+    &self,
+    co_id: String,
+    frontier_json: String,
+  ) -> napi::Result<String> {
+    self
+      .internal
+      .stream_snapshot_at_frontier(&co_id, &frontier_json)
+      .map_err(to_napi_err)
+  }
+
+  /// The `KeyID`s `co_id`'s coStream view still needs a secret for.
+  #[napi]
+  pub fn stream_missing_key_ids(&self, co_id: String) -> Vec<String> {
+    self.internal.stream_missing_key_ids(&co_id)
+  }
+
   /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
   /// them in-crate, and materialize the coMap view in ONE crossing — returning
   /// only the compact `IngestOutcome` (no per-transaction verdict array). The raw
