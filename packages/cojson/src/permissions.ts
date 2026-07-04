@@ -245,6 +245,15 @@ class MemberRoleResolver {
   }
 }
 
+/**
+ * Native counterpart of {@link determineValidTransactionsForGroup}: the
+ * NodeCore registry already holds every transaction (ingested via
+ * addTransactions), so `pending` deliberately carries ONLY the merge/branch
+ * transactions whose `sourceTxMadeAt` is a TS-derived ordering override
+ * (computed from merge meta in parseMetaInformation) that native cannot
+ * recompute itself. Verdicts come back for ALL transactions in validation
+ * order and MUST be applied in that order.
+ */
 function determineValidTransactionsForGroupNative(
   coValue: CoValueCore,
   nodeCore: NodeCoreImpl,
