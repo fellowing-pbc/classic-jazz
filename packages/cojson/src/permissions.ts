@@ -329,28 +329,44 @@ function determineValidTransactionsNative(
     throw e;
   }
 
-  // Apply verdicts ONLY to `toValidateTransactions` (the delta this pass is
-  // responsible for) — mirroring the TS fallback's contract exactly (every
-  // ruleset branch above iterates `coValue.toValidateTransactions`, never the
-  // full `coValue.verifiedTransactions`). `pending` above still walks the full
-  // history because Rust needs it for internal engine consistency, but
-  // APPLYING a verdict to an already-settled transaction here would silently
-  // overwrite TS-only, post-permission overlays that run after this function
-  // returns (e.g. `parseMetaInformation`'s `fww` winner tracking, which calls
-  // `markInvalid` on a previously-valid transaction the next time a
-  // competing transaction arrives). Since native has no notion of `fww`, a
-  // permission-only "valid" verdict for that transaction would erase the
-  // overlay's invalidation on every subsequent pass. Restricting to the delta
-  // makes native and TS agree: only freshly-arrived transactions get a
-  // verdict applied here.
+  // The set of transactions a verdict may be applied to is per-ruleset,
+  // because the TS fallback these verdicts mirror is itself per-ruleset:
+  //
+  //   • group: `determineValidTransactionsForGroup` re-marks the FULL
+  //     `verifiedTransactions` history on every pass (permissions.ts iterates
+  //     `coValue.verifiedTransactions`). That apply-all is the ONLY carrier of
+  //     a permission FLIP to an already-processed group transaction — groups
+  //     never get `resetParsedTransactions` (invalidateDependants resets only
+  //     dependants, not the group itself). So we must mirror it by applying
+  //     verdicts across all `verifiedTransactions`; scoping to the delta would
+  //     leave an already-settled tx valid after a late revocation that TS flips
+  //     to invalid (native grants access TS denies).
+  //
+  //   • ownedByGroup / unsafeAllowAll: the TS branches iterate only
+  //     `coValue.toValidateTransactions` (the delta this pass owns). These are
+  //     the covalues that carry `fww` meta (produced ONLY by owned data
+  //     covalues — coMap/coList/coFeed/snapshotRef — never groups). `fww`
+  //     winner tracking runs as a TS-only, post-permission overlay AFTER this
+  //     function returns and calls `markInvalid` on a previously-valid tx when a
+  //     competing tx arrives. Native has no notion of `fww`, so re-applying a
+  //     permission-only "valid" verdict to an already-settled tx would clobber
+  //     that overlay's invalidation on every subsequent pass. Restricting to
+  //     the delta preserves the overlay.
+  //
+  // `pending` above still walks the full history for both cases because Rust
+  // needs it for internal engine consistency.
+  const applyTo =
+    coValue.verified?.header.ruleset.type === "group"
+      ? coValue.verifiedTransactions // TS group path iterates ALL — flips must reach old txs
+      : coValue.toValidateTransactions; // ownedByGroup / unsafeAllowAll — delta, preserves fww
   const byKey = new Map<string, VerifiedTransaction>();
-  for (const tx of coValue.toValidateTransactions) {
+  for (const tx of applyTo) {
     byKey.set(`${tx.currentTxID.sessionID}/${tx.currentTxID.txIndex}`, tx);
   }
   // Apply IN THE ORDER RUST RETURNS (spec: dispatch order feeds downstream stable sorts)
   for (const v of verdicts) {
     const tx = byKey.get(`${v.sessionId}/${v.txIndex}`);
-    if (!tx) continue; // verdict for a tx outside this pass's delta (already settled, or TS hasn't wrapped it yet)
+    if (!tx) continue; // verdict for a tx outside `applyTo` (not in this pass's set, or TS hasn't wrapped it yet)
 
     if (v.outcome === "validBranchPointerOnly") {
       // Mirror the reader branch-pointer trim in the TS ownedByGroup path:
