@@ -65,6 +65,21 @@ use crate::core::session_map::{
 /// The `"everyone"` pseudo-member key (`EVERYONE`, group.ts:49).
 const EVERYONE: &str = "everyone";
 
+/// A borrowed view of the node's key store plus its monotonic keys-version,
+/// passed by value (Copy) through every engine build / extend / read. Stamping
+/// each built [`GroupEngineState`] with the `version` it observed is what closes
+/// the F1 key-arrival blind spot: a secret arriving via `provide_key_secret`
+/// bumps the node's keys-version, which can change a previously-opaque PRIVATE
+/// tx's decrypted META — and thus its `effective_made_at`, merge identity,
+/// `is_merge`, and `source_after_current` tamper verdict. Because the suffix
+/// predicate reasons over exactly those fields, a keys-version change MUST force
+/// a full recompute (never a blind extend). See [`ensure_engine`].
+#[derive(Clone, Copy)]
+struct KeyCtx<'a> {
+    map: &'a HashMap<String, String>,
+    version: u64,
+}
+
 /// Verbatim TS reason for the merge-meta anti-tamper failure
 /// (`coValueCore.ts:1559`). Emitted for any transaction whose merge-derived
 /// source made-at is after its own `currentMadeAt`.
@@ -192,6 +207,19 @@ pub struct GroupEngineState {
     /// that snapshot is unchanged (else the group moved and old owned verdicts
     /// may have flipped — a full recompute picks that up, matching TS).
     owned_group_counts: Option<Vec<(String, u32)>>,
+    /// For [`RulesetKind::OwnedByGroup`]: the owning group's engine GENERATION at
+    /// build time. Counts alone can miss a parent-group change that reorders the
+    /// group's role history without changing its counts — e.g. a key arrival on
+    /// the GROUP's own private txs (F5). Any full recompute of the owning group
+    /// bumps its generation, so an owned extend also falls back when the group's
+    /// generation moved, even if its counts held.
+    owned_group_generation: Option<u64>,
+    /// The [`KeyCtx::version`] this engine was built against. A change forces a
+    /// full recompute (never an extend): a newly-arrived key can re-decrypt an
+    /// OLD private tx's meta and flip its effective time / merge identity /
+    /// tamper verdict (F1/F3). Compared alongside `session_counts` in
+    /// [`ensure_engine`].
+    keys_version: u64,
     /// Monotonic generation, bumped ONLY on a full recompute (never on a suffix
     /// extend, which preserves it). Lets a coMap view detect whether the verdict
     /// list was rebuilt-from-scratch since it last materialized. See
@@ -354,7 +382,7 @@ fn is_valid_role_value(v: Option<&str>) -> bool {
 fn ensure_engine(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     pending: &[PendingTxIn],
     visited: &mut HashSet<String>,
@@ -364,7 +392,12 @@ fn ensure_engine(
         .ok_or_else(|| SessionMapError::CoValueNotLoaded(co_id.to_string()))?;
 
     if let Some(existing) = engines.get(co_id) {
-        if existing.session_counts == session_counts_of(sm) {
+        // The keys-version is part of the freshness key: a key that arrived since
+        // this engine was built can change an old private tx's decrypted meta
+        // (effective time / merge identity / tamper), so an unchanged count is
+        // NOT sufficient to reuse a stale-keys engine (F3).
+        if existing.session_counts == session_counts_of(sm) && existing.keys_version == keys.version
+        {
             return Ok(());
         }
     }
@@ -380,7 +413,12 @@ fn ensure_engine(
     // provable validation-order SUFFIX, extend the cached fold instead of
     // recomputing from scratch. Extending preserves the engine's `generation`
     // (old verdicts unchanged). Falls back to a full recompute on any doubt.
-    if engines.contains_key(co_id)
+    //
+    // A keys-version change is treated EXACTLY like a suffix-predicate failure:
+    // we never extend across it, because the newly-available key can re-decrypt
+    // OLD private txs (which the extend does not revisit) and flip their verdicts
+    // (F1). Only when the keys-version is unchanged is the extend even attempted.
+    if engines.get(co_id).map(|e| e.keys_version) == Some(keys.version)
         && try_extend_engine(covalues, engines, keys, co_id, pending, visited)?
     {
         return Ok(());
@@ -422,10 +460,10 @@ fn unsafe_allow_all_verdict(tx: &GroupTxView) -> Verdict {
 
 /// Full recompute of one CoValue's engine. Dispatches on ruleset type exactly as
 /// `determineValidTransactions` (permissions.ts:73-169) does.
-pub fn build_group_engine(
+fn build_group_engine(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     pending: &[PendingTxIn],
     visited: &mut HashSet<String>,
@@ -450,6 +488,10 @@ pub fn build_group_engine(
         max_effective_made_at: None,
         resolver: None,
         owned_group_counts: None,
+        owned_group_generation: None,
+        // Stamp the keys-version this build observed; a later change forces a
+        // full recompute rather than a blind extend (F1/F3).
+        keys_version: keys.version,
         // Set by `ensure_engine` after a full build (extends preserve the prior
         // generation via `engines.remove`/reinsert of the same state).
         generation: 0,
@@ -478,7 +520,7 @@ pub fn build_group_engine(
         RulesetKind::UnsafeAllowAll => {
             // permissions.ts:157-163 — every transaction is valid (modulo the
             // parseMetaInformation anti-tamper override).
-            let mut txs = collect_group_txs_keyed(sm, pending, keys);
+            let mut txs = collect_group_txs_keyed(sm, pending, keys.map);
             sort_for_validation(&mut txs);
             for tx in &txs {
                 state.max_effective_made_at = Some(
@@ -502,7 +544,7 @@ pub fn build_group_engine(
 fn build_group_ruleset(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     state: &mut GroupEngineState,
     sm: &SessionMapImpl,
@@ -511,7 +553,7 @@ fn build_group_ruleset(
     pending: &[PendingTxIn],
     visited: &mut HashSet<String>,
 ) -> Result<(), SessionMapError> {
-    let mut txs = collect_group_txs_keyed(sm, pending, keys);
+    let mut txs = collect_group_txs_keyed(sm, pending, keys.map);
     sort_for_validation(&mut txs);
 
     // `coValue.isGroup()` — a plain group (not an account).
@@ -553,7 +595,7 @@ fn build_group_ruleset(
 fn fold_group_txs(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     state: &mut GroupEngineState,
     resolver: &mut ResolverState,
@@ -972,7 +1014,7 @@ fn fold_group_txs(
 fn build_owned_by_group(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     state: &mut GroupEngineState,
     sm: &SessionMapImpl,
     group_id: &str,
@@ -985,18 +1027,22 @@ fn build_owned_by_group(
         .get(group_id)
         .map(|e| (e.is_account, e.initial_admin.clone()))
         .unwrap_or((false, None));
-    // Snapshot the owning group's tx-counts so the incremental fast-path can
-    // detect it moving (which can flip already-computed owned verdicts).
+    // Snapshot the owning group's tx-counts AND engine generation so the
+    // incremental fast-path can detect it moving (which can flip already-computed
+    // owned verdicts) — counts catch new group txs; the generation additionally
+    // catches a same-count group RECOMPUTE (e.g. a key arrival reordering the
+    // group's role history, F5).
     state.owned_group_counts = Some(
         covalues
             .get(group_id)
             .map(session_counts_of)
             .unwrap_or_default(),
     );
+    state.owned_group_generation = Some(generation_of(engines, group_id));
 
     // The ownedByGroup branch iterates transactions without the group-validation
     // sort; use collection order (session-insertion, txIndex ascending).
-    let txs = collect_group_txs_keyed(sm, pending, keys);
+    let txs = collect_group_txs_keyed(sm, pending, keys.map);
 
     for tx in &txs {
         state.max_effective_made_at = Some(
@@ -1030,7 +1076,7 @@ fn build_owned_by_group(
 fn process_owned_tx(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     state: &mut GroupEngineState,
     tx: &GroupTxView,
     group_id: &str,
@@ -1202,7 +1248,7 @@ fn growth_is_suffix(old_counts: &[(String, u32)], new_counts: &[(String, u32)]) 
 fn try_extend_engine(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     pending: &[PendingTxIn],
     visited: &mut HashSet<String>,
@@ -1214,7 +1260,7 @@ fn try_extend_engine(
 
     // Snapshot the immutable facts we need, then drop the borrow so the engine
     // store is free to be mutated (removed/reinserted, recursed into) below.
-    let (old_counts, kind, max_eff, has_resolver, owned_group_counts) = {
+    let (old_counts, kind, max_eff, has_resolver, owned_group_counts, owned_group_generation) = {
         let existing = match engines.get(co_id) {
             Some(e) => e,
             None => return Ok(false),
@@ -1225,6 +1271,7 @@ fn try_extend_engine(
             existing.max_effective_made_at,
             existing.resolver.is_some(),
             existing.owned_group_counts.clone(),
+            existing.owned_group_generation,
         )
     };
 
@@ -1234,18 +1281,21 @@ fn try_extend_engine(
     }
 
     let old_counts_map: HashMap<String, u32> = old_counts.iter().cloned().collect();
-    let new_txs = collect_group_txs_after(sm, pending, &old_counts_map, keys);
+    let new_txs = collect_group_txs_after(sm, pending, &old_counts_map, keys.map);
     if new_txs.is_empty() {
         return Ok(false);
     }
 
-    // (S2) no re-identifying merge meta on any new tx — a merged/branched tx
-    // (`meta.mi`, or a supplied source identity) can re-time/re-order into the
-    // middle of history, which the suffix assumption must not paper over.
-    if new_txs
-        .iter()
-        .any(|t| t.is_merge || t.source_session_id.is_some())
-    {
+    // (S2) no re-identifying / re-timing source on any new tx. A merged/branched
+    // tx (`meta.mi`), a supplied source IDENTITY (`source_session_id`), OR a bare
+    // source TIMING of any channel (pending `source_made_at` or native `meta.t`,
+    // detectable as `effective_made_at != current_made_at`) can re-time/re-order
+    // into the middle of history. The suffix assumption must not paper over ANY
+    // of these — a source-timed tx without an identity would otherwise slip past
+    // an `is_merge`/`source_session_id`-only check (F2).
+    if new_txs.iter().any(|t| {
+        t.is_merge || t.source_session_id.is_some() || t.effective_made_at != t.current_made_at
+    }) {
         return Ok(false);
     }
 
@@ -1264,12 +1314,21 @@ fn try_extend_engine(
             }
         }
         RulesetKind::OwnedByGroup(group_id) => {
-            // (S4) owning group unchanged since build.
+            // (S4) owning group unchanged since build. Make the owning group's
+            // engine fresh FIRST (it may itself need a recompute — e.g. a key
+            // arrived on its private txs), then compare BOTH its counts and its
+            // engine GENERATION against the snapshot. Counts catch new group txs;
+            // the generation catches a same-count recompute that reordered the
+            // group's role history (F5) — either can flip an old owned verdict.
+            ensure_engine(covalues, engines, keys, group_id, &[], visited)?;
             let cur_group_counts = covalues
                 .get(group_id)
                 .map(session_counts_of)
                 .unwrap_or_default();
             if owned_group_counts.as_deref() != Some(cur_group_counts.as_slice()) {
+                return Ok(false);
+            }
+            if owned_group_generation != Some(generation_of(engines, group_id)) {
                 return Ok(false);
             }
             // (S4) collection-order preservation.
@@ -1304,7 +1363,7 @@ fn try_extend_engine(
 fn extend_engine_state(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     co_id: &str,
     state: &mut GroupEngineState,
     new_txs: Vec<GroupTxView>,
@@ -1313,6 +1372,22 @@ fn extend_engine_state(
 ) -> Result<(), SessionMapError> {
     #[cfg(test)]
     EXTEND_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // Load-bearing invariant for the group / unsafeAllowAll arms below: S3
+    // proved every new tx's `effective_made_at` is STRICTLY greater than the
+    // cached watermark, so sorting the suffix IN ISOLATION and appending it
+    // reproduces exactly the tail a global re-sort of the whole history would
+    // produce (nothing new can sort before an old tx). If a future refactor ever
+    // weakened S3's strict `>` to `>=`, a cross-session equal-time tx could sort
+    // BEFORE an old tx under a global sort while the isolated sort still appends
+    // it — silently corrupting verdict order. This debug-assert pins the
+    // dependency so such a regression fails the tests loudly (F4).
+    debug_assert!(
+        matches!(state.kind, RulesetKind::OwnedByGroup(_))
+            || state
+                .max_effective_made_at
+                .is_none_or(|m| new_txs.iter().all(|t| t.effective_made_at > m)),
+        "extend suffix must be strictly after the cached watermark (S3)"
+    );
     match state.kind.clone() {
         RulesetKind::UnsafeAllowAll => {
             let mut txs = new_txs;
@@ -1366,6 +1441,7 @@ fn extend_engine_state(
                     .map(session_counts_of)
                     .unwrap_or_default(),
             );
+            state.owned_group_generation = Some(generation_of(engines, &group_id));
             for tx in &new_txs {
                 state.max_effective_made_at = Some(
                     state
@@ -1401,7 +1477,7 @@ fn extend_engine_state(
 fn resolver_role_at(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     resolver: &ResolverState,
     member: &str,
     time: u64,
@@ -1453,10 +1529,10 @@ fn resolver_role_at(
 /// Port of `RawGroup.roleOfInternal` (group.ts:451-488) plus the `RawAccount`
 /// overrides (account.ts:68-75). Builds the group's engine (and, recursively,
 /// its parents') on demand.
-pub fn role_of_internal(
+fn role_of_internal(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     group_id: &str,
     member: &str,
     at_time: Option<u64>,
@@ -1548,7 +1624,7 @@ pub fn role_of_internal(
 fn is_self_extension(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
-    keys: &HashMap<String, String>,
+    keys: KeyCtx<'_>,
     child_id: &str,
     parent_id: &str,
     visited: &mut HashSet<String>,
@@ -1601,10 +1677,15 @@ pub fn validate_transactions(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
     keys: &HashMap<String, String>,
+    keys_version: u64,
     co_id: &str,
     pending: &[PendingTxIn],
 ) -> Result<Vec<Verdict>, SessionMapError> {
     let mut visited = HashSet::new();
+    let keys = KeyCtx {
+        map: keys,
+        version: keys_version,
+    };
     ensure_engine(covalues, engines, keys, co_id, pending, &mut visited)?;
     Ok(engines
         .get(co_id)
@@ -1621,10 +1702,15 @@ pub fn ensure(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
     keys: &HashMap<String, String>,
+    keys_version: u64,
     co_id: &str,
     pending: &[PendingTxIn],
 ) -> Result<(), SessionMapError> {
     let mut visited = HashSet::new();
+    let keys = KeyCtx {
+        map: keys,
+        version: keys_version,
+    };
     ensure_engine(covalues, engines, keys, co_id, pending, &mut visited)
 }
 
@@ -1654,11 +1740,16 @@ pub fn role_of(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
     keys: &HashMap<String, String>,
+    keys_version: u64,
     group_id: &str,
     member: &str,
     at_time: Option<u64>,
 ) -> Result<Option<Role>, SessionMapError> {
     let mut visited = HashSet::new();
+    let keys = KeyCtx {
+        map: keys,
+        version: keys_version,
+    };
     role_of_internal(
         covalues,
         engines,
@@ -2258,6 +2349,62 @@ mod tests {
         );
     }
 
+    /// S3 write-bench guard: the keys-version stamp must NOT reintroduce a
+    /// per-step FULL RECOMPUTE in the common no-key-change case — every monotonic
+    /// ingest must still take the EXTEND fast-path. The keys-version comparison is
+    /// O(1), so it cannot change the write path's complexity; this bench reports
+    /// the end-to-end per-ingest cost and pins the fast-path against a control
+    /// that DOES full-recompute every step (a fresh key before each validate). The
+    /// no-key-change run must be materially cheaper than the recompute-every-step
+    /// control; a keys-version regression that recomputed on every ingest would
+    /// erase that gap. Prints both numbers (`--nocapture`).
+    ///
+    /// (Both curves carry the pre-existing O(n) suffix-collection scan in
+    /// `collect_group_txs_after`, unaffected by this change, so the 2N/N wall
+    /// ratio is ~3–4 for either; the FAST-vs-RECOMPUTE gap is the load-bearing
+    /// signal here, not the ratio.)
+    #[test]
+    fn s3_write_path_stays_on_fast_path_without_key_changes() {
+        let (_, header_json) = prop_group_header();
+
+        let ingest = |n: usize, rekey_each_step: bool| -> std::time::Duration {
+            let txs = gen_group_history(1234, n, 0); // 0% out-of-order → all extend
+            let mut node = NodeCore::new();
+            node.create_co_value(GROUP_ADMIN, &header_json, None, true)
+                .unwrap();
+            let start = std::time::Instant::now();
+            for (i, tx) in txs.iter().enumerate() {
+                node.get_mut(GROUP_ADMIN)
+                    .unwrap()
+                    .add_transactions(GROUP_SESSION, None, &format!("[{tx}]"), "sig_zFake", true)
+                    .unwrap();
+                if rekey_each_step {
+                    // Control: bump the keys-version every step → forces the
+                    // keys-version guard to full-recompute on each ingest.
+                    node.provide_key_secret(&format!("key_zControl{i}"), &test_key_secret(1));
+                }
+                node.validate_transactions(GROUP_ADMIN, &[]).unwrap();
+            }
+            start.elapsed()
+        };
+
+        let _ = ingest(200, false); // warm up
+        let n = 1500usize;
+        let fast = ingest(n, false);
+        let recompute = ingest(n, true);
+        println!(
+            "S3 write-bench @ {n} txs: no-key-change (fast-path) = {:.2}ms, rekey-every-step (full-recompute control) = {:.2}ms, speedup = {:.2}x",
+            fast.as_secs_f64() * 1e3,
+            recompute.as_secs_f64() * 1e3,
+            recompute.as_secs_f64() / fast.as_secs_f64().max(1e-9),
+        );
+        assert!(
+            fast < recompute,
+            "the no-key-change path must stay on the extend fast-path (cheaper than recompute-every-step); \
+             fast={fast:?} recompute={recompute:?}"
+        );
+    }
+
     /// A purely monotonic history extends on EVERY step — a strong lower bound on
     /// how often the fast-path runs (proves it is not silently always falling
     /// back), and still matches full recompute.
@@ -2277,6 +2424,511 @@ mod tests {
             EXTEND_COUNT.load(Ordering::Relaxed) >= 20,
             "monotonic incremental load must extend on nearly every step, got {}",
             EXTEND_COUNT.load(Ordering::Relaxed)
+        );
+    }
+
+    // =====================================================================
+    // F6: adversarial property generator — multiple sessions, private txs with
+    // keys provided mid/late, merge meta (tamper + benign), fww, unsafeAllowAll,
+    // ownedByGroup over a mutating group. Invariant: incremental == full
+    // recompute, verdict-for-verdict + role-for-role + coMap snapshot equality.
+    // =====================================================================
+
+    /// One generated transaction to append to a covalue, in load order.
+    #[derive(Clone)]
+    enum GenTx {
+        /// A trusting `set` on `session`, optionally carrying wire meta (fww /
+        /// merge `{mi,t}`) as a stringified JSON object.
+        Trusting {
+            session: usize,
+            key: String,
+            val: u64,
+            made_at: u64,
+            meta: Option<String>,
+        },
+        /// A private `set` on `session`, encrypted under the single test key,
+        /// optionally carrying (encrypted) meta.
+        Private {
+            session: usize,
+            key: String,
+            val: u64,
+            made_at: u64,
+            meta: Option<String>,
+        },
+    }
+
+    const UAA_SESSIONS: [&str; 3] = [
+        "co_zUAAuthor_session_zPropA",
+        "co_zUAAuthor_session_zPropB",
+        "co_zUAAuthor_session_zPropC",
+    ];
+    const UAA_KEY_ID: &str = "key_zPropMixed";
+
+    fn set_changes(key: &str, val: u64) -> String {
+        serde_json::to_string(&serde_json::json!([{"op":"set","key":key,"value":val}])).unwrap()
+    }
+
+    /// Wire JSON for a trusting tx (both `changes` and `meta` are stringified
+    /// JSON, matching the on-wire encoding).
+    fn trusting_wire(changes: &str, made_at: u64, meta_obj: Option<&str>) -> String {
+        let changes_field = serde_json::to_string(changes).unwrap();
+        match meta_obj {
+            Some(m) => {
+                let meta_field = serde_json::to_string(m).unwrap();
+                format!(
+                    r#"{{"privacy":"trusting","madeAt":{made_at},"changes":{changes_field},"meta":{meta_field}}}"#
+                )
+            }
+            None => {
+                format!(r#"{{"privacy":"trusting","madeAt":{made_at},"changes":{changes_field}}}"#)
+            }
+        }
+    }
+
+    /// Generate a mixed unsafeAllowAll history for `seed`: multiple sessions,
+    /// trusting + private txs, benign and back-dated (tamper) merge meta, and fww
+    /// competitions — every adversarial channel a suffix extend must respect.
+    fn gen_mixed_uaa_history(seed: u64, count: usize) -> Vec<GenTx> {
+        let mut rng = Lcg(seed.wrapping_mul(0x2545F4914F6CDD1D).wrapping_add(7));
+        let base = 1_700_000_000_000u64;
+        let mut clock = base;
+        let mut out = Vec::new();
+        for i in 0..count {
+            clock += 1 + rng.below(40);
+            // ~15% arrive out-of-order (earlier), forcing extend fall-backs.
+            let made_at = if rng.below(100) < 15 {
+                base + rng.below((clock - base).max(1))
+            } else {
+                clock
+            };
+            let session = rng.below(UAA_SESSIONS.len() as u64) as usize;
+            let key = format!("k{}", rng.below(6));
+            let val = rng.below(1000);
+            // Choose a meta channel.
+            let meta = match rng.below(100) {
+                0..=14 => {
+                    Some(serde_json::json!({"fww": format!("lock{}", rng.below(3))}).to_string())
+                }
+                15..=24 => {
+                    // benign merge: positive t → source earlier, never tamper.
+                    Some(
+                        serde_json::json!({"mi": i, "t": (1 + rng.below(5000)) as i64}).to_string(),
+                    )
+                }
+                25..=31 => {
+                    // tamper merge: negative t → source after current → invalid.
+                    Some(
+                        serde_json::json!({"mi": i, "t": -((1 + rng.below(5000)) as i64)})
+                            .to_string(),
+                    )
+                }
+                _ => None,
+            };
+            // ~35% private (encrypted under the single test key).
+            if rng.below(100) < 35 {
+                out.push(GenTx::Private {
+                    session,
+                    key,
+                    val,
+                    made_at,
+                    meta,
+                });
+            } else {
+                out.push(GenTx::Trusting {
+                    session,
+                    key,
+                    val,
+                    made_at,
+                    meta,
+                });
+            }
+        }
+        out
+    }
+
+    /// Append one generated tx to `node`'s covalue `co_id`.
+    fn apply_gen_tx(node: &mut NodeCore, co_id: &str, tx: &GenTx, secret: &str) {
+        use crate::core::keys::SignerSecret;
+        use ed25519_dalek::SigningKey;
+        match tx {
+            GenTx::Trusting {
+                session,
+                key,
+                val,
+                made_at,
+                meta,
+            } => {
+                let changes = set_changes(key, *val);
+                let wire = trusting_wire(&changes, *made_at, meta.as_deref());
+                node.get_mut(co_id)
+                    .unwrap()
+                    .add_transactions(
+                        UAA_SESSIONS[*session],
+                        None,
+                        &format!("[{wire}]"),
+                        "sig",
+                        true,
+                    )
+                    .unwrap();
+            }
+            GenTx::Private {
+                session,
+                key,
+                val,
+                made_at,
+                meta,
+            } => {
+                let changes = set_changes(key, *val);
+                let priv_signer = SignerSecret::from(SigningKey::from_bytes(&[7u8; 32])).0;
+                node.get_mut(co_id)
+                    .unwrap()
+                    .make_new_private_transaction(
+                        UAA_SESSIONS[*session].to_string(),
+                        priv_signer,
+                        &changes,
+                        UAA_KEY_ID.to_string(),
+                        secret.to_string(),
+                        meta.clone(),
+                        *made_at,
+                    )
+                    .unwrap();
+            }
+        }
+    }
+
+    fn new_uaa_node() -> (NodeCore, String) {
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("propmixed".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+        let mut node = NodeCore::new();
+        node.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        (node, co_id)
+    }
+
+    /// F6 core: over 200 seeded mixed unsafeAllowAll histories (multi-session,
+    /// private txs, benign + tamper merge meta, fww), an INCREMENTAL replay —
+    /// validating and materializing between each append, with the private key
+    /// provided at a per-seed MID or LATE point — must land on exactly the FULL
+    /// recompute's verdicts AND coMap snapshot. Exercises every reviewer channel:
+    /// key-arrival mid-history (F1), source timing without identity (F2), the
+    /// unsafeAllowAll isolated-suffix sort (F4), and cross-session ties.
+    #[test]
+    fn incremental_matches_recompute_mixed_uaa_200_seeds() {
+        let secret = test_key_secret(59);
+        // NB: `EXTEND_COUNT` is a process-global shared with the dedicated
+        // fast-path-fires tests; those own the "did it extend" assertion. This
+        // test owns CORRECTNESS (incremental == full) and deliberately does not
+        // touch the counter, so the two never race.
+        for seed in 0..200u64 {
+            let history = gen_mixed_uaa_history(seed, 24);
+
+            // --- Full reference: append all, provide key, validate+materialize. ---
+            let (mut full, co_id) = new_uaa_node();
+            for tx in &history {
+                apply_gen_tx(&mut full, &co_id, tx, &secret);
+            }
+            full.provide_key_secret(UAA_KEY_ID, &secret);
+            let vf = verdict_map(&full.validate_transactions(&co_id, &[]).unwrap());
+            full.map_materialize(&co_id, &[]).unwrap();
+            let sf: serde_json::Value =
+                serde_json::from_str(&full.map_snapshot(&co_id).unwrap()).unwrap();
+
+            // --- Incremental: append one at a time, validate+materialize between,
+            // provide the key at a per-seed step (mid for even seeds, late for odd). ---
+            let (mut incr, _) = new_uaa_node();
+            let provide_at = if seed % 2 == 0 {
+                history.len() / 2
+            } else {
+                history.len()
+            };
+            for (i, tx) in history.iter().enumerate() {
+                if i == provide_at {
+                    incr.provide_key_secret(UAA_KEY_ID, &secret);
+                }
+                apply_gen_tx(&mut incr, &co_id, tx, &secret);
+                incr.validate_transactions(&co_id, &[]).unwrap();
+                incr.map_materialize(&co_id, &[]).unwrap();
+            }
+            if provide_at >= history.len() {
+                incr.provide_key_secret(UAA_KEY_ID, &secret);
+            }
+            let vi = verdict_map(&incr.validate_transactions(&co_id, &[]).unwrap());
+            incr.map_materialize(&co_id, &[]).unwrap();
+            let si: serde_json::Value =
+                serde_json::from_str(&incr.map_snapshot(&co_id).unwrap()).unwrap();
+
+            assert_eq!(
+                vf, vi,
+                "seed {seed}: verdicts diverge (incremental != full)"
+            );
+            assert_eq!(
+                sf, si,
+                "seed {seed}: coMap snapshot diverges (incremental != full)"
+            );
+        }
+    }
+
+    /// F6 (group): 200 seeded MULTI-SESSION group histories — the admin session
+    /// plus member sessions granting/using roles with out-of-order arrivals —
+    /// must match full recompute verdict-for-verdict AND role-for-role. The
+    /// single-session generator could never produce cross-session watermark ties.
+    #[test]
+    fn incremental_matches_recompute_multi_session_group_200_seeds() {
+        let (_, header_json) = prop_group_header();
+        // See the note on the mixed-uaa test: correctness only, no EXTEND_COUNT.
+        for seed in 0..200u64 {
+            let mut rng = Lcg(seed.wrapping_mul(0x9E3779B97F4A7C15).wrapping_add(3));
+            let base = 1_700_000_000_000u64;
+            // Sessions 1..=2 belong to members the admin promotes to admin so
+            // their own grants can validate.
+            let member_sessions = [
+                ("co_zM0", "co_zM0_session_zMS0"),
+                ("co_zM1", "co_zM1_session_zMS1"),
+            ];
+            let mut load: Vec<(String, String)> = Vec::new();
+            load.push((
+                GROUP_SESSION.to_string(),
+                group_set_tx(GROUP_ADMIN, "admin", base),
+            ));
+            let mut clock = base + 10;
+            for (m, _s) in &member_sessions {
+                clock += 5;
+                load.push((GROUP_SESSION.to_string(), group_set_tx(m, "admin", clock)));
+            }
+            for _ in 0..24 {
+                clock += 1 + rng.below(40);
+                let made_at = if rng.below(100) < 20 {
+                    base + rng.below((clock - base).max(1))
+                } else {
+                    clock
+                };
+                let from_member = rng.below(3) != 0;
+                let session = if from_member {
+                    member_sessions[rng.below(2) as usize].1.to_string()
+                } else {
+                    GROUP_SESSION.to_string()
+                };
+                let target = GROUP_MEMBERS[rng.below(GROUP_MEMBERS.len() as u64) as usize];
+                let role = GROUP_ROLES[rng.below(GROUP_ROLES.len() as u64) as usize];
+                load.push((session, group_set_tx(target, role, made_at)));
+            }
+
+            // Full: batch per session (first-appearance session order).
+            let mut full = NodeCore::new();
+            full.create_co_value(GROUP_ADMIN, &header_json, None, true)
+                .unwrap();
+            let mut per_session: Vec<(String, Vec<String>)> = Vec::new();
+            for (s, tx) in &load {
+                match per_session.iter_mut().find(|(id, _)| id == s) {
+                    Some((_, v)) => v.push(tx.clone()),
+                    None => per_session.push((s.clone(), vec![tx.clone()])),
+                }
+            }
+            for (s, txs) in &per_session {
+                full.get_mut(GROUP_ADMIN)
+                    .unwrap()
+                    .add_transactions(s, None, &format!("[{}]", txs.join(",")), "sig", true)
+                    .unwrap();
+            }
+            let vf = verdict_map(&full.validate_transactions(GROUP_ADMIN, &[]).unwrap());
+
+            // Incremental: append one tx at a time in load order, validate between.
+            let mut incr = NodeCore::new();
+            incr.create_co_value(GROUP_ADMIN, &header_json, None, true)
+                .unwrap();
+            for (s, tx) in &load {
+                incr.get_mut(GROUP_ADMIN)
+                    .unwrap()
+                    .add_transactions(s, None, &format!("[{tx}]"), "sig", true)
+                    .unwrap();
+                incr.validate_transactions(GROUP_ADMIN, &[]).unwrap();
+            }
+            let vi = verdict_map(&incr.validate_transactions(GROUP_ADMIN, &[]).unwrap());
+            assert_eq!(vf, vi, "seed {seed}: multi-session group verdicts diverge");
+
+            for member in GROUP_MEMBERS.iter().chain([&GROUP_ADMIN, &"everyone"]) {
+                for at in [None, Some(base + 20), Some(base + 500), Some(base + 2000)] {
+                    let rf = full.role_of(GROUP_ADMIN, member, at).unwrap();
+                    let ri = incr.role_of(GROUP_ADMIN, member, at).unwrap();
+                    assert_eq!(rf, ri, "seed {seed}: role({member},{at:?}) diverges");
+                }
+            }
+        }
+    }
+
+    /// F2 (SUSPICIOUS) targeted: a pending `source_made_at` WITHOUT a
+    /// `source_tx_id` (no merge identity, `is_merge` false) is a bare re-timing
+    /// channel. The tightened S2 must treat it as re-identifying and FALL BACK to
+    /// a full recompute rather than blind-extend. Pinned behaviorally: the
+    /// incremental result equals a full recompute even when such a tx is appended.
+    #[test]
+    fn f2_pending_source_timing_without_identity_forces_fallback() {
+        use crate::core::group_engine::tx_view::PendingTxIn;
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("f2timing".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+        let base = 1_700_000_000_000u64;
+        let session = "co_zF2_session_zA";
+        let tx0 = trusting_wire(&set_changes("a", 1), base + 100, None);
+        let tx1 = trusting_wire(&set_changes("b", 2), base + 50, None);
+        let pending = vec![PendingTxIn {
+            session_id: session.to_string(),
+            tx_index: 1,
+            source_made_at: Some(base + 5000),
+            meta_json: None,
+            source_tx_id: None,
+        }];
+
+        let mut full = NodeCore::new();
+        full.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        full.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(session, None, &format!("[{tx0},{tx1}]"), "sig", true)
+            .unwrap();
+        let vf = verdict_map(&full.validate_transactions(&co_id, &pending).unwrap());
+
+        let mut incr = NodeCore::new();
+        incr.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        incr.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(session, None, &format!("[{tx0}]"), "sig", true)
+            .unwrap();
+        incr.validate_transactions(&co_id, &pending).unwrap();
+        incr.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(session, None, &format!("[{tx1}]"), "sig", true)
+            .unwrap();
+        let vi = verdict_map(&incr.validate_transactions(&co_id, &pending).unwrap());
+
+        assert_eq!(
+            vf, vi,
+            "source-timed suffix must not corrupt via a blind extend"
+        );
+    }
+
+    /// F5 (SUSPICIOUS) targeted: an ownedByGroup covalue whose OWNING GROUP gains
+    /// transactions (a member promoted) between owned ingests. Owned txs by that
+    /// member, appended before and after the promotion, must match full recompute
+    /// — the S4 group-change guard (counts + generation) forces a fall-back when
+    /// the group moved.
+    #[test]
+    fn f5_owned_over_mutating_group_matches_recompute() {
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+
+        const ADMIN: &str = "co_zF5Admin";
+        const GROUP_SESS: &str = "co_zF5Admin_session_zG";
+        let member = "co_zF5Member";
+        let member_owned_session = "co_zF5Member_session_zO";
+        let base = 1_700_000_000_000u64;
+
+        let group_header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::group(ADMIN),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("f5group".to_string()),
+        };
+        let group_header_json = serde_json::to_string(&group_header).unwrap();
+
+        let owned_header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::owned_by_group(ADMIN),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("f5owned".to_string()),
+        };
+        let owned_header_json = serde_json::to_string(&owned_header).unwrap();
+        let owned_id =
+            crate::hash::blake3::short_hash_with_prefix(owned_header_json.as_bytes(), "co_z");
+
+        let owned_tx = |made: u64| {
+            let changes =
+                serde_json::to_string(&serde_json::json!([{"op":"set","key":"x","value":made}]))
+                    .unwrap();
+            trusting_wire(&changes, made, None)
+        };
+
+        let build = |incremental: bool| -> BTreeMap<(String, u32), (bool, String, Option<String>)> {
+            let mut node = NodeCore::new();
+            node.create_co_value(ADMIN, &group_header_json, None, true)
+                .unwrap();
+            node.create_co_value(&owned_id, &owned_header_json, None, true)
+                .unwrap();
+            node.get_mut(ADMIN)
+                .unwrap()
+                .add_transactions(
+                    GROUP_SESS,
+                    None,
+                    &format!("[{}]", group_set_tx(ADMIN, "admin", base)),
+                    "sig",
+                    true,
+                )
+                .unwrap();
+            // Owned tx #0 by member BEFORE promotion → no role → invalid.
+            node.get_mut(&owned_id)
+                .unwrap()
+                .add_transactions(
+                    member_owned_session,
+                    None,
+                    &format!("[{}]", owned_tx(base + 50)),
+                    "sig",
+                    true,
+                )
+                .unwrap();
+            if incremental {
+                node.validate_transactions(&owned_id, &[]).unwrap();
+            }
+            // Group moves: admin promotes member to writer.
+            node.get_mut(ADMIN)
+                .unwrap()
+                .add_transactions(
+                    GROUP_SESS,
+                    None,
+                    &format!("[{}]", group_set_tx(member, "writer", base + 100)),
+                    "sig",
+                    true,
+                )
+                .unwrap();
+            if incremental {
+                node.validate_transactions(&owned_id, &[]).unwrap();
+            }
+            // Owned tx #1 by member AFTER promotion → writer → valid.
+            node.get_mut(&owned_id)
+                .unwrap()
+                .add_transactions(
+                    member_owned_session,
+                    None,
+                    &format!("[{}]", owned_tx(base + 200)),
+                    "sig",
+                    true,
+                )
+                .unwrap();
+            verdict_map(&node.validate_transactions(&owned_id, &[]).unwrap())
+        };
+
+        let vf = build(false);
+        let vi = build(true);
+        assert_eq!(
+            vf, vi,
+            "owned-over-mutating-group: incremental must match full recompute"
         );
     }
 
@@ -2335,6 +2987,132 @@ mod tests {
         );
         // The normal merge tx (positive t) stays valid.
         assert!(verdicts.iter().find(|v| v.tx_index == 0).unwrap().valid);
+    }
+
+    /// A 32-byte test KeySecret in the `keySecret_z<base58>` wire form the
+    /// xsalsa20 key derivation expects (shared by the key-arrival regressions).
+    fn test_key_secret(byte: u8) -> String {
+        format!("keySecret_z{}", bs58::encode([byte; 32]).into_string())
+    }
+
+    /// F1 (BREAK) deterministic regression: a key that arrives BETWEEN two
+    /// validate calls, in the SAME window as a new appended tx, must not let the
+    /// suffix extend preserve an OLD private tx's stale verdict.
+    ///
+    /// Setup (unsafeAllowAll, so ONLY the anti-tamper override can invalidate):
+    ///   P: a PRIVATE tx whose ENCRYPTED meta is a back-dated merge
+    ///      `{"mi":1,"t":-50000}` → once decrypted, `sourceMadeAt > currentMadeAt`
+    ///      → Invalid. The key for P is NOT provided yet, so at first validate P's
+    ///      meta is opaque and P reads Valid.
+    ///   provide_key_secret → the node's keys-version bumps.
+    ///   R: a later trusting tx appended in a second session.
+    /// On the buggy code the second validate saw counts change, ran the extend
+    /// (blind to the keys-version), appended R, and PRESERVED P's stale Valid —
+    /// diverging from a full recompute (which, with the key, marks P Invalid).
+    /// The keys-version guard forces a full recompute instead, so P flips to
+    /// Invalid, matching the reference.
+    #[test]
+    fn f1_key_arrival_with_append_forces_recompute_not_stale_extend() {
+        use crate::core::keys::SignerSecret;
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+        use ed25519_dalek::SigningKey;
+        use rand_core::OsRng;
+
+        let key_id = "key_zF1Tamper";
+        let secret = test_key_secret(41);
+        let priv_session = "co_zF1_session_zPriv";
+        let trust_session = "co_zF1_session_zTrust";
+        let base = 1_700_000_000_000u64;
+        let tamper_meta = serde_json::json!({"mi": 1, "t": -50_000}).to_string();
+
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("f1keyarrival".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+
+        let changes =
+            serde_json::to_string(&serde_json::json!([{"op":"set","key":"k","value":1}])).unwrap();
+        let signer = SignerSecret::from(SigningKey::generate(&mut OsRng)).0;
+        let r_tx = format!(
+            r#"[{{"privacy":"trusting","madeAt":{},"changes":{}}}]"#,
+            base + 100_000,
+            serde_json::to_string(&changes).unwrap()
+        );
+
+        // --- Reference: full recompute with the key present from the start. ---
+        let mut full = NodeCore::new();
+        full.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        full.get_mut(&co_id)
+            .unwrap()
+            .make_new_private_transaction(
+                priv_session.to_string(),
+                signer.clone(),
+                &changes,
+                key_id.to_string(),
+                secret.clone(),
+                Some(tamper_meta.clone()),
+                base,
+            )
+            .unwrap();
+        full.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(trust_session, None, &r_tx, "sig", true)
+            .unwrap();
+        full.provide_key_secret(key_id, &secret);
+        let vf = verdict_map(&full.validate_transactions(&co_id, &[]).unwrap());
+
+        // --- Incremental: validate BEFORE the key, then key + append + validate. ---
+        let mut incr = NodeCore::new();
+        incr.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        incr.get_mut(&co_id)
+            .unwrap()
+            .make_new_private_transaction(
+                priv_session.to_string(),
+                signer.clone(),
+                &changes,
+                key_id.to_string(),
+                secret.clone(),
+                Some(tamper_meta.clone()),
+                base,
+            )
+            .unwrap();
+        // First validate WITHOUT the key: P's tamper meta is opaque → P reads Valid.
+        let before = verdict_map(&incr.validate_transactions(&co_id, &[]).unwrap());
+        assert!(
+            before.get(&(priv_session.to_string(), 0)).unwrap().0,
+            "with no key, P's meta is opaque and P reads valid"
+        );
+        // Key arrives (keys-version bumps), then a later tx is appended.
+        incr.provide_key_secret(key_id, &secret);
+        incr.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(trust_session, None, &r_tx, "sig", true)
+            .unwrap();
+        let vi = verdict_map(&incr.validate_transactions(&co_id, &[]).unwrap());
+
+        // The fix: incremental == full, and P is now Invalid (tamper caught).
+        assert_eq!(
+            vi, vf,
+            "incremental must match full recompute after key arrival"
+        );
+        let p = vi
+            .get(&(priv_session.to_string(), 0))
+            .expect("P verdict present");
+        assert!(
+            !p.0,
+            "P's back-dated merge must flip to invalid once its key is available: {p:?}"
+        );
+        assert_eq!(
+            p.2.as_deref(),
+            Some("Transaction sourceMadeAt is after the currentMadeAt"),
+        );
     }
 
     /// (ii) Out-of-order REVOCATION flip (the `nativeGroupFlip` scenario): a

@@ -477,7 +477,7 @@ pub fn ensure_co_map(
     // Make the permission engine fresh (extend or recompute), then BORROW its
     // verdicts rather than cloning them out — the clone would be O(n) per ingest.
     // `co_id` presence is checked by the caller (NodeCore) via UnknownCoValue.
-    engine_ensure(covalues, engines, keys, co_id, pending)?;
+    engine_ensure(covalues, engines, keys, keys_version, co_id, pending)?;
     let verdicts = verdicts_of(engines, co_id);
     let engine_generation = generation_of(engines, co_id);
     let sm = covalues
@@ -1005,7 +1005,8 @@ mod tests {
 
         // From-scratch full build over the same total history.
         let mut full = NodeCore::new();
-        full.create_co_value(ADMIN, &header_json, None, true).unwrap();
+        full.create_co_value(ADMIN, &header_json, None, true)
+            .unwrap();
         full.get_mut(ADMIN)
             .unwrap()
             .add_transactions(SESSION, None, &format!("[{}]", txs.join(",")), "sig", true)

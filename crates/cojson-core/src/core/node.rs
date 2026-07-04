@@ -142,9 +142,9 @@ impl NodeCore {
             engines,
             co_maps: _,
             keys,
-            keys_version: _,
+            keys_version,
         } = self;
-        engine_validate_transactions(covalues, engines, keys, co_id, pending)
+        engine_validate_transactions(covalues, engines, keys, *keys_version, co_id, pending)
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute
@@ -293,9 +293,17 @@ impl NodeCore {
             engines,
             co_maps: _,
             keys,
-            keys_version: _,
+            keys_version,
         } = self;
-        engine_role_of(covalues, engines, keys, group_id, member, at_time)
+        engine_role_of(
+            covalues,
+            engines,
+            keys,
+            *keys_version,
+            group_id,
+            member,
+            at_time,
+        )
     }
 
     pub fn co_value_count(&self) -> usize {
