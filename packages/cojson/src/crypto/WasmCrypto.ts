@@ -33,6 +33,7 @@ import {
   NodeCoreGroupVerdict,
   NodeCoreImpl,
   NodeCorePendingTx,
+  NodeCoreVerdictDelta,
   Sealed,
   SealedForGroup,
   SealerID,
@@ -472,6 +473,17 @@ class SessionMapAdapter implements SessionMapImpl {
  * `NodeCoreGroupVerdict` verbatim, so only a cast + `reason` normalization is
  * needed here, not a field-by-field rebuild.
  */
+/** Normalize a wasm-returned verdict (`reason: null` → `undefined`). */
+function normalizeWasmVerdict(v: NodeCoreGroupVerdict): NodeCoreGroupVerdict {
+  return {
+    sessionId: v.sessionId,
+    txIndex: v.txIndex,
+    valid: v.valid,
+    outcome: v.outcome,
+    reason: v.reason ?? undefined,
+  };
+}
+
 class WasmNodeCoreAdapter implements NodeCoreImpl {
   constructor(private readonly nodeCore: WasmNodeCore) {}
 
@@ -704,13 +716,28 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
       coId,
       pending,
     ) as NodeCoreGroupVerdict[];
-    return verdicts.map((v) => ({
-      sessionId: v.sessionId,
-      txIndex: v.txIndex,
-      valid: v.valid,
-      outcome: v.outcome,
-      reason: v.reason ?? undefined,
-    }));
+    return verdicts.map(normalizeWasmVerdict);
+  }
+
+  validateTransactionsDelta(
+    coId: string,
+    sinceGeneration: number,
+    sinceCount: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreVerdictDelta {
+    // Wire shape match verbatim (see VerdictDeltaWire in
+    // crates/cojson-core-wasm/src/lib.rs) — pending passes straight through.
+    const delta = this.nodeCore.validateTransactionsDelta(
+      coId,
+      sinceGeneration,
+      sinceCount,
+      pending,
+    ) as NodeCoreVerdictDelta;
+    return {
+      generation: delta.generation,
+      fromIndex: delta.fromIndex,
+      verdicts: delta.verdicts.map(normalizeWasmVerdict),
+    };
   }
 
   roleOf(groupId: string, member: string, atTime?: number): string | undefined {

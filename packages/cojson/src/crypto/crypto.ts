@@ -425,6 +425,23 @@ export type NodeCoreGroupVerdict = {
   outcome: "valid" | "invalid" | "validBranchPointerOnly";
   reason?: string;
 };
+/**
+ * A DELTA of validation verdicts returned by
+ * {@link NodeCoreImpl.validateTransactionsDelta}: only the verdicts the caller
+ * has not yet seen, tagged with the engine `generation` and the `fromIndex` at
+ * which they begin in the full verdict list.
+ *
+ *  - `fromIndex === 0`  → the WHOLE list is returned (a full recompute may have
+ *    reordered/flipped verdicts, or the caller had no cursor). The caller resets
+ *    its cursor and re-applies everything.
+ *  - `fromIndex === sinceCount` → only the appended tail is returned; the prefix
+ *    the caller already applied is unchanged (engine generation contract).
+ */
+export type NodeCoreVerdictDelta = {
+  generation: number;
+  fromIndex: number;
+  verdicts: NodeCoreGroupVerdict[];
+};
 
 /**
  * NodeCoreImpl - node-level registry of per-CoValue session state.
@@ -542,6 +559,21 @@ export interface NodeCoreImpl {
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[];
+  /**
+   * DELTA-returning transaction validation. Given the caller's
+   * `(sinceGeneration, sinceCount)` cursor, returns only the verdicts it has not
+   * seen (see {@link NodeCoreVerdictDelta}). On a generation match the untouched
+   * prefix is NOT re-sent, so per-ingest marshalling stays O(new). `pending` need
+   * only carry the extras for the NEW transactions this pass — the engine keeps
+   * earlier merge/branch extras resident. Same error contract as
+   * {@link NodeCoreImpl.validateTransactions}.
+   */
+  validateTransactionsDelta(
+    coId: string,
+    sinceGeneration: number,
+    sinceCount: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreVerdictDelta;
   /**
    * Native role resolution (stage 2).
    * Error contract identical to {@link NodeCoreImpl.validateTransactions}.

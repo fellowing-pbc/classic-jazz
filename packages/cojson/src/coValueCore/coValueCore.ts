@@ -1321,6 +1321,11 @@ export class CoValueCore {
     // so pending changes (e.g. late-decrypted private meta) require an explicit
     // reset here — the one place TS re-derives validity.
     this.node.nodeCore.resetValidation(this.id);
+    // Drop the delta cursor in the SAME breath: dropping the engine restarts its
+    // generation, so a surviving cursor could spuriously "match" a rebuilt-but-
+    // changed verdict prefix and skip re-applying flips. Clearing it forces the
+    // next pass to take the full verdict set (see `validationCursor`).
+    this.validationCursor = undefined;
 
     const verifiedTransactions = this.verifiedTransactions;
 
@@ -1362,6 +1367,18 @@ export class CoValueCore {
 
   verifiedTransactions: VerifiedTransaction[] = [];
   toValidateTransactions: VerifiedTransaction[] = [];
+
+  /**
+   * Cursor into the native validation engine's verdict list for the delta
+   * protocol (see `determineValidTransactionsNative` in permissions.ts):
+   * `generation` is the engine's last-seen full-recompute generation, `count`
+   * the number of verdicts already applied. Kept per-CoValueCore (its lifetime
+   * matches this object's, NOT the shared nodeCore) and cleared in
+   * `resetParsedTransactions` — in lockstep with the `resetValidation` that drops
+   * the native engine — so a generation match never coincides with a stale-but-
+   * changed verdict prefix. `undefined` = no cursor → next pass gets the full set.
+   */
+  validationCursor: { generation: number; count: number } | undefined;
   toDecryptTransactions: VerifiedTransaction[] = [];
   toParseMetaTransactions: VerifiedTransaction[] = [];
   toProcessTransactions: VerifiedTransaction[] = [];

@@ -15,6 +15,7 @@ import {
   NodeCoreGroupVerdict,
   NodeCoreImpl,
   NodeCorePendingTx,
+  NodeCoreVerdictDelta,
   Sealed,
   SealedForGroup,
   SealerID,
@@ -728,6 +729,27 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
         outcome: v.outcome as "valid" | "invalid" | "validBranchPointerOnly",
         reason: v.reason ?? undefined,
       }));
+  }
+
+  validateTransactionsDelta(
+    coId: string,
+    _sinceGeneration: number,
+    _sinceCount: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreVerdictDelta {
+    // The generated uniffi binding exposes the native
+    // `validateTransactionsDelta` only after an `ubrn` regeneration (like the
+    // wasm artifacts, the RN glue is a build product). Until then this degrades
+    // SAFELY to a full return (`fromIndex: 0`): the caller then re-applies every
+    // verdict, exactly the pre-delta behavior. Correctness is unaffected because
+    // the Rust engine accumulates each pass's `pending` into its resident store
+    // regardless of which entry point drives it, so folding stays complete even
+    // when TS sends pending only for the new transactions.
+    return {
+      generation: 0,
+      fromIndex: 0,
+      verdicts: this.validateTransactions(coId, pending),
+    };
   }
 
   roleOf(groupId: string, member: string, atTime?: number): string | undefined {

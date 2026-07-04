@@ -2,9 +2,9 @@ import { CoValueCore, VerifiedTransaction } from "./coValueCore/coValueCore.js";
 import { RawAccountID } from "./coValues/account.js";
 import {
   KeyID,
-  NodeCoreGroupVerdict,
   NodeCoreImpl,
   NodeCorePendingTx,
+  NodeCoreVerdictDelta,
 } from "./crypto/crypto.js";
 import { AgentID, RawCoID } from "./ids.js";
 
@@ -78,16 +78,43 @@ export function determineValidTransactions(coValue: CoValueCore): void {
  *   - `metaJson`: decrypted PRIVATE meta available NOW (private meta is not on
  *     the wire, so native can't read it; trusting meta IS wire-visible and must
  *     NOT be sent — native reads it itself).
- * A transaction contributes a pending entry only when it has at least one such
- * extra. Verdicts come back for ALL transactions in validation order and MUST
- * be applied in that order.
+ *
+ * ## Delta protocol (O(new) per pass)
+ *
+ * `pending` is built over ONLY the transactions this pass owns
+ * (`toValidateTransactions`) — NOT the whole history. The native engine keeps
+ * each pass's extras resident (a sparse per-CoValue store), so a later full
+ * recompute still folds every historical merge/branch tx even though TS supplied
+ * pending only for the new ones.
+ *
+ * Verdicts come back as a DELTA keyed to a per-CoValueCore cursor
+ * `{generation, count}`:
+ *   - **generation-stable extend** — the engine only APPENDED verdicts since the
+ *     cursor; native returns just the tail (`fromIndex === count`). By the
+ *     engine's generation contract the prefix TS already applied is byte-for-byte
+ *     unchanged, so TS re-marks only the new txs. This holds for the GROUP path
+ *     too: a group verdict FLIP can only come from a full recompute, which bumps
+ *     the generation — so on a stable generation there is provably nothing to
+ *     re-mark on old group txs.
+ *   - **generation bump / no cursor** — a recompute may have reordered/flipped
+ *     verdicts, so native returns the FULL list (`fromIndex === 0`); TS resets
+ *     the cursor and (for a group) re-marks ALL `verifiedTransactions` so a late
+ *     revocation's flip reaches already-settled txs.
+ *
+ * The cursor is invalidated in lockstep with the ONE place the native engine is
+ * dropped — {@link CoValueCore.resetParsedTransactions} clears it right where it
+ * calls `resetValidation` — so a generation match can never coincide with a
+ * stale-but-changed verdict prefix.
  */
 function determineValidTransactionsNative(
   coValue: CoValueCore,
   nodeCore: NodeCoreImpl,
 ): void {
+  // Pending is built over the DELTA this pass owns, not the whole history:
+  // per-ingest cost stays O(new). A tx contributes an entry only when it has an
+  // extra native cannot recompute itself.
   const pending: NodeCorePendingTx[] = [];
-  for (const tx of coValue.verifiedTransactions) {
+  for (const tx of coValue.toValidateTransactions) {
     const entry: NodeCorePendingTx = {
       sessionId: tx.currentTxID.sessionID,
       txIndex: tx.currentTxID.txIndex,
@@ -128,9 +155,15 @@ function determineValidTransactionsNative(
       ? "Determining valid transaction in owned object but its group wasn't loaded"
       : "Expected parent group to be loaded";
 
-  let verdicts: NodeCoreGroupVerdict[];
+  const cursor = coValue.validationCursor;
+  let delta: NodeCoreVerdictDelta;
   try {
-    verdicts = nodeCore.validateTransactions(coValue.id, pending);
+    delta = nodeCore.validateTransactionsDelta(
+      coValue.id,
+      cursor?.generation ?? 0,
+      cursor?.count ?? 0,
+      pending,
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (message.startsWith("CoValue not loaded: ")) {
@@ -143,37 +176,38 @@ function determineValidTransactionsNative(
     throw e;
   }
 
-  // The set of transactions a verdict may be applied to is per-ruleset,
-  // preserving the semantics of the original TypeScript engine (deleted in the
-  // cleanup phase; its behavior is frozen in the group_engine fixtures), which
-  // was itself per-ruleset:
+  const verdicts = delta.verdicts;
+  // A full return (`fromIndex === 0`) means the engine recomputed (verdicts may
+  // have been reordered/flipped) or TS had no cursor: reset the cursor and, for
+  // a group, apply across ALL history so flips reach already-settled txs.
+  const isFullReset = delta.fromIndex === 0;
+  coValue.validationCursor = {
+    generation: delta.generation,
+    count: delta.fromIndex + verdicts.length,
+  };
+
+  // The set of transactions a verdict may be applied to:
   //
-  //   • group: the group path re-marks the FULL `verifiedTransactions` history
-  //     on every pass. That apply-all is the ONLY carrier of a permission FLIP
-  //     to an already-processed group transaction — groups never get
-  //     `resetParsedTransactions` (invalidateDependants resets only dependants,
-  //     not the group itself). So we must mirror it by applying verdicts across
-  //     all `verifiedTransactions`; scoping to the delta would leave an
-  //     already-settled tx valid after a late revocation that flips it to
-  //     invalid (granting access the permission rules deny).
+  //   • group + full reset: re-mark the FULL `verifiedTransactions` history —
+  //     the ONLY carrier of a permission FLIP to an already-processed group
+  //     transaction (groups never get `resetParsedTransactions`; the flip rides
+  //     a full-recompute delta). On a generation-stable extend the returned
+  //     delta is only the new txs and old verdicts provably did not change, so
+  //     `toValidateTransactions` suffices there.
   //
-  //   • ownedByGroup / unsafeAllowAll: the delta this pass owns
-  //     (`coValue.toValidateTransactions`). These are the covalues that carry
-  //     `fww` meta (produced ONLY by owned data covalues —
-  //     coMap/coList/coFeed/snapshotRef — never groups). `fww` winner tracking
-  //     runs as a TS-only, post-permission overlay AFTER this function returns
-  //     and calls `markInvalid` on a previously-valid tx when a competing tx
-  //     arrives. Native has no notion of `fww`, so re-applying a permission-only
-  //     "valid" verdict to an already-settled tx would clobber that overlay's
-  //     invalidation on every subsequent pass. Restricting to the delta
-  //     preserves the overlay.
-  //
-  // `pending` above still walks the full history for both cases because Rust
-  // needs it for internal engine consistency.
+  //   • ownedByGroup / unsafeAllowAll: always the delta this pass owns
+  //     (`coValue.toValidateTransactions`). These carry `fww` meta (produced ONLY
+  //     by owned data covalues, never groups). `fww` winner tracking is a TS-only
+  //     overlay run AFTER this function that `markInvalid`s a previously-valid tx
+  //     when a competing tx arrives; re-applying a permission-only "valid" to an
+  //     already-settled tx would clobber it. Their old verdicts flip only on a
+  //     group change, which fires `resetParsedTransactions` (→ cursor cleared,
+  //     `toValidateTransactions` = ALL), so the delta scope still covers the flip.
+  const isGroup = coValue.verified?.header.ruleset.type === "group";
   const applyTo =
-    coValue.verified?.header.ruleset.type === "group"
-      ? coValue.verifiedTransactions // group path applies to ALL — flips must reach old txs
-      : coValue.toValidateTransactions; // ownedByGroup / unsafeAllowAll — delta, preserves fww
+    isGroup && isFullReset
+      ? coValue.verifiedTransactions // group flip carrier — reaches old txs
+      : coValue.toValidateTransactions; // extend / owned / unsafe — delta scope
   const byKey = new Map<string, VerifiedTransaction>();
   for (const tx of applyTo) {
     byKey.set(`${tx.currentTxID.sessionID}/${tx.currentTxID.txIndex}`, tx);

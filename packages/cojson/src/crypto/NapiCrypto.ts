@@ -30,6 +30,7 @@ import {
   NodeCoreGroupVerdict,
   NodeCoreImpl,
   NodeCorePendingTx,
+  NodeCoreVerdictDelta,
   Sealed,
   SealedForGroup,
   SealerID,
@@ -43,6 +44,41 @@ import {
   textEncoder,
 } from "./crypto.js";
 import { WasmCrypto } from "./WasmCrypto.js";
+
+/**
+ * Bridge one public {@link NodeCorePendingTx} to the napi `PendingTx` object.
+ * Seam: the native `SourceTxId` object is plain camelCase (`sessionId`/
+ * `txIndex`) because napi objects bypass serde's `#[serde(rename)]`; the public
+ * TS type follows this codebase's `sessionID` convention for transaction-identity
+ * wire objects (matching `TransactionID`). Bridge the casing here.
+ */
+function napiPendingTx(p: NodeCorePendingTx) {
+  return {
+    sessionId: p.sessionId,
+    txIndex: p.txIndex,
+    sourceMadeAt: p.sourceMadeAt,
+    metaJson: p.metaJson,
+    sourceTxId: p.sourceTxId
+      ? { sessionId: p.sourceTxId.sessionID, txIndex: p.sourceTxId.txIndex }
+      : undefined,
+  };
+}
+
+function napiVerdict(v: {
+  sessionId: string;
+  txIndex: number;
+  valid: boolean;
+  outcome: string;
+  reason?: string | null;
+}): NodeCoreGroupVerdict {
+  return {
+    sessionId: v.sessionId,
+    txIndex: v.txIndex,
+    valid: v.valid,
+    outcome: v.outcome as "valid" | "invalid" | "validBranchPointerOnly",
+    reason: v.reason ?? undefined,
+  };
+}
 
 import { Transaction } from "../coValueCore/verifiedState.js";
 
@@ -637,33 +673,27 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[] {
     return this.nodeCore
-      .validateTransactions(
-        coId,
-        pending.map((p) => ({
-          sessionId: p.sessionId,
-          txIndex: p.txIndex,
-          sourceMadeAt: p.sourceMadeAt,
-          metaJson: p.metaJson,
-          // Seam: the native `SourceTxId` object is plain camelCase
-          // (`sessionId`/`txIndex`) because napi objects bypass serde's
-          // `#[serde(rename)]`; the public TS type follows this codebase's
-          // `sessionID` convention for transaction-identity wire objects
-          // (matching `TransactionID`). Bridge the casing here.
-          sourceTxId: p.sourceTxId
-            ? {
-                sessionId: p.sourceTxId.sessionID,
-                txIndex: p.sourceTxId.txIndex,
-              }
-            : undefined,
-        })),
-      )
-      .map((v) => ({
-        sessionId: v.sessionId,
-        txIndex: v.txIndex,
-        valid: v.valid,
-        outcome: v.outcome as "valid" | "invalid" | "validBranchPointerOnly",
-        reason: v.reason ?? undefined,
-      }));
+      .validateTransactions(coId, pending.map(napiPendingTx))
+      .map(napiVerdict);
+  }
+
+  validateTransactionsDelta(
+    coId: string,
+    sinceGeneration: number,
+    sinceCount: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreVerdictDelta {
+    const delta = this.nodeCore.validateTransactionsDelta(
+      coId,
+      sinceGeneration,
+      sinceCount,
+      pending.map(napiPendingTx),
+    );
+    return {
+      generation: delta.generation,
+      fromIndex: delta.fromIndex,
+      verdicts: delta.verdicts.map(napiVerdict),
+    };
   }
 
   roleOf(groupId: string, member: string, atTime?: number): string | undefined {
