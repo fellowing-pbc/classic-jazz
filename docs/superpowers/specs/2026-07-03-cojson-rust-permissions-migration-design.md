@@ -116,6 +116,15 @@ returns to baseline.
 
 ## Stage 2 — Group engine: validation + role resolution for groups/accounts
 
+**Status:** Implemented, napi-first. Group/account validation and role
+resolution delegate to the native `NodeCore` (`validateGroup`/`roleOf`) behind
+capability detection, with the `COJSON_DISABLE_NATIVE_VALIDATION` kill switch
+as an operational escape hatch and differential-test oracle; wasm and RN stay
+on the TS path until their native ports land. Branch/frontier views — reading
+CoMap keys other than roles off a time-travel view (e.g. branch pointers) —
+remain on the TS path; only role resolution delegates, per the `atTime` view
+semantics risk noted below.
+
 ### Rust
 
 New `core/group_engine.rs`; one `GroupEngine` per group/account CoValue,
