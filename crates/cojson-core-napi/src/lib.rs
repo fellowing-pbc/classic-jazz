@@ -1,6 +1,6 @@
 use cojson_core::core::{
-  CoJsonCoreError, KnownState as RustKnownState, NodeCore as RustNodeCore,
-  PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
+  CoJsonCoreError, IngestOutcome as RustIngestOutcome, KnownState as RustKnownState,
+  NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
   VerdictDelta as RustVerdictDelta, VerdictOutcome as RustVerdictOutcome,
 };
 use napi_derive::napi;
@@ -391,6 +391,31 @@ pub struct VerdictDelta {
   pub generation: f64,
   pub from_index: u32,
   pub verdicts: Vec<GroupVerdict>,
+}
+
+/// The compact result of `ingestAndMaterialize` (R3 stage-1): the ONLY payload
+/// that crosses the boundary per content chunk. Carries no verdict array —
+/// validation happens in-crate. Mirrors `IngestOutcome` on the Rust side.
+#[napi(object)]
+pub struct IngestOutcome {
+  /// The validation engine's full-recompute generation after this ingest.
+  pub generation: f64,
+  /// Total verdict count after this ingest (the TS validation cursor's `count`).
+  pub count: u32,
+  /// The coMap view's monotonic version after materialization (the delta cursor).
+  pub view_version: f64,
+  /// `{version, changedKeys, deletedKeys}` since the caller's `sinceVersion`,
+  /// as a JSON string.
+  pub delta_json: String,
+}
+
+fn to_napi_ingest(o: RustIngestOutcome) -> IngestOutcome {
+  IngestOutcome {
+    generation: o.generation as f64,
+    count: o.count,
+    view_version: o.view_version as f64,
+    delta_json: o.delta_json,
+  }
 }
 
 fn to_napi_verdict(v: RustVerdict) -> GroupVerdict {
@@ -939,6 +964,40 @@ impl NodeCore {
       .internal
       .map_delta(&co_id, since_version as u64)
       .map_err(to_napi_err)
+  }
+
+  /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+  /// them in-crate, and materialize the coMap view in ONE crossing — returning
+  /// only the compact `IngestOutcome` (no per-transaction verdict array). The raw
+  /// session log is still written, so TS sync/storage (which read raw sessions)
+  /// are unaffected. See `NodeCore::ingest_and_materialize`.
+  #[napi]
+  #[allow(clippy::too_many_arguments)]
+  pub fn ingest_and_materialize(
+    &mut self,
+    co_id: String,
+    session_id: String,
+    signer_id: Option<String>,
+    transactions_json: String,
+    signature: String,
+    skip_verify: bool,
+    since_version: f64,
+    pending: Vec<PendingTx>,
+  ) -> napi::Result<IngestOutcome> {
+    let out = self
+      .internal
+      .ingest_and_materialize(
+        &co_id,
+        &session_id,
+        signer_id.as_deref(),
+        &transactions_json,
+        &signature,
+        skip_verify,
+        since_version as u64,
+        &to_rust_pending(pending),
+      )
+      .map_err(to_napi_err)?;
+    Ok(to_napi_ingest(out))
   }
 
   // === R1 key store (experimental) ===

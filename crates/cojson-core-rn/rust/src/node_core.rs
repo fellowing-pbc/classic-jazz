@@ -1,7 +1,7 @@
 use crate::session_map::{KnownState, SessionMapError};
 use cojson_core::core::{
-    NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn, Verdict as RustVerdict,
-    VerdictDelta as RustVerdictDelta,
+    IngestOutcome as RustIngestOutcome, NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn,
+    Verdict as RustVerdict, VerdictDelta as RustVerdictDelta,
 };
 use std::sync::Mutex;
 
@@ -80,6 +80,30 @@ impl From<RustVerdictDelta> for VerdictDelta {
             generation: d.generation as f64,
             from_index: d.from_index,
             verdicts: d.verdicts.into_iter().map(GroupVerdict::from).collect(),
+        }
+    }
+}
+
+/// The compact result of the R3 stage-1 single-call ingest, mirroring
+/// `IngestOutcome` on the Rust side: `{generation, count, viewVersion,
+/// deltaJson}`, with no per-transaction verdict array (validation happens
+/// in-crate). `generation`/`viewVersion` are `f64` for lossless JS-number
+/// round-tripping of the u64 counters.
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct IngestOutcome {
+    pub generation: f64,
+    pub count: u32,
+    pub view_version: f64,
+    pub delta_json: String,
+}
+
+impl From<RustIngestOutcome> for IngestOutcome {
+    fn from(o: RustIngestOutcome) -> Self {
+        IngestOutcome {
+            generation: o.generation as f64,
+            count: o.count,
+            view_version: o.view_version as f64,
+            delta_json: o.delta_json,
         }
     }
 }
@@ -586,6 +610,43 @@ impl NodeCore {
             .validate_transactions_delta(&co_id, since_generation as u64, since_count, &pending)
             .map_err(|e| SessionMapError::Internal(e.to_string()))?;
         Ok(VerdictDelta::from(delta))
+    }
+
+    /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+    /// them in-crate, and materialize the coMap view in ONE crossing — returning
+    /// only the compact `IngestOutcome` (no per-transaction verdict array). The raw
+    /// session log is still written, so the TS sync/storage paths are unaffected.
+    /// See `NodeCore::ingest_and_materialize`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ingest_and_materialize(
+        &self,
+        co_id: String,
+        session_id: String,
+        signer_id: Option<String>,
+        transactions_json: String,
+        signature: String,
+        skip_verify: bool,
+        since_version: f64,
+        pending: Vec<PendingTx>,
+    ) -> Result<IngestOutcome, SessionMapError> {
+        let pending = rn_pending_to_rust(pending);
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        let out = internal
+            .ingest_and_materialize(
+                &co_id,
+                &session_id,
+                signer_id.as_deref(),
+                &transactions_json,
+                &signature,
+                skip_verify,
+                since_version as u64,
+                &pending,
+            )
+            .map_err(|e| SessionMapError::Internal(e.to_string()))?;
+        Ok(IngestOutcome::from(out))
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute

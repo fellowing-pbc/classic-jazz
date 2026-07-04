@@ -1,6 +1,7 @@
 use cojson_core::core::{
-    CoJsonCoreError, NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn, SessionMapImpl,
-    Verdict as RustVerdict, VerdictDelta as RustVerdictDelta,
+    CoJsonCoreError, IngestOutcome as RustIngestOutcome, NodeCore as RustNodeCore,
+    PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
+    VerdictDelta as RustVerdictDelta,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Once;
@@ -461,6 +462,29 @@ impl From<RustVerdictDelta> for VerdictDeltaWire {
             generation: d.generation as f64,
             from_index: d.from_index,
             verdicts: d.verdicts.into_iter().map(GroupVerdictWire::from).collect(),
+        }
+    }
+}
+
+/// Wire shape of the R3 stage-1 single-call ingest result, mirroring
+/// `IngestOutcome` on the Rust side: `{generation, count, viewVersion, deltaJson}`.
+/// `generation`/`viewVersion` are `f64` for lossless JS-number round-tripping.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IngestOutcomeWire {
+    generation: f64,
+    count: u32,
+    view_version: f64,
+    delta_json: String,
+}
+
+impl From<RustIngestOutcome> for IngestOutcomeWire {
+    fn from(o: RustIngestOutcome) -> Self {
+        IngestOutcomeWire {
+            generation: o.generation as f64,
+            count: o.count,
+            view_version: o.view_version as f64,
+            delta_json: o.delta_json,
         }
     }
 }
@@ -985,6 +1009,43 @@ impl NodeCore {
         self.internal
             .map_delta(&co_id, since_version as u64)
             .map_err(to_wasm_err)
+    }
+
+    /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+    /// them in-crate, and materialize the coMap view in ONE crossing — returning
+    /// only the compact `IngestOutcomeWire` (`{generation, count, viewVersion,
+    /// deltaJson}`), with no per-transaction verdict array. The raw session log is
+    /// still written, so TS sync/storage are unaffected. See
+    /// `NodeCore::ingest_and_materialize`.
+    #[wasm_bindgen(js_name = ingestAndMaterialize)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn ingest_and_materialize(
+        &mut self,
+        co_id: String,
+        session_id: String,
+        signer_id: Option<String>,
+        transactions_json: String,
+        signature: String,
+        skip_verify: bool,
+        since_version: f64,
+        pending: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
+            .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
+        let out = self
+            .internal
+            .ingest_and_materialize(
+                &co_id,
+                &session_id,
+                signer_id.as_deref(),
+                &transactions_json,
+                &signature,
+                skip_verify,
+                since_version as u64,
+                &pending_wire_to_rust(pending),
+            )
+            .map_err(to_wasm_err)?;
+        Ok(serialize_js_value(IngestOutcomeWire::from(out)))
     }
 
     // === R1 key store (experimental) ===

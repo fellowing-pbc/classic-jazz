@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use crate::core::co_map::{ensure_co_map, CoMapView};
 use crate::core::group_engine::engine::{
-    role_of as engine_role_of, validate_transactions as engine_validate_transactions,
-    validate_transactions_delta as engine_validate_transactions_delta, GroupEngineState,
-    VerdictDelta,
+    generation_of, role_of as engine_role_of,
+    validate_transactions as engine_validate_transactions,
+    validate_transactions_delta as engine_validate_transactions_delta, verdicts_of,
+    GroupEngineState, VerdictDelta,
 };
 use crate::core::group_engine::tx_view::PendingTxIn;
 use crate::core::group_engine::types::Role;
@@ -45,6 +46,28 @@ pub struct NodeCore {
     /// coMap view's freshness key so a view lazily rebuilds when a
     /// previously-missing key finally arrives (the retry path).
     keys_version: u64,
+}
+
+/// The compact result of [`NodeCore::ingest_and_materialize`] — the ONLY thing
+/// that crosses the FFI boundary per content chunk (the R0-winning delta shape).
+/// It deliberately omits the per-transaction verdict array: validation happens
+/// in-crate (the engine ensure path consumes verdicts to materialize the view),
+/// so the 2000-verdict-per-chunk marshalling the R2.5 report flagged never
+/// occurs on this path.
+#[derive(Debug, Clone)]
+pub struct IngestOutcome {
+    /// The validation engine's full-recompute generation after this ingest.
+    /// A TS validation cursor can advance on `(generation, count)` WITHOUT
+    /// receiving the verdicts themselves — a generation match means the tail
+    /// only extended, a change means a recompute happened.
+    pub generation: u64,
+    /// Total verdict count after this ingest (the TS validation cursor's `count`).
+    pub count: u32,
+    /// The coMap view's monotonic version after materialization (the delta cursor).
+    pub view_version: u64,
+    /// `{version, changedKeys, deletedKeys}` since the caller's `since_version`,
+    /// as a JSON string — the patch a TS-side read cache applies.
+    pub delta_json: String,
 }
 
 impl NodeCore {
@@ -309,6 +332,62 @@ impl NodeCore {
         Ok(delta.to_string())
     }
 
+    /// Stage-1 single-call ingest (R3): add a content chunk's transactions to the
+    /// raw session log, validate them in-crate, and materialize the coMap view —
+    /// all in one FFI crossing, returning only the compact [`IngestOutcome`].
+    ///
+    /// This collapses the old three-step coMap receive path
+    /// (`add_transactions` + `validate_transactions_delta` marshalling every
+    /// verdict + TS `VerifiedTransaction` bookkeeping) into a single call whose
+    /// return payload is O(changed keys), not O(transactions): the engine ensure
+    /// path inside `map_materialize` consumes the verdicts internally, so no
+    /// verdict array crosses the boundary.
+    ///
+    /// The RAW session log is still written (via `add_transactions`), so the TS
+    /// sync (`newContentSince`) and storage paths — which read raw sessions from
+    /// this same store, independent of the valid-transaction path — are
+    /// unaffected.
+    ///
+    /// `co_id` must be registered (`UnknownCoValue`); `add_transactions` errors
+    /// (bad signature, deleted covalue, malformed tx JSON) surface unchanged and
+    /// leave no view mutation (materialization only runs after a successful add).
+    #[allow(clippy::too_many_arguments)]
+    pub fn ingest_and_materialize(
+        &mut self,
+        co_id: &str,
+        session_id: &str,
+        signer_id: Option<&str>,
+        transactions_json: &str,
+        signature: &str,
+        skip_verify: bool,
+        since_version: u64,
+        pending: &[PendingTxIn],
+    ) -> Result<IngestOutcome, SessionMapError> {
+        // Ingest into the raw session log (the store TS sync/storage also read).
+        self.get_mut(co_id)?.add_transactions(
+            session_id,
+            signer_id,
+            transactions_json,
+            signature,
+            skip_verify,
+        )?;
+
+        // Validate (in-crate) + materialize. `map_materialize` runs the engine
+        // ensure path and consumes verdicts internally.
+        let view_version = self.map_materialize(co_id, pending)?;
+
+        let generation = generation_of(&self.engines, co_id);
+        let count = verdicts_of(&self.engines, co_id).len() as u32;
+        let delta_json = self.map_delta(co_id, since_version)?;
+
+        Ok(IngestOutcome {
+            generation,
+            count,
+            view_version,
+            delta_json,
+        })
+    }
+
     /// Read-side role of `member` in group `group_id` at `at_time` (`None` =
     /// latest). Builds engines on demand.
     ///
@@ -440,6 +519,96 @@ mod tests {
         node.create_co_value(&co_id, &header_json, None, false)
             .unwrap();
         assert_eq!(node.co_value_count(), 1);
+    }
+
+    /// A trusting single-tx chunk over an unsafeAllowAll comap, in the wire
+    /// shape `add_transactions` expects (`changes` is a STRINGIFIED JSON array).
+    fn trusting_chunk(key: &str, value: serde_json::Value, made_at: u64) -> String {
+        let changes =
+            serde_json::to_string(&serde_json::json!([{"op":"set","key":key,"value":value}]))
+                .unwrap();
+        format!(
+            r#"[{{"privacy":"trusting","madeAt":{made_at},"changes":{}}}]"#,
+            serde_json::to_string(&changes).unwrap()
+        )
+    }
+
+    #[test]
+    fn ingest_and_materialize_returns_compact_delta_no_verdict_marshal() {
+        let (co_id, header_json) = valid_header();
+        let mut node = NodeCore::new();
+        node.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+        let session = "co_zA_session_zS";
+
+        // First chunk: sets "a" = 1.
+        let out = node
+            .ingest_and_materialize(
+                &co_id,
+                session,
+                None,
+                &trusting_chunk("a", serde_json::json!(1), 1_700_000_000_000),
+                "sig",
+                true,
+                0,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(out.count, 1, "one verdict after one tx");
+        assert!(out.view_version >= 1);
+        let delta: serde_json::Value = serde_json::from_str(&out.delta_json).unwrap();
+        assert_eq!(delta["version"], out.view_version);
+        assert_eq!(delta["changedKeys"], serde_json::json!({"a": 1}));
+
+        // Second chunk: sets "b" = 2. Delta SINCE the previous view version must
+        // carry only the newly-changed key (O(changed), not O(history)).
+        let prev = out.view_version;
+        let out2 = node
+            .ingest_and_materialize(
+                &co_id,
+                session,
+                None,
+                &trusting_chunk("b", serde_json::json!(2), 1_700_000_000_001),
+                "sig",
+                true,
+                prev,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(out2.count, 2);
+        assert!(out2.view_version > prev, "version bumps on the second ingest");
+        let delta2: serde_json::Value = serde_json::from_str(&out2.delta_json).unwrap();
+        assert_eq!(
+            delta2["changedKeys"],
+            serde_json::json!({"b": 2}),
+            "delta since prev carries only the new key"
+        );
+
+        // The materialized view is identical to what the separate
+        // add+materialize path would produce.
+        assert_eq!(node.map_get(&co_id, "a").unwrap(), Some("1".to_string()));
+        assert_eq!(node.map_get(&co_id, "b").unwrap(), Some("2".to_string()));
+        let snap: serde_json::Value =
+            serde_json::from_str(&node.map_snapshot(&co_id).unwrap()).unwrap();
+        assert_eq!(snap, serde_json::json!({"a": 1, "b": 2}));
+    }
+
+    #[test]
+    fn ingest_and_materialize_unknown_covalue_errors() {
+        let mut node = NodeCore::new();
+        match node.ingest_and_materialize(
+            "co_zNope",
+            "co_zNope_session_zS",
+            None,
+            &trusting_chunk("a", serde_json::json!(1), 1_700_000_000_000),
+            "sig",
+            true,
+            0,
+            &[],
+        ) {
+            Err(SessionMapError::UnknownCoValue(id)) => assert_eq!(id, "co_zNope"),
+            other => panic!("expected UnknownCoValue, got {other:?}"),
+        }
     }
 
     #[test]

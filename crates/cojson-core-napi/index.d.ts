@@ -104,6 +104,14 @@ export declare class NodeCore {
   /** Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`. */
   mapDelta(coId: string, sinceVersion: number): string
   /**
+   * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+   * them in-crate, and materialize the coMap view in ONE crossing — returning
+   * only the compact `IngestOutcome` (no per-transaction verdict array). The raw
+   * session log is still written, so TS sync/storage (which read raw sessions)
+   * are unaffected. See `NodeCore::ingest_and_materialize`.
+   */
+  ingestAndMaterialize(coId: string, sessionId: string, signerId: string | undefined | null, transactionsJson: string, signature: string, skipVerify: boolean, sinceVersion: number, pending: Array<PendingTx>): IngestOutcome
+  /**
    * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
    * TS calls this once it has unsealed a private tx's read key; native
    * materialization then decrypts that tx internally.
@@ -320,6 +328,25 @@ export interface GroupVerdict {
    */
   outcome: string
   reason?: string
+}
+
+/**
+ * The compact result of `ingestAndMaterialize` (R3 stage-1): the ONLY payload
+ * that crosses the boundary per content chunk. Carries no verdict array —
+ * validation happens in-crate. Mirrors `IngestOutcome` on the Rust side.
+ */
+export interface IngestOutcome {
+  /** The validation engine's full-recompute generation after this ingest. */
+  generation: number
+  /** Total verdict count after this ingest (the TS validation cursor's `count`). */
+  count: number
+  /** The coMap view's monotonic version after materialization (the delta cursor). */
+  viewVersion: number
+  /**
+   * `{version, changedKeys, deletedKeys}` since the caller's `sinceVersion`,
+   * as a JSON string.
+   */
+  deltaJson: string
 }
 
 /** KnownState as a native JavaScript object (no JSON serialization needed) */
