@@ -125,11 +125,15 @@ function buildValidationScenario(): ValidationScenario {
 
 function revalidateFully(scenario: ValidationScenario) {
   // resetParsedTransactions() marks every verified transaction as
-  // to-validate again and re-runs parseNewTransactions, which forces a full
-  // recompute of the whole (200-transaction) history - both the native
-  // GroupEngine and the TS MemberRoleResolver rebuild from scratch on every
-  // validation call by design (see the migration spec's "recompute, don't
-  // increment" rule), so this exercises the real per-call cost either way.
+  // to-validate again and re-runs parseNewTransactions over the whole
+  // (200-transaction) history. NOTE what each variant then measures:
+  // - TS fallback: a genuine full recompute (fresh MemberRoleResolver) per call.
+  // - Native: the Rust engine's (session_id, tx_count) cache SHORT-CIRCUITS
+  //   (no new transactions), so the native number is the end-to-end
+  //   DELEGATION-PATH cost — pending[] build, napi crossing, marshaling ~200
+  //   verdicts back, byKey map + verdict application — NOT Rust compute time.
+  // Both numbers are real user-visible costs of their paths; they are not a
+  // compute-vs-compute comparison.
   scenario.group.core.resetParsedTransactions();
 }
 
