@@ -369,7 +369,12 @@ impl NodeCore {
   ) -> napi::Result<()> {
     self
       .internal
-      .create_co_value(&co_id, &header_json, max_tx_size, skip_verify.unwrap_or(false))
+      .create_co_value(
+        &co_id,
+        &header_json,
+        max_tx_size,
+        skip_verify.unwrap_or(false),
+      )
       .map_err(to_napi_err)
   }
 
@@ -504,7 +509,13 @@ impl NodeCore {
   /// Get all session IDs as native array
   #[napi]
   pub fn get_session_ids(&self, co_id: String) -> napi::Result<Vec<String>> {
-    Ok(self.internal.get(&co_id).map_err(to_napi_err)?.get_session_ids())
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_session_ids(),
+    )
   }
 
   /// Get transaction count for a session (returns -1 if session not found)
@@ -512,7 +523,11 @@ impl NodeCore {
   pub fn get_transaction_count(&self, co_id: String, session_id: String) -> napi::Result<i32> {
     let sm = self.internal.get(&co_id).map_err(to_napi_err)?;
     // Same -1-if-absent convention as the SessionMap wrapper
-    Ok(sm.get_transaction_count(&session_id).map(|c| c as i32).unwrap_or(-1))
+    Ok(
+      sm.get_transaction_count(&session_id)
+        .map(|c| c as i32)
+        .unwrap_or(-1),
+    )
   }
 
   /// Get single transaction by index as JSON string (returns undefined if not found)
@@ -523,11 +538,13 @@ impl NodeCore {
     session_id: String,
     tx_index: u32,
   ) -> napi::Result<Option<String>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_transaction(&session_id, tx_index))
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_transaction(&session_id, tx_index),
+    )
   }
 
   /// Get transactions for a session from index as JSON strings (returns undefined if session not found)
@@ -538,21 +555,29 @@ impl NodeCore {
     session_id: String,
     from_index: u32,
   ) -> napi::Result<Option<Vec<String>>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_session_transactions(&session_id, from_index))
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_session_transactions(&session_id, from_index),
+    )
   }
 
   /// Get last signature for a session (returns undefined if session not found)
   #[napi]
-  pub fn get_last_signature(&self, co_id: String, session_id: String) -> napi::Result<Option<String>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_last_signature(&session_id))
+  pub fn get_last_signature(
+    &self,
+    co_id: String,
+    session_id: String,
+  ) -> napi::Result<Option<String>> {
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_last_signature(&session_id),
+    )
   }
 
   /// Get signature after specific transaction index
@@ -563,11 +588,13 @@ impl NodeCore {
     session_id: String,
     tx_index: u32,
   ) -> napi::Result<Option<String>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_signature_after(&session_id, tx_index))
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_signature_after(&session_id, tx_index),
+    )
   }
 
   /// Get the last signature checkpoint index (-1 if no checkpoints, undefined if session not found)
@@ -577,11 +604,13 @@ impl NodeCore {
     co_id: String,
     session_id: String,
   ) -> napi::Result<Option<i32>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_last_signature_checkpoint(&session_id))
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_last_signature_checkpoint(&session_id),
+    )
   }
 
   // --- Known State ---
@@ -589,35 +618,49 @@ impl NodeCore {
   /// Get the known state as a native JavaScript object
   #[napi]
   pub fn get_known_state(&self, co_id: String) -> napi::Result<KnownState> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_known_state()
-      .clone()
-      .into())
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_known_state()
+        .clone()
+        .into(),
+    )
   }
 
   /// Get the known state with streaming as a native JavaScript object
   #[napi]
   pub fn get_known_state_with_streaming(&self, co_id: String) -> napi::Result<Option<KnownState>> {
-    Ok(self
-      .internal
-      .get(&co_id)
-      .map_err(to_napi_err)?
-      .get_known_state_with_streaming()
-      .map(|ks| ks.clone().into()))
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .get_known_state_with_streaming()
+        .map(|ks| ks.clone().into()),
+    )
   }
 
   /// Check whether the CoValue still has pending streaming content.
   #[napi]
   pub fn is_streaming(&self, co_id: String) -> napi::Result<bool> {
-    Ok(self.internal.get(&co_id).map_err(to_napi_err)?.is_streaming())
+    Ok(
+      self
+        .internal
+        .get(&co_id)
+        .map_err(to_napi_err)?
+        .is_streaming(),
+    )
   }
 
   /// Set streaming known state
   #[napi]
-  pub fn set_streaming_known_state(&mut self, co_id: String, streaming_json: String) -> napi::Result<()> {
+  pub fn set_streaming_known_state(
+    &mut self,
+    co_id: String,
+    streaming_json: String,
+  ) -> napi::Result<()> {
     self
       .internal
       .get_mut(&co_id)
@@ -631,7 +674,11 @@ impl NodeCore {
   /// Mark this CoValue as deleted
   #[napi]
   pub fn mark_as_deleted(&mut self, co_id: String) -> napi::Result<()> {
-    self.internal.get_mut(&co_id).map_err(to_napi_err)?.mark_as_deleted();
+    self
+      .internal
+      .get_mut(&co_id)
+      .map_err(to_napi_err)?
+      .mark_as_deleted();
     Ok(())
   }
 
