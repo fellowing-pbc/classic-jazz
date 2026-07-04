@@ -1,6 +1,7 @@
 use crate::session_map::{KnownState, SessionMapError};
 use cojson_core::core::{
     NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn, Verdict as RustVerdict,
+    VerdictDelta as RustVerdictDelta,
 };
 use std::sync::Mutex;
 
@@ -60,6 +61,40 @@ impl From<RustVerdict> for GroupVerdict {
             reason: v.reason,
         }
     }
+}
+
+/// A DELTA of validation verdicts, mirroring `VerdictDelta` on the Rust side:
+/// the verdicts the caller has not yet seen, tagged with the engine `generation`
+/// and the `from_index` where they begin in the full list. `generation` is an
+/// `f64` for lossless JS-number round-tripping of the u64 counter.
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct VerdictDelta {
+    pub generation: f64,
+    pub from_index: u32,
+    pub verdicts: Vec<GroupVerdict>,
+}
+
+impl From<RustVerdictDelta> for VerdictDelta {
+    fn from(d: RustVerdictDelta) -> Self {
+        VerdictDelta {
+            generation: d.generation as f64,
+            from_index: d.from_index,
+            verdicts: d.verdicts.into_iter().map(GroupVerdict::from).collect(),
+        }
+    }
+}
+
+fn rn_pending_to_rust(pending: Vec<PendingTx>) -> Vec<RustPendingTxIn> {
+    pending
+        .into_iter()
+        .map(|p| RustPendingTxIn {
+            session_id: p.session_id,
+            tx_index: p.tx_index,
+            source_made_at: p.source_made_at.map(|v| v as u64),
+            meta_json: p.meta_json,
+            source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
+        })
+        .collect()
 }
 
 #[derive(uniffi::Object)]
@@ -519,16 +554,7 @@ impl NodeCore {
         co_id: String,
         pending: Vec<PendingTx>,
     ) -> Result<Vec<GroupVerdict>, SessionMapError> {
-        let pending: Vec<RustPendingTxIn> = pending
-            .into_iter()
-            .map(|p| RustPendingTxIn {
-                session_id: p.session_id,
-                tx_index: p.tx_index,
-                source_made_at: p.source_made_at.map(|v| v as u64),
-                meta_json: p.meta_json,
-                source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
-            })
-            .collect();
+        let pending = rn_pending_to_rust(pending);
         let mut internal = self
             .internal
             .lock()
@@ -537,6 +563,29 @@ impl NodeCore {
             .validate_transactions(&co_id, &pending)
             .map_err(|e| SessionMapError::Internal(e.to_string()))?;
         Ok(verdicts.into_iter().map(GroupVerdict::from).collect())
+    }
+
+    /// Delta counterpart of `validate_transactions`: given the caller's
+    /// `(since_generation, since_count)` cursor, return only the verdicts it has
+    /// not seen. On a generation match returns `verdicts[since_count..]` with
+    /// `from_index = since_count`; on a mismatch returns the whole list with
+    /// `from_index = 0`. Same error contract as `validate_transactions`.
+    pub fn validate_transactions_delta(
+        &self,
+        co_id: String,
+        since_generation: f64,
+        since_count: u32,
+        pending: Vec<PendingTx>,
+    ) -> Result<VerdictDelta, SessionMapError> {
+        let pending = rn_pending_to_rust(pending);
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        let delta = internal
+            .validate_transactions_delta(&co_id, since_generation as u64, since_count, &pending)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))?;
+        Ok(VerdictDelta::from(delta))
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute

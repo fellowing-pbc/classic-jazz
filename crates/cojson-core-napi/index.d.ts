@@ -70,6 +70,14 @@ export declare class NodeCore {
    */
   validateTransactions(coId: string, pending: Array<PendingTx>): Array<GroupVerdict>
   /**
+   * Delta counterpart of `validate_transactions`: given the caller's
+   * `(since_generation, since_count)` cursor, return only the verdicts it has
+   * not seen. On a generation match returns `verdicts[since_count..]` with
+   * `from_index = since_count`; on a mismatch returns the whole list with
+   * `from_index = 0`. Same error contract as `validate_transactions`.
+   */
+  validateTransactionsDelta(coId: string, sinceGeneration: number, sinceCount: number, pending: Array<PendingTx>): VerdictDelta
+  /**
    * Drop the cached validation engine for `co_id`, forcing a full recompute
    * on the next `validate_transactions` / `role_of`. An absent `co_id` is a
    * no-op (not `UnknownCoValue`): callers invoke this on dependants that may
@@ -417,6 +425,18 @@ export declare function unseal(sealedMessage: Uint8Array, recipientSecret: strin
  * Returns unsealed bytes or throws error if unsealing fails.
  */
 export declare function unsealForGroup(sealedMessage: Uint8Array, recipientSecret: string, nonceMaterial: Uint8Array): Uint8Array
+
+/**
+ * A DELTA of validation verdicts (mirrors `VerdictDelta` on the Rust side): the
+ * verdicts the caller has not yet seen, tagged with the engine `generation` and
+ * the `from_index` at which they begin in the full list. See
+ * `NodeCore::validate_transactions_delta`.
+ */
+export interface VerdictDelta {
+  generation: number
+  fromIndex: number
+  verdicts: Array<GroupVerdict>
+}
 
 /**
  * NAPI-exposed function to verify an Ed25519 signature.

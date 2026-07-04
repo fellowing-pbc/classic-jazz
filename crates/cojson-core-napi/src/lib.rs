@@ -1,7 +1,7 @@
 use cojson_core::core::{
   CoJsonCoreError, KnownState as RustKnownState, NodeCore as RustNodeCore,
   PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
-  VerdictOutcome as RustVerdictOutcome,
+  VerdictDelta as RustVerdictDelta, VerdictOutcome as RustVerdictOutcome,
 };
 use napi_derive::napi;
 use std::collections::HashMap;
@@ -380,6 +380,48 @@ pub struct GroupVerdict {
 
 fn verdict_outcome_to_str(outcome: RustVerdictOutcome) -> String {
   outcome.as_str().to_string()
+}
+
+/// A DELTA of validation verdicts (mirrors `VerdictDelta` on the Rust side): the
+/// verdicts the caller has not yet seen, tagged with the engine `generation` and
+/// the `from_index` at which they begin in the full list. See
+/// `NodeCore::validate_transactions_delta`.
+#[napi(object)]
+pub struct VerdictDelta {
+  pub generation: f64,
+  pub from_index: u32,
+  pub verdicts: Vec<GroupVerdict>,
+}
+
+fn to_napi_verdict(v: RustVerdict) -> GroupVerdict {
+  GroupVerdict {
+    session_id: v.session_id,
+    tx_index: v.tx_index,
+    valid: v.valid,
+    outcome: verdict_outcome_to_str(v.outcome),
+    reason: v.reason,
+  }
+}
+
+fn to_napi_delta(d: RustVerdictDelta) -> VerdictDelta {
+  VerdictDelta {
+    generation: d.generation as f64,
+    from_index: d.from_index,
+    verdicts: d.verdicts.into_iter().map(to_napi_verdict).collect(),
+  }
+}
+
+fn to_rust_pending(pending: Vec<PendingTx>) -> Vec<RustPendingTxIn> {
+  pending
+    .into_iter()
+    .map(|p| RustPendingTxIn {
+      session_id: p.session_id,
+      tx_index: p.tx_index,
+      source_made_at: p.source_made_at.map(|v| v as u64),
+      meta_json: p.meta_json,
+      source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
+    })
+    .collect()
 }
 
 #[napi]
@@ -783,32 +825,33 @@ impl NodeCore {
     co_id: String,
     pending: Vec<PendingTx>,
   ) -> napi::Result<Vec<GroupVerdict>> {
-    let pending: Vec<RustPendingTxIn> = pending
-      .into_iter()
-      .map(|p| RustPendingTxIn {
-        session_id: p.session_id,
-        tx_index: p.tx_index,
-        source_made_at: p.source_made_at.map(|v| v as u64),
-        meta_json: p.meta_json,
-        source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
-      })
-      .collect();
+    let pending = to_rust_pending(pending);
     let verdicts = self
       .internal
       .validate_transactions(&co_id, &pending)
       .map_err(to_napi_err)?;
-    Ok(
-      verdicts
-        .into_iter()
-        .map(|v: RustVerdict| GroupVerdict {
-          session_id: v.session_id,
-          tx_index: v.tx_index,
-          valid: v.valid,
-          outcome: verdict_outcome_to_str(v.outcome),
-          reason: v.reason,
-        })
-        .collect(),
-    )
+    Ok(verdicts.into_iter().map(to_napi_verdict).collect())
+  }
+
+  /// Delta counterpart of `validate_transactions`: given the caller's
+  /// `(since_generation, since_count)` cursor, return only the verdicts it has
+  /// not seen. On a generation match returns `verdicts[since_count..]` with
+  /// `from_index = since_count`; on a mismatch returns the whole list with
+  /// `from_index = 0`. Same error contract as `validate_transactions`.
+  #[napi]
+  pub fn validate_transactions_delta(
+    &mut self,
+    co_id: String,
+    since_generation: f64,
+    since_count: u32,
+    pending: Vec<PendingTx>,
+  ) -> napi::Result<VerdictDelta> {
+    let pending = to_rust_pending(pending);
+    let delta = self
+      .internal
+      .validate_transactions_delta(&co_id, since_generation as u64, since_count, &pending)
+      .map_err(to_napi_err)?;
+    Ok(to_napi_delta(delta))
   }
 
   /// Drop the cached validation engine for `co_id`, forcing a full recompute

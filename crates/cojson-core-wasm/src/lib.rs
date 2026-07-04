@@ -1,6 +1,6 @@
 use cojson_core::core::{
     CoJsonCoreError, NodeCore as RustNodeCore, PendingTxIn as RustPendingTxIn, SessionMapImpl,
-    Verdict as RustVerdict,
+    Verdict as RustVerdict, VerdictDelta as RustVerdictDelta,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Once;
@@ -443,6 +443,41 @@ impl From<RustVerdict> for GroupVerdictWire {
     }
 }
 
+/// Wire shape of a validation-verdict DELTA returned by
+/// `validateTransactionsDelta`, mirroring `VerdictDelta` on the Rust side:
+/// `{generation, fromIndex, verdicts}`. `generation` is an `f64` for lossless
+/// JS-number round-tripping of the u64 counter.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerdictDeltaWire {
+    generation: f64,
+    from_index: u32,
+    verdicts: Vec<GroupVerdictWire>,
+}
+
+impl From<RustVerdictDelta> for VerdictDeltaWire {
+    fn from(d: RustVerdictDelta) -> Self {
+        VerdictDeltaWire {
+            generation: d.generation as f64,
+            from_index: d.from_index,
+            verdicts: d.verdicts.into_iter().map(GroupVerdictWire::from).collect(),
+        }
+    }
+}
+
+fn pending_wire_to_rust(pending: Vec<PendingTxWire>) -> Vec<RustPendingTxIn> {
+    pending
+        .into_iter()
+        .map(|p| RustPendingTxIn {
+            session_id: p.session_id,
+            tx_index: p.tx_index,
+            source_made_at: p.source_made_at.map(|v| v as u64),
+            meta_json: p.meta_json,
+            source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
+        })
+        .collect()
+}
+
 #[wasm_bindgen]
 pub struct NodeCore {
     internal: RustNodeCore,
@@ -831,16 +866,7 @@ impl NodeCore {
     ) -> Result<JsValue, JsValue> {
         let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
             .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
-        let pending: Vec<RustPendingTxIn> = pending
-            .into_iter()
-            .map(|p| RustPendingTxIn {
-                session_id: p.session_id,
-                tx_index: p.tx_index,
-                source_made_at: p.source_made_at.map(|v| v as u64),
-                meta_json: p.meta_json,
-                source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
-            })
-            .collect();
+        let pending = pending_wire_to_rust(pending);
         let verdicts = self
             .internal
             .validate_transactions(&co_id, &pending)
@@ -848,6 +874,30 @@ impl NodeCore {
         let verdicts: Vec<GroupVerdictWire> =
             verdicts.into_iter().map(GroupVerdictWire::from).collect();
         Ok(serialize_js_value(verdicts))
+    }
+
+    /// Delta counterpart of `validateTransactions`: given the caller's
+    /// `(since_generation, since_count)` cursor, return only the verdicts it has
+    /// not seen as a `VerdictDeltaWire` (`{generation, fromIndex, verdicts}`). On
+    /// a generation match returns `verdicts[since_count..]`; on a mismatch returns
+    /// the whole list with `fromIndex = 0`. Same error contract as
+    /// `validateTransactions`.
+    #[wasm_bindgen(js_name = validateTransactionsDelta)]
+    pub fn validate_transactions_delta(
+        &mut self,
+        co_id: String,
+        since_generation: f64,
+        since_count: u32,
+        pending: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
+            .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
+        let pending = pending_wire_to_rust(pending);
+        let delta = self
+            .internal
+            .validate_transactions_delta(&co_id, since_generation as u64, since_count, &pending)
+            .map_err(to_wasm_err)?;
+        Ok(serialize_js_value(VerdictDeltaWire::from(delta)))
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute
