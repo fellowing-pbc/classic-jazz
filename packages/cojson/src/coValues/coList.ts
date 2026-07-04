@@ -36,11 +36,18 @@ export type ListOpPayload<T extends JsonValue> =
 
 type InsertionEntry<T extends JsonValue> = {
   madeAt: number;
-  predecessors: OpID[];
-  successors: OpID[];
+  /** The OpID of this insertion, stored once so it can be reused in results */
+  opID: OpID;
+  /** Direct references to the entries inserted before/after this one */
+  predecessors: InsertionEntry<T>[];
+  successors: InsertionEntry<T>[];
   change: InsertionOpPayload<T>;
   /** Whether this entry comes from a valid transaction */
   isValid: boolean;
+  /** Number of deletion ops targeting this insertion (>0 means deleted) */
+  deletionsCount: number;
+  /** Traversal generation marker, used instead of a visited Set */
+  visitedGen: number;
 };
 
 type DeletionEntry = {
@@ -62,8 +69,8 @@ export class RawCoList<
   core: AvailableCoValueCore;
 
   /** The internal state of the RawCoList */
-  afterStart: OpID[] = [];
-  beforeEnd: OpID[] = [];
+  afterStart: InsertionEntry<Item>[] = [];
+  beforeEnd: InsertionEntry<Item>[] = [];
   insertions: {
     [sessionID: SessionIndex]: {
       [txIdx: number]: {
@@ -71,6 +78,8 @@ export class RawCoList<
       };
     };
   } = {};
+  /** Traversal generation counter, bumped on every full traversal */
+  private traversalGen = 0;
   deletionsByInsertion: {
     [deletedSessionID: SessionIndex]: {
       [deletedTxIdx: number]: {
@@ -174,26 +183,13 @@ export class RawCoList<
       return false;
     }
 
+    // Deletions targeting this insertion may have been processed first
+    value.deletionsCount =
+      this.deletionsByInsertion[index]?.[opID.txIndex]?.[opID.changeIdx]
+        ?.length ?? 0;
+
     txEntry[opID.changeIdx] = value;
     return true;
-  }
-
-  private isDeleted(opID: OpID) {
-    const index = getSessionIndex(opID);
-
-    const sessionEntry = this.deletionsByInsertion[index];
-
-    if (!sessionEntry) {
-      return false;
-    }
-
-    const txEntry = sessionEntry[opID.txIndex];
-
-    if (!txEntry) {
-      return false;
-    }
-
-    return Boolean(txEntry[opID.changeIdx]?.length);
   }
 
   private pushDeletionsByInsertionEntry(opID: OpID, value: DeletionEntry) {
@@ -219,6 +215,12 @@ export class RawCoList<
     }
 
     list.push(value);
+
+    // Keep the deletion flag on the insertion entry in sync, if it exists
+    const insertionEntry = this.getInsertionsEntry(opID);
+    if (insertionEntry) {
+      insertionEntry.deletionsCount++;
+    }
   }
 
   processNewTransactions() {
@@ -236,7 +238,41 @@ export class RawCoList<
 
     let lastValidTransaction: number | undefined = undefined;
     let oldestValidTransaction: number | undefined = undefined;
-    this._cachedEntries = undefined;
+
+    // Incremental fast path: when the cached entries are only extended at the
+    // tail by the new transactions (the common case: appends arriving in
+    // order, e.g. while streaming or on local appendItems), we append to the
+    // cache instead of invalidating it and re-traversing the whole graph.
+    //
+    // `fastVisible` collects the already-closed append blocks in visible
+    // order. `block` is the currently open block: a run of insertions
+    // attached to the same parent. Blocks attached to an OpID parent are
+    // written by appendItems in reverse order (they become successors, which
+    // are traversed in reverse), so they are reversed when the block closes.
+    // Blocks attached to "start" render in insertion order.
+    let fastVisible: InsertionEntry<Item>[] | null =
+      this._cachedEntries !== undefined && !this.isTimeTravelEntity()
+        ? []
+        : null;
+    let block: InsertionEntry<Item>[] | null = null;
+    let blockIsReversed = false;
+    let blockParentOpID: OpID | undefined = undefined;
+    let tailOpID: OpID | undefined =
+      fastVisible && this._cachedEntries!.length > 0
+        ? this._cachedEntries![this._cachedEntries!.length - 1]!.opID
+        : undefined;
+
+    const closeBlock = () => {
+      if (block) {
+        if (blockIsReversed) {
+          block.reverse();
+        }
+        for (const entry of block) {
+          fastVisible!.push(entry);
+        }
+        block = null;
+      }
+    };
 
     for (const tx of transactions) {
       if (this.isFilteredOut(tx)) {
@@ -267,8 +303,8 @@ export class RawCoList<
         );
       }
 
-      for (const [changeIdx, changeUntyped] of changes.entries()) {
-        const change = changeUntyped as ListOpPayload<Item>;
+      for (let changeIdx = 0; changeIdx < changes.length; changeIdx++) {
+        const change = changes[changeIdx] as ListOpPayload<Item>;
 
         const opID = {
           sessionID: txID.sessionID,
@@ -278,22 +314,31 @@ export class RawCoList<
         };
 
         if (change.op === "pre" || change.op === "app") {
-          const created = this.createInsertionsEntry(opID, {
+          const entry: InsertionEntry<Item> = {
             madeAt,
+            opID,
             predecessors: [],
             successors: [],
             change,
             isValid,
-          });
+            deletionsCount: 0,
+            visitedGen: 0,
+          };
+          const created = this.createInsertionsEntry(opID, entry);
 
           // If the change index already exists, we don't need to process it again
           if (!created) {
+            // Duplicate ops (double merges) are rare: fall back to a rebuild
+            fastVisible = null;
             continue;
           }
 
           if (change.op === "pre") {
+            // Prepends are rare: fall back to a full re-traversal
+            fastVisible = null;
+
             if (change.before === "end") {
-              this.beforeEnd.push(opID);
+              this.beforeEnd.push(entry);
             } else {
               const beforeEntry = this.getInsertionsEntry(change.before);
 
@@ -301,22 +346,72 @@ export class RawCoList<
                 continue;
               }
 
-              beforeEntry.predecessors.push(opID);
+              beforeEntry.predecessors.push(entry);
             }
           } else {
             if (change.after === "start") {
-              this.afterStart.push(opID);
+              this.afterStart.push(entry);
+
+              // A new root at the end of afterStart renders after every other
+              // item only if there are no beforeEnd roots.
+              if (fastVisible && isValid) {
+                if (this.beforeEnd.length === 0) {
+                  if (block && blockIsReversed) {
+                    closeBlock();
+                  }
+                  if (!block) {
+                    block = [];
+                    blockIsReversed = false;
+                    blockParentOpID = undefined;
+                  }
+                  block.push(entry);
+                  tailOpID = opID;
+                } else {
+                  fastVisible = null;
+                }
+              }
             } else {
               const afterEntry = this.getInsertionsEntry(change.after);
 
               if (!afterEntry) {
+                if (isValid) {
+                  // Orphaned valid op: it stays invisible, but later ops may
+                  // attach to it, so conservatively fall back
+                  fastVisible = null;
+                }
                 continue;
               }
 
-              afterEntry.successors.push(opID);
+              afterEntry.successors.push(entry);
+
+              if (fastVisible && isValid) {
+                if (
+                  block &&
+                  blockIsReversed &&
+                  blockParentOpID &&
+                  opIDsEqual(change.after, blockParentOpID)
+                ) {
+                  // Sibling of the open block: renders before its previously
+                  // processed siblings (successors traverse in reverse)
+                  block.push(entry);
+                } else if (tailOpID && opIDsEqual(change.after, tailOpID)) {
+                  // Extends the current visible tail: start a new block
+                  closeBlock();
+                  block = [entry];
+                  blockIsReversed = true;
+                  blockParentOpID = tailOpID;
+                  tailOpID = opID;
+                } else {
+                  // Insertion somewhere else in the list: fall back
+                  fastVisible = null;
+                }
+              }
             }
           }
         } else if (change.op === "del") {
+          // Deletions may remove items already in the cache: fall back
+          fastVisible = null;
+
           this.pushDeletionsByInsertionEntry(change.insertion, {
             madeAt,
             deletionID: opID,
@@ -338,6 +433,20 @@ export class RawCoList<
       this.rebuildFromCore();
     } else {
       this.lastValidTransaction = lastValidTransaction;
+
+      if (fastVisible) {
+        closeBlock();
+        const cachedEntries = this._cachedEntries!;
+        for (const entry of fastVisible as InsertionEntry<Item>[]) {
+          cachedEntries.push({
+            value: entry.change.value,
+            madeAt: entry.madeAt,
+            opID: entry.opID,
+          });
+        }
+      } else {
+        this._cachedEntries = undefined;
+      }
     }
 
     this.totalValidTransactions += transactions.length;
@@ -448,58 +557,48 @@ export class RawCoList<
       madeAt: number;
       opID: OpID;
     }[] = [];
-    for (const opID of this.afterStart) {
-      this.fillArrayFromOpID(opID, arr);
+    const gen = ++this.traversalGen;
+    for (const entry of this.afterStart) {
+      this.fillArrayFromEntry(entry, arr, gen);
     }
-    for (const opID of this.beforeEnd) {
-      this.fillArrayFromOpID(opID, arr);
+    for (const entry of this.beforeEnd) {
+      this.fillArrayFromEntry(entry, arr, gen);
     }
     return arr;
   }
 
   /** @internal */
-  private fillArrayFromOpID(
-    opID: OpID,
+  private fillArrayFromEntry(
+    root: InsertionEntry<Item>,
     arr: {
       value: Item;
       madeAt: number;
       opID: OpID;
     }[],
+    gen: number,
   ) {
-    const todo = [opID]; // a stack with the next item to do at the end
-    const predecessorsVisited = new Set<OpID>();
+    const todo = [root]; // a stack with the next item to do at the end
 
     while (todo.length > 0) {
-      const currentOpID = todo[todo.length - 1]!;
+      const entry = todo[todo.length - 1]!;
 
-      const entry = this.getInsertionsEntry(currentOpID);
-
-      if (!entry) {
-        throw new Error("Missing op " + currentOpID);
-      }
-
-      const shouldTraversePredecessors =
-        entry.predecessors.length > 0 && !predecessorsVisited.has(currentOpID);
-
-      // We navigate the predecessors before processing the current opID in the list
-      if (shouldTraversePredecessors) {
+      // We navigate the predecessors before processing the current entry in the list
+      if (entry.predecessors.length > 0 && entry.visitedGen !== gen) {
+        entry.visitedGen = gen;
         for (const predecessor of entry.predecessors) {
           todo.push(predecessor);
         }
-        predecessorsVisited.add(currentOpID);
       } else {
-        // Remove the current opID from the todo stack to consider it processed.
+        // Remove the current entry from the todo stack to consider it processed.
         todo.pop();
-
-        const deleted = this.isDeleted(currentOpID);
 
         // Skip entries that are deleted or from invalid transactions
         // (e.g., losing init transactions in firstComesWins scenarios)
-        if (!deleted && entry.isValid) {
+        if (entry.deletionsCount === 0 && entry.isValid) {
           arr.push({
             value: entry.change.value,
             madeAt: entry.madeAt,
-            opID: currentOpID,
+            opID: entry.opID,
           });
         }
 
@@ -785,4 +884,13 @@ function getSessionIndex(txID: TransactionID): SessionIndex {
     return `${txID.sessionID}_branch_${txID.branch}`;
   }
   return txID.sessionID;
+}
+
+function opIDsEqual(a: OpID, b: OpID): boolean {
+  return (
+    a.txIndex === b.txIndex &&
+    a.changeIdx === b.changeIdx &&
+    a.sessionID === b.sessionID &&
+    (a.branch ?? undefined) === (b.branch ?? undefined)
+  );
 }

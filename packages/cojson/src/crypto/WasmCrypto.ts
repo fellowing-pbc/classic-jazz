@@ -281,7 +281,25 @@ export class WasmCrypto extends CryptoProvider<Blake3State> {
  * Adapter wrapping WasmSessionMap to implement SessionMapImpl interface
  */
 class SessionMapAdapter implements SessionMapImpl {
-  constructor(private readonly sessionMap: WasmSessionMap) {}
+  // Batch decrypt fast path. Only wired up when the underlying (prebuilt) wasm
+  // binary actually exposes `decryptTransactions`; otherwise it stays undefined
+  // so callers transparently fall back to the per-transaction path.
+  decryptTransactions?: (
+    sessionID: string,
+    indices: Uint32Array,
+    keySecret: string,
+  ) => string | undefined;
+
+  constructor(private readonly sessionMap: WasmSessionMap) {
+    if (typeof (sessionMap as any).decryptTransactions === "function") {
+      this.decryptTransactions = (sessionID, indices, keySecret) =>
+        (sessionMap as any).decryptTransactions(
+          sessionID,
+          indices,
+          keySecret,
+        ) ?? undefined;
+    }
+  }
 
   // === Header ===
   getHeader(): string {
