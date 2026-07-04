@@ -9,7 +9,7 @@ import { NapiCrypto } from "cojson/crypto/NapiCrypto";
  * the kill switch is what routes validation/role-resolution through the
  * pure-TS algorithm instead of the native NodeCore, so this is an
  * apples-to-apples comparison of the two code paths, not two crypto
- * backends. (WasmCrypto/RNCrypto have no native validateGroup/roleOf at all,
+ * backends. (WasmCrypto/RNCrypto have no native validateTransactions/roleOf at all,
  * so they always run the TS path regardless of the kill switch — see
  * permissions.ts/group.ts capability gates.)
  */
@@ -182,7 +182,7 @@ await cronometro(
           .COJSON_DISABLE_NATIVE_VALIDATION;
       },
     },
-    "validateGroup - 200-tx group, full revalidate (native)": {
+    "validateTransactions - 200-tx group, full revalidate (native)": {
       async before() {
         delete (process.env as Record<string, string | undefined>)
           .COJSON_DISABLE_NATIVE_VALIDATION;
@@ -192,7 +192,7 @@ await cronometro(
         revalidateFully(validationScenario);
       },
     },
-    "validateGroup - 200-tx group, full revalidate (TS fallback)": {
+    "validateTransactions - 200-tx group, full revalidate (TS fallback)": {
       async before() {
         process.env.COJSON_DISABLE_NATIVE_VALIDATION = "1";
         validationScenario = buildValidationScenario();

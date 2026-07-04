@@ -72,6 +72,18 @@ pub enum VerdictOutcome {
     ValidBranchPointerOnly,
 }
 
+impl VerdictOutcome {
+    /// The canonical wire string, shared by the napi binding and the fixture
+    /// tests — single source of truth, matching the TS union in crypto.ts.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            VerdictOutcome::Valid => "valid",
+            VerdictOutcome::Invalid => "invalid",
+            VerdictOutcome::ValidBranchPointerOnly => "validBranchPointerOnly",
+        }
+    }
+}
+
 /// A per-transaction validation verdict, in validation order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
@@ -1192,11 +1204,7 @@ mod tests {
             // verdict with no `outcome` derives it from `valid` (valid ->
             // "valid", invalid -> "invalid") so pre-stage-3 fixtures are
             // unaffected while `validBranchPointerOnly` is pinned exactly.
-            let outcome_str = |o: super::VerdictOutcome| match o {
-                super::VerdictOutcome::Valid => "valid",
-                super::VerdictOutcome::Invalid => "invalid",
-                super::VerdictOutcome::ValidBranchPointerOnly => "validBranchPointerOnly",
-            };
+            let outcome_str = |o: super::VerdictOutcome| o.as_str();
             let key = |v: &Verdict| {
                 (
                     made_at[&(v.session_id.clone(), v.tx_index)],

@@ -379,11 +379,7 @@ pub struct GroupVerdict {
 }
 
 fn verdict_outcome_to_str(outcome: RustVerdictOutcome) -> String {
-  match outcome {
-    RustVerdictOutcome::Valid => "valid".to_string(),
-    RustVerdictOutcome::Invalid => "invalid".to_string(),
-    RustVerdictOutcome::ValidBranchPointerOnly => "validBranchPointerOnly".to_string(),
-  }
+  outcome.as_str().to_string()
 }
 
 #[napi]
