@@ -726,7 +726,7 @@ impl NodeCore {
       .collect();
     let verdicts = self
       .internal
-      .validate_group(&co_id, &pending)
+      .validate_transactions(&co_id, &pending)
       .map_err(to_napi_err)?;
     Ok(
       verdicts

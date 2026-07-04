@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::core::group_engine::engine::{
-    role_of as engine_role_of, validate_group as engine_validate_group, GroupEngineState,
+    role_of as engine_role_of, validate_transactions as engine_validate_transactions,
+    GroupEngineState,
 };
 use crate::core::group_engine::tx_view::PendingTxIn;
 use crate::core::group_engine::types::Role;
@@ -58,12 +59,14 @@ impl NodeCore {
     /// Validate every transaction of `co_id`, returning the verdicts in
     /// validation order. Ensures the (cross-CoValue) group engine is fresh,
     /// rebuilding it — and any parent/owner engines it depends on — as needed.
+    /// (Stage 2 name: `validate_group`; this is Stage 3's unified
+    /// `validateTransactions` surface, which subsumes it.)
     ///
     /// `co_id` itself must already be registered: an unregistered primary
     /// coId is API misuse (`UnknownCoValue`), consistent with `get`/`get_mut`.
     /// A dependency (parent group / owning account) discovered missing during
     /// the recursive build still surfaces as `CoValueNotLoaded`, unchanged.
-    pub fn validate_group(
+    pub fn validate_transactions(
         &mut self,
         co_id: &str,
         pending: &[PendingTxIn],
@@ -72,7 +75,19 @@ impl NodeCore {
             return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
         }
         let Self { covalues, engines } = self;
-        engine_validate_group(covalues, engines, co_id, pending)
+        engine_validate_transactions(covalues, engines, co_id, pending)
+    }
+
+    /// Drop the cached validation engine for `co_id`, forcing a full recompute
+    /// on the next `validate_transactions` / `role_of`. Mirrors TS
+    /// `CoValueCore.resetValidation`, which the sync layer fires on a CoValue
+    /// AND on every dependant that referenced it.
+    ///
+    /// An absent id is a NO-OP (not `UnknownCoValue`): the TS caller invokes
+    /// this on dependants that may never have been registered on this node, so
+    /// erroring would be hostile — same rationale as `remove_co_value`.
+    pub fn reset_validation(&mut self, co_id: &str) {
+        self.engines.remove(co_id);
     }
 
     /// Read-side role of `member` in group `group_id` at `at_time` (`None` =

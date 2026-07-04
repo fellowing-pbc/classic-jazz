@@ -61,10 +61,10 @@ use crate::core::session_map::{CoValueHeader, JsonValue, RulesetDef, SessionMapE
 const EVERYONE: &str = "everyone";
 
 /// The three-way validation result a transaction can land in. Stage 3
-/// (`validateTransactions`) adds `ValidBranchPointerOnly` for the
-/// ownedByGroup reader branch-pointer special case (permissions.ts:124-137,
-/// not yet ported here — see `build_owned_by_group`'s note); every verdict
-/// produced by this module today is `Valid` or `Invalid`.
+/// (`validateTransactions`) adds `ValidBranchPointerOnly` for the ownedByGroup
+/// reader branch-pointer special case (permissions.ts:124-137), emitted by
+/// [`build_owned_by_group`]. Both `Valid` and `ValidBranchPointerOnly` are
+/// non-`Invalid` outcomes, so [`Verdict::valid`] is true for each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerdictOutcome {
     Valid,
@@ -77,13 +77,40 @@ pub enum VerdictOutcome {
 pub struct Verdict {
     pub session_id: String,
     pub tx_index: u32,
-    /// `outcome != VerdictOutcome::Invalid` — kept in sync with `outcome` at
-    /// every construction site so pre-stage-3 callers (and the stage-2
-    /// fixture tests, which assert on `valid`/`reason` only) are unaffected.
+    /// `outcome != VerdictOutcome::Invalid`, derived once in [`Verdict::new`]
+    /// (the sole constructor) so the flag can never drift from `outcome`.
+    /// Pre-stage-3 callers that read only `valid`/`reason` are unaffected.
     pub valid: bool,
     pub outcome: VerdictOutcome,
     /// Verbatim TS reason string when invalid; `None` when valid.
     pub reason: Option<String>,
+}
+
+impl Verdict {
+    /// The ONLY verdict constructor. Derives `valid = outcome !=
+    /// VerdictOutcome::Invalid` so the flag can never drift from the outcome
+    /// (both non-`Invalid` outcomes — `Valid` and `ValidBranchPointerOnly` —
+    /// are valid). A `reason` is required exactly when the outcome is
+    /// `Invalid`, and forbidden otherwise (debug-asserted).
+    fn new(
+        session_id: String,
+        tx_index: u32,
+        outcome: VerdictOutcome,
+        reason: Option<String>,
+    ) -> Verdict {
+        debug_assert_eq!(
+            outcome == VerdictOutcome::Invalid,
+            reason.is_some(),
+            "an Invalid verdict must carry a reason; a valid one must not"
+        );
+        Verdict {
+            session_id,
+            tx_index,
+            valid: outcome != VerdictOutcome::Invalid,
+            outcome,
+            reason,
+        }
+    }
 }
 
 /// The ruleset kind of a CoValue header, plus the facts the engine needs.
@@ -199,6 +226,22 @@ fn change_key(change: &serde_json::Value) -> &str {
 
 fn change_value_str(change: &serde_json::Value) -> Option<&str> {
     change.get("value").and_then(|v| v.as_str())
+}
+
+/// JavaScript truthiness of an optional JSON value, mirroring how TS evaluates
+/// `tx.meta?.branch` / `tx.meta?.ownerId` in the reader branch-pointer guard
+/// (`permissions.ts:143-147`). A missing key, `null`, `false`, `0`/`NaN`, and
+/// the empty string are FALSY; every other string/number, and any array or
+/// object, is truthy (JS treats `[]`/`{}` as truthy). The stage-3 fixtures use
+/// non-empty string values for both keys, so this only matters for hardening.
+fn is_truthy(v: Option<&serde_json::Value>) -> bool {
+    match v {
+        None | Some(serde_json::Value::Null) => false,
+        Some(serde_json::Value::Bool(b)) => *b,
+        Some(serde_json::Value::Number(n)) => n.as_f64().map(|f| f != 0.0 && !f.is_nan()).unwrap_or(false),
+        Some(serde_json::Value::String(s)) => !s.is_empty(),
+        Some(serde_json::Value::Array(_)) | Some(serde_json::Value::Object(_)) => true,
+    }
 }
 
 /// Parse a `parent_<id>` change value into a [`ParentRoleMapping`].
@@ -331,13 +374,12 @@ pub fn build_group_engine(
             let mut txs = collect_group_txs(sm, pending);
             sort_for_validation(&mut txs);
             for tx in &txs {
-                state.verdicts.push(Verdict {
-                    session_id: tx.session_id.clone(),
-                    tx_index: tx.tx_index,
-                    valid: true,
-                    outcome: VerdictOutcome::Valid,
-                    reason: None,
-                });
+                state.verdicts.push(Verdict::new(
+                    tx.session_id.clone(),
+                    tx.tx_index,
+                    VerdictOutcome::Valid,
+                    None,
+                ));
             }
         }
     }
@@ -380,22 +422,20 @@ fn build_group_ruleset(
 
         macro_rules! verdict {
             (valid) => {{
-                state.verdicts.push(Verdict {
-                    session_id: tx.session_id.clone(),
-                    tx_index: tx.tx_index,
-                    valid: true,
-                    outcome: VerdictOutcome::Valid,
-                    reason: None,
-                });
+                state.verdicts.push(Verdict::new(
+                    tx.session_id.clone(),
+                    tx.tx_index,
+                    VerdictOutcome::Valid,
+                    None,
+                ));
             }};
             (invalid $reason:expr) => {{
-                state.verdicts.push(Verdict {
-                    session_id: tx.session_id.clone(),
-                    tx_index: tx.tx_index,
-                    valid: false,
-                    outcome: VerdictOutcome::Invalid,
-                    reason: Some($reason.to_string()),
-                });
+                state.verdicts.push(Verdict::new(
+                    tx.session_id.clone(),
+                    tx.tx_index,
+                    VerdictOutcome::Invalid,
+                    Some($reason.to_string()),
+                ));
             }};
         }
 
@@ -778,33 +818,55 @@ fn build_owned_by_group(
             visited,
         )?;
 
-        // The reader branch-pointer special case (permissions.ts:124-137)
-        // requires `tx.meta.branch`, which no fixture exercises and which the
-        // transaction view does not surface; it is intentionally not ported.
-        // Stage 3 ports it: `validateTransactions`' PendingTx will carry
-        // decrypted meta and the verdict gains a `validBranchPointerOnly`
-        // outcome.
+        // The reader branch-pointer special case (permissions.ts:124-137),
+        // checked BEFORE the write-permission gate exactly as TS does. The guard
+        // is `transactorRoleAtTxTime === "reader" && tx.meta?.branch &&
+        // tx.meta?.ownerId`: the role must be EXACTLY reader (an admin posting an
+        // identically-shaped {branch, ownerId} pointer is NOT trimmed — it has
+        // write permission and falls through to a plain Valid), and both meta
+        // keys must be JS-truthy (see `is_truthy`). The actual trim (forcing
+        // changes/meta to the pointer only) stays in TS; the Rust engine merely
+        // classifies the outcome as `ValidBranchPointerOnly`.
+        //
+        // `tx.meta` is populated from the pending tx's DECRYPTED meta first,
+        // then the trusting tx's own wire meta (tx_view). A received private tx
+        // has meta `None` at validation (decryption follows validation), so this
+        // guard cannot fire for it — see `owned_private_tx_meta_unavailable`.
+        let is_reader_branch_pointer = role == Some(Role::Reader)
+            && tx
+                .meta
+                .as_ref()
+                .is_some_and(|m| is_truthy(m.get("branch")) && is_truthy(m.get("ownerId")));
+
+        if is_reader_branch_pointer {
+            state.verdicts.push(Verdict::new(
+                tx.session_id.clone(),
+                tx.tx_index,
+                VerdictOutcome::ValidBranchPointerOnly,
+                None,
+            ));
+            continue;
+        }
+
         let has_write = matches!(
             role,
             Some(Role::Admin) | Some(Role::Manager) | Some(Role::Writer) | Some(Role::WriteOnly)
         );
 
         if has_write {
-            state.verdicts.push(Verdict {
-                session_id: tx.session_id.clone(),
-                tx_index: tx.tx_index,
-                valid: true,
-                outcome: VerdictOutcome::Valid,
-                reason: None,
-            });
+            state.verdicts.push(Verdict::new(
+                tx.session_id.clone(),
+                tx.tx_index,
+                VerdictOutcome::Valid,
+                None,
+            ));
         } else {
-            state.verdicts.push(Verdict {
-                session_id: tx.session_id.clone(),
-                tx_index: tx.tx_index,
-                valid: false,
-                outcome: VerdictOutcome::Invalid,
-                reason: Some("Transactor has no write permissions".to_string()),
-            });
+            state.verdicts.push(Verdict::new(
+                tx.session_id.clone(),
+                tx.tx_index,
+                VerdictOutcome::Invalid,
+                Some("Transactor has no write permissions".to_string()),
+            ));
         }
     }
 
@@ -1004,8 +1066,10 @@ fn is_self_extension(
 // =====================================================================
 
 /// Validate every transaction of `co_id` and return the verdicts in validation
-/// order. Operates on `NodeCore`'s disjoint field borrows.
-pub fn validate_group(
+/// order. Operates on `NodeCore`'s disjoint field borrows. (Stage 2 name:
+/// `validate_group`; renamed here as Stage 3's unified `validateTransactions`
+/// surface, which subsumes it and adds the `ValidBranchPointerOnly` outcome.)
+pub fn validate_transactions(
     covalues: &HashMap<String, SessionMapImpl>,
     engines: &mut HashMap<String, GroupEngineState>,
     co_id: &str,
@@ -1066,12 +1130,10 @@ mod tests {
     /// of verdicts within each equal-`madeAt` group — pinning validity, reason, and
     /// the fully-ordered part of the sequence, while allowing equal-`madeAt`
     /// cross-session ties to differ. See the report's ordering note.
-    fn run_fixture(name: &str) {
-        let fix = FixtureFile::load(name);
-        let made_at = made_at_index(&fix);
-
-        // Build each covalue's session map exactly as the standalone fixture
-        // helper does, but inside the node's registry.
+    /// Load every covalue of a fixture into a fresh `NodeCore`, mirroring the
+    /// standalone fixture builder (create + transaction replay under
+    /// skip_verify). Shared by `run_fixture` and the dedicated stage-3 tests.
+    fn load_fixture_node(name: &str, fix: &FixtureFile) -> NodeCore {
         let mut node = NodeCore::new();
         for cov in &fix.covalues {
             // Reuse the shared builder to stay identical to the tx_view tests,
@@ -1087,12 +1149,22 @@ mod tests {
                     .unwrap_or_else(|e| panic!("[{name}] add txs {}: {e}", session.session_id));
             }
         }
+        node
+    }
 
-        // Verdicts: one validate_group call per verdict-bearing covalue.
+    fn run_fixture(name: &str) {
+        let fix = FixtureFile::load(name);
+        let made_at = made_at_index(&fix);
+
+        // Build each covalue's session map exactly as the standalone fixture
+        // helper does, but inside the node's registry.
+        let mut node = load_fixture_node(name, &fix);
+
+        // Verdicts: one validate_transactions call per verdict-bearing covalue.
         for (co_id, expected) in &fix.verdicts {
             let got = node
-                .validate_group(co_id, &[])
-                .unwrap_or_else(|e| panic!("[{name}] validate_group {co_id}: {e}"));
+                .validate_transactions(co_id, &[])
+                .unwrap_or_else(|e| panic!("[{name}] validate_transactions {co_id}: {e}"));
             assert_eq!(
                 got.len(),
                 expected.len(),
@@ -1114,7 +1186,17 @@ mod tests {
                 );
             }
 
-            // (b) identical verdict set within each equal-madeAt group.
+            // (b) identical verdict set within each equal-madeAt group. The
+            // comparison honors the stage-3 `outcome` field: got's
+            // `VerdictOutcome` is compared as its wire string, and an expected
+            // verdict with no `outcome` derives it from `valid` (valid ->
+            // "valid", invalid -> "invalid") so pre-stage-3 fixtures are
+            // unaffected while `validBranchPointerOnly` is pinned exactly.
+            let outcome_str = |o: super::VerdictOutcome| match o {
+                super::VerdictOutcome::Valid => "valid",
+                super::VerdictOutcome::Invalid => "invalid",
+                super::VerdictOutcome::ValidBranchPointerOnly => "validBranchPointerOnly",
+            };
             let key = |v: &Verdict| {
                 (
                     made_at[&(v.session_id.clone(), v.tx_index)],
@@ -1122,18 +1204,24 @@ mod tests {
                     v.tx_index,
                     v.valid,
                     v.reason.clone(),
+                    outcome_str(v.outcome).to_string(),
                 )
             };
             let mut gs: Vec<_> = got.iter().map(key).collect();
             let mut es: Vec<_> = expected
                 .iter()
                 .map(|e| {
+                    let outcome = e
+                        .outcome
+                        .clone()
+                        .unwrap_or_else(|| if e.valid { "valid" } else { "invalid" }.to_string());
                     (
                         made_at[&(e.session_id.clone(), e.tx_index)],
                         e.session_id.clone(),
                         e.tx_index,
                         e.valid,
                         e.reason.clone(),
+                        outcome,
                     )
                 })
                 .collect();
@@ -1187,6 +1275,154 @@ mod tests {
     fixture_test!(self_revoke, "self_revoke");
     fixture_test!(write_only_keys, "write_only_keys");
 
+    // --- Stage 3: ownedByGroup / account / unsafeAllowAll + branch pointer ---
+    fixture_test!(unsafe_allow_all, "unsafe_allow_all");
+    fixture_test!(owned_by_account, "owned_by_account");
+    fixture_test!(owned_by_group_roles, "owned_by_group_roles");
+    fixture_test!(
+        owned_by_group_role_change_over_time,
+        "owned_by_group_role_change_over_time"
+    );
+    fixture_test!(owned_reader_branch_pointer, "owned_reader_branch_pointer");
+    fixture_test!(
+        owned_private_tx_meta_unavailable,
+        "owned_private_tx_meta_unavailable"
+    );
+
+    // =====================================================================
+    // merged_tx_ties: the admin branch-pointer COUNTER-case + all-valid multiset
+    // =====================================================================
+
+    /// `merged_tx_ties` (ownedByGroup) — every transaction is authored by the
+    /// group's admin. One of them carries an `{branch, ownerId}` meta that is
+    /// shape-identical to the reader branch-pointer trim's input; because the
+    /// author is admin (NOT reader), the reader trim must NOT fire. This pins
+    /// (a) the documented all-valid multiset and (b) that NO verdict is
+    /// `ValidBranchPointerOnly` — the trim's `role == reader` guard.
+    #[test]
+    fn merged_tx_ties_admin_branch_pointer_is_not_trimmed() {
+        use crate::core::group_engine::tx_view::PendingTxIn;
+        use super::VerdictOutcome;
+
+        let owned_id = "co_zSKK5oFqS8LcD3Rj14nYJQf5S6B";
+        let fix = FixtureFile::load("merged_tx_ties");
+        let mut node = load_fixture_node("merged_tx_ties", &fix);
+
+        // The owning group's id — used as a truthy `ownerId` for the pointer.
+        let group_id = "co_zQRoiJcPP4nRGqf8bnMWoxYJkZH";
+        // The single admin session of the owned covalue.
+        let admin_session = fix
+            .covalues
+            .iter()
+            .find(|c| c.co_id == owned_id)
+            .expect("owned covalue present")
+            .sessions[0]
+            .session_id
+            .clone();
+
+        // Force branch-pointer meta onto the (private) tx #1 so the trim's meta
+        // precondition is satisfied; only the admin-vs-reader role must then
+        // decide the outcome.
+        let pending = vec![PendingTxIn {
+            session_id: admin_session.clone(),
+            tx_index: 1,
+            source_made_at: None,
+            meta_json: Some(format!(
+                r#"{{"branch":"feature-branch","ownerId":"{group_id}"}}"#
+            )),
+            source_tx_id: None,
+        }];
+
+        let got = node
+            .validate_transactions(owned_id, &pending)
+            .expect("validate merged_tx_ties");
+
+        assert_eq!(got.len(), 5, "5 transactions in the owned covalue");
+        assert!(
+            got.iter().all(|v| v.valid),
+            "every merged_tx_ties transaction is valid (admin-authored): {got:#?}"
+        );
+        assert!(
+            got.iter()
+                .all(|v| v.outcome != VerdictOutcome::ValidBranchPointerOnly),
+            "an admin's identically-shaped branch pointer must stay plain Valid, \
+             never validBranchPointerOnly: {got:#?}"
+        );
+    }
+
+    // =====================================================================
+    // reset_validation: drop the cached engine, forcing a rebuild
+    // =====================================================================
+
+    /// `reset_validation` must drop the cached engine so the NEXT validate
+    /// rebuilds with fresh inputs. Probe (behavioral, no counter): the engine
+    /// cache is keyed by per-session tx-counts and IGNORES `pending`, so a
+    /// second `validate_transactions` with changed `pending` normally hits the
+    /// cache and returns the stale verdicts. `reset_validation` between the two
+    /// calls forces the rebuild, letting the new pending meta take effect —
+    /// flipping a reader's private write from "no write permissions" to the
+    /// branch-pointer outcome.
+    ///
+    /// Also asserts the absent-id no-op contract.
+    #[test]
+    fn reset_validation_forces_rebuild_with_fresh_pending() {
+        use crate::core::group_engine::tx_view::PendingTxIn;
+        use super::VerdictOutcome;
+
+        let owned_id = "co_zaNLWDF81o7S9DV94nkS9NPhLTE";
+        // The reader's PRIVATE tx — meta is unavailable at validation, so it is
+        // rejected until decrypted meta is supplied as pending.
+        let private_session = "co_zb63hTq7sRoA9bULJuhYkkD3Ytc_session_zFf61jGJyWoS";
+        let owner_group = "co_z95CafWcqPaQiGCj9YiF3QyGPrN";
+
+        let fix = FixtureFile::load("owned_private_tx_meta_unavailable");
+        let mut node = load_fixture_node("owned_private_tx_meta_unavailable", &fix);
+
+        let private_verdict = |verdicts: &[Verdict]| -> Verdict {
+            verdicts
+                .iter()
+                .find(|v| v.session_id == private_session && v.tx_index == 0)
+                .expect("private tx verdict present")
+                .clone()
+        };
+
+        // 1) Baseline: no pending meta -> reader's private write is rejected.
+        let base = node.validate_transactions(owned_id, &[]).unwrap();
+        assert!(!private_verdict(&base).valid, "private write rejected without meta");
+
+        // Branch-pointer meta the reader "intended" — visible only once decrypted.
+        let pending = vec![PendingTxIn {
+            session_id: private_session.to_string(),
+            tx_index: 0,
+            source_made_at: None,
+            meta_json: Some(format!(
+                r#"{{"branch":"feature-branch","ownerId":"{owner_group}"}}"#
+            )),
+            source_tx_id: None,
+        }];
+
+        // 2) Same node, NEW pending, but NO reset -> cache hit ignores pending.
+        let cached = node.validate_transactions(owned_id, &pending).unwrap();
+        assert!(
+            !private_verdict(&cached).valid,
+            "without reset, the cached engine ignores the new pending meta"
+        );
+
+        // 3) reset_validation -> the next validate rebuilds and sees the pending.
+        node.reset_validation(owned_id);
+        let rebuilt = node.validate_transactions(owned_id, &pending).unwrap();
+        let v = private_verdict(&rebuilt);
+        assert!(v.valid, "after reset, the branch pointer is honored");
+        assert_eq!(
+            v.outcome,
+            VerdictOutcome::ValidBranchPointerOnly,
+            "reader + branch-pointer meta -> validBranchPointerOnly after rebuild"
+        );
+
+        // Absent-id contract: no-op, no panic.
+        node.reset_validation("co_zNeverRegistered");
+    }
+
     // =====================================================================
     // Error taxonomy: UnknownCoValue (primary) vs CoValueNotLoaded (dependency)
     // =====================================================================
@@ -1197,12 +1433,12 @@ mod tests {
     /// `CoValueNotLoaded`, which is reserved for dependencies (parent groups /
     /// owning accounts) discovered missing during a recursive build.
     #[test]
-    fn validate_group_unknown_primary_errors() {
+    fn validate_transactions_unknown_primary_errors() {
         use crate::core::session_map::SessionMapError;
 
         let mut node = NodeCore::new();
 
-        match node.validate_group("co_zNope", &[]) {
+        match node.validate_transactions("co_zNope", &[]) {
             Err(SessionMapError::UnknownCoValue(id)) => assert_eq!(id, "co_zNope"),
             other => panic!("expected UnknownCoValue, got {other:?}"),
         }
@@ -1265,7 +1501,7 @@ mod tests {
                 .unwrap_or_else(|e| panic!("[parent_extend] add txs {}: {e}", session.session_id));
         }
 
-        match node.validate_group(&child.co_id, &[]) {
+        match node.validate_transactions(&child.co_id, &[]) {
             Err(SessionMapError::CoValueNotLoaded(id)) => assert_eq!(id, parent_id),
             other => panic!("expected CoValueNotLoaded({parent_id}), got {other:?}"),
         }
