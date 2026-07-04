@@ -82,6 +82,19 @@ export declare class NodeCore {
    * "CoValue not loaded: <id>" if a parent group / owning account is missing.
    */
   roleOf(groupId: string, member: string, atTime?: number | undefined | null): string | null
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coMap view; returns the
+   * current monotonic version. Call after each ingest batch.
+   */
+  mapMaterialize(coId: string, pending: Array<PendingTx>): number
+  /** Boundary (a): latest JSON value for `key`, or null. */
+  mapGet(coId: string, key: string): string | null
+  /** Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest). */
+  mapGetAt(coId: string, key: string, atTime?: number | undefined | null): string | null
+  /** Boundary (b): whole materialized map as a JSON object string. */
+  mapSnapshot(coId: string): string
+  /** Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`. */
+  mapDelta(coId: string, sinceVersion: number): string
 }
 
 export declare class SessionMap {

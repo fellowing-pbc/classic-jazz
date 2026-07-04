@@ -876,4 +876,64 @@ impl NodeCore {
             .map_err(to_wasm_err)?;
         Ok(role.map(|r| r.as_str().to_string()))
     }
+
+    // === R0 coMap materialization (experimental) ===
+    // Three read-boundary candidates benchmarked in R0. `mapMaterialize` is the
+    // only mutating path; the read methods operate on the cached view.
+
+    /// Materialize (or incrementally refresh) `co_id`'s coMap view; returns the
+    /// current monotonic version. `pending` is a `JsValue` array of
+    /// `PendingTxWire` objects (same shape as `validateTransactions`).
+    #[wasm_bindgen(js_name = mapMaterialize)]
+    pub fn map_materialize(&mut self, co_id: String, pending: JsValue) -> Result<f64, JsValue> {
+        let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
+            .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
+        let pending: Vec<RustPendingTxIn> = pending
+            .into_iter()
+            .map(|p| RustPendingTxIn {
+                session_id: p.session_id,
+                tx_index: p.tx_index,
+                source_made_at: p.source_made_at.map(|v| v as u64),
+                meta_json: p.meta_json,
+                source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
+            })
+            .collect();
+        Ok(self
+            .internal
+            .map_materialize(&co_id, &pending)
+            .map_err(to_wasm_err)? as f64)
+    }
+
+    /// Boundary (a): latest JSON value for `key`, or undefined.
+    #[wasm_bindgen(js_name = mapGet)]
+    pub fn map_get(&self, co_id: String, key: String) -> Result<Option<String>, JsValue> {
+        self.internal.map_get(&co_id, &key).map_err(to_wasm_err)
+    }
+
+    /// Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
+    #[wasm_bindgen(js_name = mapGetAt)]
+    pub fn map_get_at(
+        &self,
+        co_id: String,
+        key: String,
+        at_time: Option<f64>,
+    ) -> Result<Option<String>, JsValue> {
+        self.internal
+            .map_get_at(&co_id, &key, at_time.map(|v| v as u64))
+            .map_err(to_wasm_err)
+    }
+
+    /// Boundary (b): whole materialized map as a JSON object string.
+    #[wasm_bindgen(js_name = mapSnapshot)]
+    pub fn map_snapshot(&self, co_id: String) -> Result<String, JsValue> {
+        self.internal.map_snapshot(&co_id).map_err(to_wasm_err)
+    }
+
+    /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`.
+    #[wasm_bindgen(js_name = mapDelta)]
+    pub fn map_delta(&self, co_id: String, since_version: f64) -> Result<String, JsValue> {
+        self.internal
+            .map_delta(&co_id, since_version as u64)
+            .map_err(to_wasm_err)
+    }
 }

@@ -836,6 +836,71 @@ impl NodeCore {
       .map_err(to_napi_err)?;
     Ok(role.map(|r| r.as_str().to_string()))
   }
+
+  // === R0 coMap materialization (experimental) ===
+  // Three read-boundary candidates benchmarked in R0. `mapMaterialize` is the
+  // only mutating path; the read methods operate on the cached view.
+
+  /// Materialize (or incrementally refresh) `co_id`'s coMap view; returns the
+  /// current monotonic version. Call after each ingest batch.
+  #[napi]
+  pub fn map_materialize(
+    &mut self,
+    co_id: String,
+    pending: Vec<PendingTx>,
+  ) -> napi::Result<f64> {
+    let pending: Vec<RustPendingTxIn> = pending
+      .into_iter()
+      .map(|p| RustPendingTxIn {
+        session_id: p.session_id,
+        tx_index: p.tx_index,
+        source_made_at: p.source_made_at.map(|v| v as u64),
+        meta_json: p.meta_json,
+        source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
+      })
+      .collect();
+    Ok(
+      self
+        .internal
+        .map_materialize(&co_id, &pending)
+        .map_err(to_napi_err)? as f64,
+    )
+  }
+
+  /// Boundary (a): latest JSON value for `key`, or null.
+  #[napi]
+  pub fn map_get(&self, co_id: String, key: String) -> napi::Result<Option<String>> {
+    self.internal.map_get(&co_id, &key).map_err(to_napi_err)
+  }
+
+  /// Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
+  #[napi]
+  pub fn map_get_at(
+    &self,
+    co_id: String,
+    key: String,
+    at_time: Option<f64>,
+  ) -> napi::Result<Option<String>> {
+    self
+      .internal
+      .map_get_at(&co_id, &key, at_time.map(|v| v as u64))
+      .map_err(to_napi_err)
+  }
+
+  /// Boundary (b): whole materialized map as a JSON object string.
+  #[napi]
+  pub fn map_snapshot(&self, co_id: String) -> napi::Result<String> {
+    self.internal.map_snapshot(&co_id).map_err(to_napi_err)
+  }
+
+  /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`.
+  #[napi]
+  pub fn map_delta(&self, co_id: String, since_version: f64) -> napi::Result<String> {
+    self
+      .internal
+      .map_delta(&co_id, since_version as u64)
+      .map_err(to_napi_err)
+  }
 }
 
 // ============================================================================
