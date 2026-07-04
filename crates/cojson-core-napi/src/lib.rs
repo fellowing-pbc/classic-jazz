@@ -704,6 +704,8 @@ impl NodeCore {
   // above; the "lifted verbatim" breadcrumb on that section doesn't apply here.
 
   /// Validate a group/account CoValue; verdicts for ALL its transactions in validation order.
+  /// Throws "Unknown CoValue: <id>" if `co_id` itself is not registered, and
+  /// "CoValue not loaded: <id>" if a dependency (parent group / owning account) is missing.
   #[napi]
   pub fn validate_group(
     &mut self,
@@ -736,6 +738,8 @@ impl NodeCore {
   }
 
   /// Role of member in group at time (ms). Returns the role string or null.
+  /// Throws "Unknown CoValue: <id>" if `group_id` itself is not registered, and
+  /// "CoValue not loaded: <id>" if a parent group / owning account is missing.
   #[napi]
   pub fn role_of(
     &mut self,

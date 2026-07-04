@@ -63,9 +63,17 @@ export declare class NodeCore {
   decryptTransaction(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
   /** Decrypt transaction meta */
   decryptTransactionMeta(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
-  /** Validate a group/account CoValue; verdicts for ALL its transactions in validation order. */
+  /**
+   * Validate a group/account CoValue; verdicts for ALL its transactions in validation order.
+   * Throws "Unknown CoValue: <id>" if `co_id` itself is not registered, and
+   * "CoValue not loaded: <id>" if a dependency (parent group / owning account) is missing.
+   */
   validateGroup(coId: string, pending: Array<PendingTx>): Array<GroupVerdict>
-  /** Role of member in group at time (ms). Returns the role string or null. */
+  /**
+   * Role of member in group at time (ms). Returns the role string or null.
+   * Throws "Unknown CoValue: <id>" if `group_id` itself is not registered, and
+   * "CoValue not loaded: <id>" if a parent group / owning account is missing.
+   */
   roleOf(groupId: string, member: string, atTime?: number | undefined | null): string | null
 }
 
