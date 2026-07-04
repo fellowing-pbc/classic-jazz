@@ -110,6 +110,14 @@ export declare class NodeCore {
    */
   mapDeltaRich(coId: string, sinceVersion: number): string
   /**
+   * Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
+   * array string (`[]` if absent). The lazy per-key counterpart to
+   * `mapDeltaRich`: a TS `RawCoMap` pulls this ONLY when a rich accessor first
+   * touches the key, so ingest transfers only latest values (the cheap
+   * `mapDelta`), never the per-op history of un-inspected keys.
+   */
+  mapOpsForKey(coId: string, key: string): string
+  /**
    * Frontier read: latest frontier-visible value of `key` (null = absent).
    * `frontier_json` is `{ sessionID: txCount }`.
    */

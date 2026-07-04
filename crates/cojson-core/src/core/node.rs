@@ -356,6 +356,28 @@ impl NodeCore {
             }))
     }
 
+    /// Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
+    /// string (`[]` if the key is absent or the view is not yet materialized).
+    /// The lazy per-key counterpart to [`map_delta_rich`]: a TS `RawCoMap` pulls
+    /// this ONLY when a rich accessor (`ops`/`getRaw`/`lastEditAt`/`editsAt`/
+    /// `nthEditAt`/atTime/atFrontier) first touches the key, so the hot ingest
+    /// path transfers only latest values (the cheap [`map_delta`]) and never the
+    /// per-op history of keys nobody inspects.
+    pub fn map_ops_for_key(
+        &self,
+        co_id: &str,
+        key: &str,
+    ) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_maps
+            .get(co_id)
+            .map(|v| v.ops_for_key(key))
+            .unwrap_or_else(|| "[]".to_string()))
+    }
+
     /// Parse a `{ sessionID: txCount }` frontier JSON object into the map the
     /// coMap frontier reads expect. A malformed frontier is treated as empty
     /// (every op excluded — the `?? -1` default).

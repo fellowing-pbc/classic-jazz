@@ -501,6 +501,34 @@ impl CoMapView {
         out.push_str("}}");
         out
     }
+
+    /// The full ordered `MapOp[]` for a SINGLE key, as compact JSON (`[]` when
+    /// the key has no ops). This is the LAZY per-key counterpart to
+    /// [`Self::delta_rich`]: the two-tier transfer sends only latest VALUES on
+    /// every ingest (the cheap [`Self::delta`]), and pulls a key's full per-op
+    /// history through here ONLY when a rich accessor
+    /// (`ops`/`getRaw`/`lastEditAt`/`editsAt`/`nthEditAt`/atTime/atFrontier)
+    /// actually touches that key — so the hot ingest path never pays the 5-field
+    /// per-op serialization for keys nobody inspects. Each op is written in the
+    /// exact TS `MapOp` shape (`txID`/`madeAt`/`changeIdx`/`change`/`trusting`)
+    /// via [`MapOp::write_json`], already in `compareTransactions` order, so a TS
+    /// `RawCoMap` can adopt the array verbatim as `ops[key]`.
+    pub fn ops_for_key(&self, key: &str) -> String {
+        let mut out = String::with_capacity(32);
+        out.push('[');
+        if let Some(e) = self.ops.get(key) {
+            let mut first = true;
+            for op in e.iter_values() {
+                if !first {
+                    out.push(',');
+                }
+                first = false;
+                op.write_json(key, &mut out);
+            }
+        }
+        out.push(']');
+        out
+    }
 }
 
 /// `(session_id, tx_count)` in session-insertion order — the freshness key.
@@ -1005,6 +1033,41 @@ mod tests {
         let snap: serde_json::Value =
             serde_json::from_str(&node.map_snapshot(&co_id).unwrap()).unwrap();
         assert_eq!(snap, serde_json::json!({"a": 2, "b": "x"}));
+    }
+
+    #[test]
+    fn ops_for_key_returns_full_history_lazily() {
+        let session = "co_zA_session_zS";
+        let (mut node, co_id) = make_map(
+            session,
+            &[
+                ("a", serde_json::json!(1), None),
+                ("b", serde_json::json!("x"), None),
+                ("a", serde_json::json!(2), None), // second op on "a"
+            ],
+        );
+        node.map_materialize(&co_id, &[]).unwrap();
+
+        // "a" has TWO ops in compareTransactions (madeAt) order.
+        let a_ops: serde_json::Value =
+            serde_json::from_str(&node.map_ops_for_key(&co_id, "a").unwrap()).unwrap();
+        let a_arr = a_ops.as_array().unwrap();
+        assert_eq!(a_arr.len(), 2);
+        assert_eq!(a_arr[0]["change"], serde_json::json!({"op":"set","key":"a","value":1}));
+        assert_eq!(a_arr[1]["change"], serde_json::json!({"op":"set","key":"a","value":2}));
+        assert_eq!(a_arr[0]["changeIdx"], serde_json::json!(0));
+        assert_eq!(a_arr[1]["trusting"], serde_json::json!(true));
+        assert_eq!(a_arr[0]["txID"]["sessionID"], serde_json::json!(session));
+
+        // The per-key lazy shape matches the corresponding slice of the rich delta.
+        let rich: serde_json::Value =
+            serde_json::from_str(&node.map_delta_rich(&co_id, 0).unwrap()).unwrap();
+        assert_eq!(rich["changedKeys"]["a"], a_ops);
+
+        // A key with no ops -> empty array.
+        let missing: serde_json::Value =
+            serde_json::from_str(&node.map_ops_for_key(&co_id, "nope").unwrap()).unwrap();
+        assert_eq!(missing, serde_json::json!([]));
     }
 
     #[test]

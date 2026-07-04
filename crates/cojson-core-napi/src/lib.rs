@@ -977,6 +977,19 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
+  /// Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
+  /// array string (`[]` if absent). The lazy per-key counterpart to
+  /// `mapDeltaRich`: a TS `RawCoMap` pulls this ONLY when a rich accessor first
+  /// touches the key, so ingest transfers only latest values (the cheap
+  /// `mapDelta`), never the per-op history of un-inspected keys.
+  #[napi]
+  pub fn map_ops_for_key(&self, co_id: String, key: String) -> napi::Result<String> {
+    self
+      .internal
+      .map_ops_for_key(&co_id, &key)
+      .map_err(to_napi_err)
+  }
+
   /// Frontier read: latest frontier-visible value of `key` (null = absent).
   /// `frontier_json` is `{ sessionID: txCount }`.
   #[napi]
