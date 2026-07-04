@@ -566,7 +566,9 @@ fn tx_id_of(tx: &GroupTxView) -> (String, u32) {
 /// op is stored with full `MapOp` metadata: its (source-adjusted) `txID`, the
 /// effective `made_at`, its `change_idx` within the transaction, and whether the
 /// transaction is `trusting`.
-fn apply_change(
+/// Apply a BORROWED change (the trusting path — the change lives inside the
+/// borrowed `GroupTxView`). Only the `set` value is cloned, as before.
+fn apply_change_borrowed(
     ops: &mut IndexMap<String, TimeBasedEntry<MapOp>>,
     tx: &GroupTxView,
     change: &JsonValue,
@@ -581,8 +583,42 @@ fn apply_change(
         // than defaulting to JSON `null`, which is a DIFFERENT, explicit value.
         _ => MapVal::Set(change.get("value").cloned()),
     };
+    Some(push_op(ops, tx, key.to_string(), val, change_idx))
+}
+
+/// Apply an OWNED change (the private decrypt path — the decrypted `Vec` is
+/// dropped right after), MOVING the `set` value into the op instead of cloning.
+fn apply_change_owned(
+    ops: &mut IndexMap<String, TimeBasedEntry<MapOp>>,
+    tx: &GroupTxView,
+    change: JsonValue,
+    change_idx: u32,
+) -> Option<String> {
+    let mut obj = match change {
+        JsonValue::Object(m) => m,
+        _ => return None,
+    };
+    let key = obj.get("key").and_then(|v| v.as_str())?.to_string();
+    let val = match obj.get("op").and_then(|v| v.as_str()) {
+        Some("del") => MapVal::Del,
+        // `obj.remove("value")` moves the value out; `None` (no `"value"` field)
+        // is preserved as `Set(None)` — see `apply_change_borrowed`.
+        _ => MapVal::Set(obj.remove("value")),
+    };
+    Some(push_op(ops, tx, key, val, change_idx))
+}
+
+/// Insert one materialized op under `key`, returning `key` (so the caller can
+/// bump its version). Shared tail of both apply paths.
+fn push_op(
+    ops: &mut IndexMap<String, TimeBasedEntry<MapOp>>,
+    tx: &GroupTxView,
+    key: String,
+    val: MapVal,
+    change_idx: u32,
+) -> String {
     let (session_id, tx_index) = tx_id_of(tx);
-    ops.entry(key.to_string()).or_default().add_change(
+    ops.entry(key.clone()).or_default().add_change(
         tx.effective_made_at,
         MapOp {
             session_id,
@@ -593,7 +629,7 @@ fn apply_change(
             trusting: matches!(tx.privacy, Privacy::Trusting),
         },
     );
-    Some(key.to_string())
+    key
 }
 
 /// Decrypt a PRIVATE tx's changes into a parsed op array, reusing the session
@@ -628,7 +664,7 @@ fn index_tx(
         Privacy::Trusting => {
             if let Some(changes) = &tx.changes {
                 for (idx, change) in changes.iter().enumerate() {
-                    if let Some(k) = apply_change(ops, tx, change, idx as u32) {
+                    if let Some(k) = apply_change_borrowed(ops, tx, change, idx as u32) {
                         touched(k);
                     }
                 }
@@ -647,8 +683,10 @@ fn index_tx(
                 }
             };
             if let Some(changes) = decrypt_private_changes(sm, tx, secret) {
-                for (idx, change) in changes.iter().enumerate() {
-                    if let Some(k) = apply_change(ops, tx, change, idx as u32) {
+                // The decrypted `Vec` is owned and dropped right after: MOVE each
+                // change object into `apply_change_owned` instead of cloning it.
+                for (idx, change) in changes.into_iter().enumerate() {
+                    if let Some(k) = apply_change_owned(ops, tx, change, idx as u32) {
                         touched(k);
                     }
                 }
@@ -1053,8 +1091,14 @@ mod tests {
             serde_json::from_str(&node.map_ops_for_key(&co_id, "a").unwrap()).unwrap();
         let a_arr = a_ops.as_array().unwrap();
         assert_eq!(a_arr.len(), 2);
-        assert_eq!(a_arr[0]["change"], serde_json::json!({"op":"set","key":"a","value":1}));
-        assert_eq!(a_arr[1]["change"], serde_json::json!({"op":"set","key":"a","value":2}));
+        assert_eq!(
+            a_arr[0]["change"],
+            serde_json::json!({"op":"set","key":"a","value":1})
+        );
+        assert_eq!(
+            a_arr[1]["change"],
+            serde_json::json!({"op":"set","key":"a","value":2})
+        );
         assert_eq!(a_arr[0]["changeIdx"], serde_json::json!(0));
         assert_eq!(a_arr[1]["trusting"], serde_json::json!(true));
         assert_eq!(a_arr[0]["txID"]["sessionID"], serde_json::json!(session));
@@ -1485,8 +1529,8 @@ mod tests {
         let (mut node, co_id) = make_map(
             session,
             &[
-                ("a", serde_json::json!(1), None), // tx 0
-                ("a", serde_json::json!(2), None), // tx 1 (later write)
+                ("a", serde_json::json!(1), None),   // tx 0
+                ("a", serde_json::json!(2), None),   // tx 1 (later write)
                 ("b", serde_json::json!("x"), None), // tx 2
             ],
         );
@@ -1499,10 +1543,16 @@ mod tests {
         let a = delta["changedKeys"]["a"].as_array().unwrap();
         assert_eq!(a.len(), 2);
         // op 0: txIndex 0, changeIdx 0, set 1, trusting
-        assert_eq!(a[0]["txID"], serde_json::json!({"sessionID": session, "txIndex": 0}));
+        assert_eq!(
+            a[0]["txID"],
+            serde_json::json!({"sessionID": session, "txIndex": 0})
+        );
         assert_eq!(a[0]["changeIdx"], serde_json::json!(0));
         assert_eq!(a[0]["trusting"], serde_json::json!(true));
-        assert_eq!(a[0]["change"], serde_json::json!({"op":"set","key":"a","value":1}));
+        assert_eq!(
+            a[0]["change"],
+            serde_json::json!({"op":"set","key":"a","value":1})
+        );
         // op 1: txIndex 1, later — is LAST (latest)
         assert_eq!(a[1]["txID"]["txIndex"], serde_json::json!(1));
         assert_eq!(a[1]["change"]["value"], serde_json::json!(2));
@@ -1511,7 +1561,10 @@ mod tests {
         // Key "b": single set op.
         let b = delta["changedKeys"]["b"].as_array().unwrap();
         assert_eq!(b.len(), 1);
-        assert_eq!(b[0]["change"], serde_json::json!({"op":"set","key":"b","value":"x"}));
+        assert_eq!(
+            b[0]["change"],
+            serde_json::json!({"op":"set","key":"b","value":"x"})
+        );
     }
 
     #[test]
@@ -1612,7 +1665,10 @@ mod tests {
             op.write_json(key, &mut buf);
             let actual: JsonValue = serde_json::from_str(&buf)
                 .unwrap_or_else(|e| panic!("write_json produced invalid JSON: {e}\n{buf}"));
-            assert_eq!(actual, expected, "write_json diverged from to_json oracle for key {key:?}");
+            assert_eq!(
+                actual, expected,
+                "write_json diverged from to_json oracle for key {key:?}"
+            );
         }
     }
 
@@ -1675,10 +1731,7 @@ mod tests {
         );
         // A session absent from the frontier defaults to -1 → all excluded.
         let empty = "{}";
-        assert_eq!(
-            node.map_get_at_frontier(&co_id, "a", empty).unwrap(),
-            None
-        );
+        assert_eq!(node.map_get_at_frontier(&co_id, "a", empty).unwrap(), None);
         // snapshot_at_frontier honors the same filter.
         let snap: serde_json::Value =
             serde_json::from_str(&node.map_snapshot_at_frontier(&co_id, &f2).unwrap()).unwrap();
@@ -1791,7 +1844,10 @@ mod content_fixture_tests {
                     assert_eq!(&gv, expected, "[{name}] atTime {}@{} mismatch", e.key, e.t);
                 }
                 (expected, None) => {
-                    panic!("[{name}] atTime {}@{} expected {expected}, got absent", e.key, e.t)
+                    panic!(
+                        "[{name}] atTime {}@{} expected {expected}, got absent",
+                        e.key, e.t
+                    )
                 }
             }
         }

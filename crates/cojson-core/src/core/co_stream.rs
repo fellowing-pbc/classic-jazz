@@ -433,9 +433,9 @@ fn tx_id_of(tx: &GroupTxView) -> (String, u32) {
 fn append_entries(
     sessions: &mut IndexMap<String, TimeBasedEntry<StreamEntry>>,
     tx: &GroupTxView,
-    changes: &[JsonValue],
+    changes: impl ExactSizeIterator<Item = JsonValue>,
 ) -> Option<String> {
-    if changes.is_empty() {
+    if changes.len() == 0 {
         return None;
     }
     let (session_id, tx_index) = tx_id_of(tx);
@@ -446,7 +446,10 @@ fn append_entries(
             StreamEntry {
                 tx_index,
                 made_at: tx.effective_made_at,
-                value: change.clone(),
+                // The value is MOVED in (the private decrypt path hands us an
+                // owned, about-to-be-dropped `Vec<JsonValue>`; the trusting path
+                // clones at the call site since it only holds a borrow).
+                value: change,
             },
         );
     }
@@ -483,7 +486,9 @@ fn index_tx(
     match tx.privacy {
         Privacy::Trusting => {
             if let Some(changes) = &tx.changes {
-                if let Some(sid) = append_entries(sessions, tx, changes) {
+                // Trusting changes live inside the borrowed `GroupTxView`, so the
+                // values must be cloned to be owned by the entries.
+                if let Some(sid) = append_entries(sessions, tx, changes.iter().cloned()) {
                     touched(sid);
                 }
             }
@@ -501,7 +506,9 @@ fn index_tx(
                 }
             };
             if let Some(changes) = decrypt_private_changes(sm, tx, secret) {
-                if let Some(sid) = append_entries(sessions, tx, &changes) {
+                // The decrypted `Vec` is owned and dropped right after: MOVE its
+                // values into the entries rather than cloning them.
+                if let Some(sid) = append_entries(sessions, tx, changes.into_iter()) {
                     touched(sid);
                 }
             }
@@ -521,7 +528,10 @@ fn valid_set(verdicts: &[Verdict]) -> HashSet<(String, u32)> {
 /// fww winner selection over sorted txs (see the module doc + `co_map`'s
 /// identical overlay): the first permission-valid tx for a given fww key wins;
 /// later ones are losers (excluded). Returns `(losers, has_fww)`.
-fn fww_losers(txs: &[GroupTxView], valid: &HashSet<(String, u32)>) -> (HashSet<(String, u32)>, bool) {
+fn fww_losers(
+    txs: &[GroupTxView],
+    valid: &HashSet<(String, u32)>,
+) -> (HashSet<(String, u32)>, bool) {
     let mut fww_seen: HashSet<String> = HashSet::new();
     let mut losers: HashSet<(String, u32)> = HashSet::new();
     let mut has_fww = false;
@@ -732,10 +742,7 @@ mod tests {
     // A minimal unsafeAllowAll costream covalue: header + a single session of
     // trusting transactions, each pushing one item. Every trusting tx is valid
     // (unsafeAllowAll), isolating content materialization.
-    fn make_stream(
-        session_id: &str,
-        items: &[serde_json::Value],
-    ) -> (NodeCore, String) {
+    fn make_stream(session_id: &str, items: &[serde_json::Value]) -> (NodeCore, String) {
         use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
         let header = CoValueHeader {
             created_at: NullableString::Missing,
@@ -835,10 +842,7 @@ mod tests {
         node.stream_materialize(&co_id, &[]).unwrap();
         let snap: serde_json::Value =
             serde_json::from_str(&node.stream_snapshot(&co_id).unwrap()).unwrap();
-        assert_eq!(
-            snap,
-            serde_json::json!({ session: ["a", {"n": 1}, "b"] })
-        );
+        assert_eq!(snap, serde_json::json!({ session: ["a", {"n": 1}, "b"] }));
     }
 
     #[test]
@@ -850,11 +854,18 @@ mod tests {
 
         let delta: serde_json::Value =
             serde_json::from_str(&node.stream_delta(&co_id, 0).unwrap()).unwrap();
-        assert_eq!(delta["reset"], serde_json::json!(true), "fresh cursor resyncs");
+        assert_eq!(
+            delta["reset"],
+            serde_json::json!(true),
+            "fresh cursor resyncs"
+        );
         let entries = delta["sessions"][session].as_array().unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0]["value"], serde_json::json!("a"));
-        assert_eq!(entries[0]["madeAt"], serde_json::json!(1_700_000_000_000u64));
+        assert_eq!(
+            entries[0]["madeAt"],
+            serde_json::json!(1_700_000_000_000u64)
+        );
         assert_eq!(entries[0]["tx"]["sessionID"], serde_json::json!(session));
         assert_eq!(entries[0]["tx"]["txIndex"], serde_json::json!(0));
         assert_eq!(entries[1]["tx"]["txIndex"], serde_json::json!(1));
@@ -864,7 +875,8 @@ mod tests {
     fn multi_session_streams_are_bucketed() {
         let s1 = "co_zA_session_zS1";
         let s2 = "co_zA_session_zS2";
-        let (mut node, co_id) = make_stream(s1, &[serde_json::json!("x1"), serde_json::json!("x2")]);
+        let (mut node, co_id) =
+            make_stream(s1, &[serde_json::json!("x1"), serde_json::json!("x2")]);
         // Append a second session with its own items.
         let made = 1_700_000_000_500u64;
         let tx = format!(
@@ -954,7 +966,10 @@ mod tests {
         let snap: serde_json::Value =
             serde_json::from_str(&node.stream_snapshot(&co_id).unwrap()).unwrap();
         assert_eq!(snap, serde_json::json!({}));
-        assert_eq!(node.stream_missing_key_ids(&co_id), vec![key_id.to_string()]);
+        assert_eq!(
+            node.stream_missing_key_ids(&co_id),
+            vec![key_id.to_string()]
+        );
     }
 
     #[test]
@@ -974,7 +989,10 @@ mod tests {
             node.stream_snapshot(&co_id).unwrap(),
             serde_json::json!({}).to_string()
         );
-        assert_eq!(node.stream_missing_key_ids(&co_id), vec![key_id.to_string()]);
+        assert_eq!(
+            node.stream_missing_key_ids(&co_id),
+            vec![key_id.to_string()]
+        );
 
         node.provide_key_secret(key_id, &secret);
         let v2 = node.stream_materialize(&co_id, &[]).unwrap();
@@ -1087,7 +1105,9 @@ mod content_fixture_tests {
         for e in &fix.frontier {
             let fj = serde_json::to_string(&e.frontier).unwrap();
             let got: serde_json::Value = serde_json::from_str(
-                &node.stream_snapshot_at_frontier(&fix.stream_id, &fj).unwrap(),
+                &node
+                    .stream_snapshot_at_frontier(&fix.stream_id, &fj)
+                    .unwrap(),
             )
             .unwrap();
             assert_eq!(got, e.snapshot, "[{name}] frontier {fj} snapshot mismatch");
