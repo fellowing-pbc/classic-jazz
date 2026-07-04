@@ -62,7 +62,7 @@ const EVERYONE: &str = "everyone";
 
 /// The three-way validation result a transaction can land in. Stage 3
 /// (`validateTransactions`) adds `ValidBranchPointerOnly` for the ownedByGroup
-/// reader branch-pointer special case (permissions.ts:124-137), emitted by
+/// reader branch-pointer special case (permissions.ts:143-156), emitted by
 /// [`build_owned_by_group`]. Both `Valid` and `ValidBranchPointerOnly` are
 /// non-`Invalid` outcomes, so [`Verdict::valid`] is true for each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -818,7 +818,7 @@ fn build_owned_by_group(
             visited,
         )?;
 
-        // The reader branch-pointer special case (permissions.ts:124-137),
+        // The reader branch-pointer special case (permissions.ts:143-156),
         // checked BEFORE the write-permission gate exactly as TS does. The guard
         // is `transactorRoleAtTxTime === "reader" && tx.meta?.branch &&
         // tx.meta?.ownerId`: the role must be EXACTLY reader (an admin posting an
