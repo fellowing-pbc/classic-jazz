@@ -21,6 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 import { expectMap } from "../coValue.js";
+import type { CoValueCore } from "../coValueCore/coValueCore.js";
 import { ControlledAgent } from "../coValues/account.js";
 import { WasmCrypto } from "../crypto/WasmCrypto.js";
 import type { RawCoID } from "../ids.js";
@@ -62,6 +63,27 @@ type Verdict = {
   txIndex: number;
   valid: boolean;
   reason: string | null;
+  // --- Stage-3 rich-verdict fields (present only for the ownedByGroup /
+  // unsafeAllowAll / merged-transaction scenarios; omitted for the original 18
+  // group-only fixtures so their bytes stay unchanged) ---
+  //
+  // Explicit outcome for the Rust port. Absent => derive from `valid`.
+  // "validBranchPointerOnly" marks the TS reader-branch-pointer trim
+  // (permissions.ts:124-137): a reader tx with meta.branch + meta.ownerId is
+  // forced to `meta = {branch, ownerId}`, `changes = []`, then marked valid.
+  outcome?: "valid" | "invalid" | "validBranchPointerOnly";
+  // Effective (source) madeAt for a merged transaction (VerifiedTransaction
+  // .sourceTxMadeAt, derived from merge meta in parseMetaInformation). Omitted
+  // for non-merged transactions.
+  sourceMadeAt?: number;
+  // The source transaction identity used by TS compareTransactions for
+  // same-"session" tie-breaks (txID = sourceTxID ?? currentTxID). Omitted for
+  // non-merged transactions.
+  sourceTxId?: { sessionID: string; txIndex: number };
+  // The decrypted meta the TS engine had AT VALIDATION TIME, or null when it
+  // was unavailable (e.g. a received private transaction validates with
+  // meta === undefined, before decryption — the pipeline-order contract).
+  metaJson?: string | null;
 };
 
 type RoleQueryInput = {
@@ -83,13 +105,21 @@ type Fixture = {
 // Readers
 // ---------------------------------------------------------------------------
 
-function readCoValue(node: LocalNode, id: RawCoID): CoValueFixture {
+function readCoValue(
+  node: LocalNode,
+  id: RawCoID,
+  rich = false,
+): CoValueFixture {
   const core = node.getCoValue(id);
   if (!core.verified) {
     throw new Error(`CoValue ${id} is not available`);
   }
-  // Force parsing so verified state / session logs are fully materialised.
-  core.getValidTransactions({ ignorePrivateTransactions: false });
+  // Force parsing so verified state / session logs are fully materialised. For
+  // rich (Stage-3) scenarios we keep private transactions undecrypted so that a
+  // received private transaction's meta stays `undefined` at validation time
+  // (the pipeline-order contract). Either way the exported wire form — raw
+  // encrypted transactions, signerId, lastSignature — is identical.
+  core.getValidTransactions({ ignorePrivateTransactions: rich });
 
   const nc = node.nodeCore;
   const headerJson = nc.getHeader(id);
@@ -118,16 +148,83 @@ function readCoValue(node: LocalNode, id: RawCoID): CoValueFixture {
   return { coId: id, headerJson, sessions };
 }
 
-function readVerdicts(node: LocalNode, id: RawCoID): Verdict[] {
-  const core = node.getCoValue(id);
-  core.getValidTransactions({ ignorePrivateTransactions: false });
+/**
+ * Resolves the author's role in the OWNING group at a transaction's
+ * currentMadeAt — mirroring the lookup the ownedByGroup branch performs
+ * (permissions.ts:104-107). Used to disambiguate the reader-branch-pointer
+ * trim from an equally-shaped admin/writer branch pointer. Returns undefined
+ * when the covalue is not group-owned or the group cannot be resolved.
+ */
+function roleOfAuthorAtTxTime(
+  core: CoValueCore,
+  t: { author: string; currentMadeAt: number },
+): string | null | undefined {
+  try {
+    const group = core.safeGetGroup();
+    if (!group) {
+      return undefined;
+    }
+    return (
+      group.atTime(t.currentMadeAt).roleOfInternal(t.author as any) ?? null
+    );
+  } catch {
+    return undefined;
+  }
+}
 
-  return core.verifiedTransactions.map((t) => ({
-    sessionId: t.currentTxID.sessionID,
-    txIndex: t.currentTxID.txIndex,
-    valid: t.isValid,
-    reason: t.validationErrorMessage ?? null,
-  }));
+function readVerdicts(node: LocalNode, id: RawCoID, rich = false): Verdict[] {
+  const core = node.getCoValue(id);
+  core.getValidTransactions({ ignorePrivateTransactions: rich });
+
+  return core.verifiedTransactions.map((t) => {
+    const base: Verdict = {
+      sessionId: t.currentTxID.sessionID,
+      txIndex: t.currentTxID.txIndex,
+      valid: t.isValid,
+      reason: t.validationErrorMessage ?? null,
+    };
+
+    if (!rich) {
+      return base;
+    }
+
+    const meta = t.meta as { branch?: unknown; ownerId?: unknown } | undefined;
+    // The reader-branch-pointer trim (permissions.ts:124-137) is the path that
+    // leaves a VALID transaction with meta {branch, ownerId} and empty changes.
+    // It fires ONLY when the author's role at the tx's currentMadeAt is
+    // `reader`; an admin/writer branch pointer is valid via write permissions
+    // and carries the same shape, so we must confirm the reader role to avoid a
+    // false positive (see the merged-branch scenario, where the admin's own
+    // branch pointer is a locally-created private tx with visible meta).
+    const hasBranchMeta =
+      t.isValid &&
+      !!meta &&
+      meta.branch !== undefined &&
+      meta.ownerId !== undefined &&
+      Array.isArray(t.changes) &&
+      t.changes.length === 0;
+    const isBranchPointerTrim =
+      hasBranchMeta && roleOfAuthorAtTxTime(core, t) === "reader";
+
+    base.outcome = isBranchPointerTrim
+      ? "validBranchPointerOnly"
+      : t.isValid
+        ? "valid"
+        : "invalid";
+
+    if (t.sourceTxMadeAt !== undefined) {
+      base.sourceMadeAt = t.sourceTxMadeAt;
+    }
+    if (t.sourceTxID !== undefined) {
+      base.sourceTxId = {
+        sessionID: t.sourceTxID.sessionID,
+        txIndex: t.sourceTxID.txIndex,
+      };
+    }
+    base.metaJson = t.meta === undefined ? null : JSON.stringify(t.meta);
+
+    return base;
+  });
 }
 
 function readRoleQueries(
@@ -151,13 +248,18 @@ function exportScenario(
     covalueIds: RawCoID[];
     verdictIds: RawCoID[];
     roleQueries: RoleQueryInput[];
+    // Stage-3 scenarios: emit the extended verdict fields (outcome / merge
+    // metadata / validation-time meta) and keep private transactions
+    // undecrypted. Left off for the original 18 group-only fixtures.
+    rich?: boolean;
   },
 ): Fixture {
-  const covalues = opts.covalueIds.map((id) => readCoValue(node, id));
+  const rich = opts.rich ?? false;
+  const covalues = opts.covalueIds.map((id) => readCoValue(node, id, rich));
 
   const verdicts: Record<string, Verdict[]> = {};
   for (const id of opts.verdictIds) {
-    verdicts[id] = readVerdicts(node, id);
+    verdicts[id] = readVerdicts(node, id, rich);
   }
 
   const roleQueries = readRoleQueries(node, opts.roleQueries);
@@ -230,6 +332,24 @@ async function actAs(
   const group = expectGroup(content);
   fn(group);
   importContentIntoNode(group.core, node);
+}
+
+/**
+ * Like {@link actAs}, but authors transaction(s) directly on an arbitrary
+ * CoValue (e.g. a map owned by a group) as `account`, then imports the produced
+ * session back into `node`. `fn` receives the CoValueCore in the cloned node so
+ * it can craft raw transactions the way the public APIs would.
+ */
+async function actAsOnCoValue(
+  node: LocalNode,
+  coId: RawCoID,
+  account: ControlledAgent | any,
+  fn: (core: CoValueCore) => void,
+) {
+  const core = node.getCoValue(coId);
+  const content = await core.contentInClonedNodeWithDifferentAccount(account);
+  fn(content.core);
+  importContentIntoNode(content.core, node);
 }
 
 function verdictReasons(fixture: Fixture, id: string): (string | null)[] {
@@ -1052,5 +1172,458 @@ describe("group engine fixtures", () => {
 
     hasInvalid(fixture, group.id, "Can't make private transactions in groups");
     await node.gracefulShutdown();
+  });
+
+  // =========================================================================
+  // Stage-3 scenarios: ownedByGroup / unsafeAllowAll / merged transactions.
+  //
+  // Every Stage-3 scenario forces the native-validation kill switch
+  // (COJSON_DISABLE_NATIVE_VALIDATION=1) around scenario building AND verdict
+  // reading. TS never delegates the ownedByGroup / unsafeAllowAll branches of
+  // determineValidTransactions to the native engine (permissions.ts:100 gates
+  // native on ruleset.type === "group" only), so in this build the two paths
+  // already agree on these verdicts. But the native/Rust ownedByGroup engine
+  // (crates/.../group_engine/engine.rs:build_owned_by_group) does NOT yet port
+  // the reader-branch-pointer trim and would mark it invalid; forcing the kill
+  // switch guarantees the fixture records the authoritative TS-fallback
+  // semantics (validBranchPointerOnly) that Stage-3's unified validateTransactions
+  // must reproduce.
+  // =========================================================================
+
+  // 19. owned_by_group_roles -----------------------------------------------
+  test("owned_by_group_roles", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    try {
+      const { node, group } = newGroupHighLevel();
+
+      const manager = createAccountInNode(node);
+      const writer = createAccountInNode(node);
+      const writeOnly = createAccountInNode(node);
+      const reader = createAccountInNode(node);
+
+      group.addMember(manager, "manager" as any);
+      group.addMember(writer, "writer" as any);
+      group.addMember(writeOnly, "writeOnly" as any);
+      group.addMember(reader, "reader" as any);
+
+      const map = group.createMap();
+      // admin (the node's own agent) writes directly → valid
+      map.core.makeTransaction(
+        [{ op: "set", key: "byAdmin", value: 1 }],
+        "trusting",
+      );
+
+      // each member writes as themselves (author = their account id)
+      const members: [ReturnType<typeof createAccountInNode>, string][] = [
+        [manager, "byManager"],
+        [writer, "byWriter"],
+        [writeOnly, "byWriteOnly"],
+        [reader, "byReader"],
+      ];
+      for (const [acct, key] of members) {
+        await actAsOnCoValue(node, map.id, acct, (core) => {
+          core.makeTransaction([{ op: "set", key, value: 1 }], "trusting");
+        });
+      }
+
+      // a non-member (a bare agent never added to the group) writes → invalid
+      const nonMember = new ControlledAgent(
+        Crypto.newRandomAgentSecret(),
+        Crypto,
+      );
+      await actAsOnCoValue(node, map.id, nonMember, (core) => {
+        core.makeTransaction(
+          [{ op: "set", key: "byNonMember", value: 1 }],
+          "trusting",
+        );
+      });
+
+      const fixture = exportScenario("owned_by_group_roles", node, {
+        description:
+          "a comap owned by a group: admin/manager/writer/writeOnly writes are valid; a reader write and a non-member write are both rejected 'Transactor has no write permissions' (agentInAccountOrMemberInGroup never returns undefined, so 'Transactor not found in group' is unreachable)",
+        covalueIds: [
+          map.id,
+          group.id,
+          manager.id,
+          writer.id,
+          writeOnly.id,
+          reader.id,
+        ],
+        verdictIds: [map.id],
+        roleQueries: [
+          { groupId: group.id, member: manager.id, atTime: null },
+          { groupId: group.id, member: writer.id, atTime: null },
+          { groupId: group.id, member: writeOnly.id, atTime: null },
+          { groupId: group.id, member: reader.id, atTime: null },
+          { groupId: group.id, member: nonMember.id, atTime: null },
+        ],
+        rich: true,
+      });
+
+      hasValid(fixture, map.id);
+      // reader and non-member both rejected with the write-permission reason
+      const invalidReasons = verdictReasons(fixture, map.id).filter(
+        (r) => r !== null,
+      );
+      expect(invalidReasons).toContain("Transactor has no write permissions");
+      // exactly two invalid txs (reader + non-member)
+      expect(fixture.verdicts[map.id]!.filter((v) => !v.valid).length).toBe(2);
+      expect(fixture.roleQueries[0]!.expectedRole).toBe("manager");
+      expect(fixture.roleQueries[1]!.expectedRole).toBe("writer");
+      expect(fixture.roleQueries[2]!.expectedRole).toBe("writeOnly");
+      expect(fixture.roleQueries[3]!.expectedRole).toBe("reader");
+      expect(fixture.roleQueries[4]!.expectedRole).toBe(null);
+      await node.gracefulShutdown();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 20. owned_by_group_role_change_over_time -------------------------------
+  test("owned_by_group_role_change_over_time", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+      const member = createAccountInNode(node);
+
+      vi.setSystemTime(1_700_000_010_000);
+      group.addMember(member, "writer" as any);
+      const tWriter = Date.now();
+
+      const map = group.createMap();
+
+      // member writes while still a writer → valid at its currentMadeAt
+      vi.setSystemTime(1_700_000_020_000);
+      await actAsOnCoValue(node, map.id, member, (core) => {
+        core.makeTransaction(
+          [{ op: "set", key: "early", value: 1 }],
+          "trusting",
+        );
+      });
+
+      // admin demotes the member to reader
+      vi.setSystemTime(1_700_000_030_000);
+      (group.set as any)(member.id, "reader", "trusting");
+      const tReader = Date.now();
+
+      // member writes again, now a reader → invalid at its currentMadeAt
+      vi.setSystemTime(1_700_000_040_000);
+      await actAsOnCoValue(node, map.id, member, (core) => {
+        core.makeTransaction(
+          [{ op: "set", key: "late", value: 1 }],
+          "trusting",
+        );
+      });
+
+      const fixture = exportScenario(
+        "owned_by_group_role_change_over_time",
+        node,
+        {
+          description:
+            "a member is a writer, writes to an owned map (valid), is demoted to reader, then writes again (invalid). ownedByGroup uses each tx's currentMadeAt for the role lookup, so the earlier write stays valid while the later one is rejected.",
+          covalueIds: [map.id, group.id, member.id],
+          verdictIds: [map.id],
+          roleQueries: [
+            { groupId: group.id, member: member.id, atTime: tWriter },
+            { groupId: group.id, member: member.id, atTime: tReader },
+            { groupId: group.id, member: member.id, atTime: null },
+          ],
+          rich: true,
+        },
+      );
+
+      // one valid (early), one invalid (late)
+      const memberVerdicts = fixture.verdicts[map.id]!.filter((v) =>
+        v.sessionId.startsWith(member.id),
+      );
+      expect(memberVerdicts.some((v) => v.valid)).toBe(true);
+      expect(
+        memberVerdicts.some(
+          (v) => !v.valid && v.reason === "Transactor has no write permissions",
+        ),
+      ).toBe(true);
+      expect(fixture.roleQueries[0]!.expectedRole).toBe("writer");
+      expect(fixture.roleQueries[1]!.expectedRole).toBe("reader");
+      expect(fixture.roleQueries[2]!.expectedRole).toBe("reader");
+      await node.gracefulShutdown();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 21. owned_by_account ----------------------------------------------------
+  test("owned_by_account", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    try {
+      const { node, accountID } = await LocalNode.withNewlyCreatedAccount({
+        peers: [],
+        crypto: Crypto,
+        creationProps: { name: "OwnerAccount" },
+      });
+
+      // a comap owned directly by an ACCOUNT (ownedByGroup.group = accountID).
+      const owned = node.createCoValue({
+        type: "comap",
+        ruleset: { type: "ownedByGroup", group: accountID! },
+        meta: null,
+        ...Crypto.createdNowUnique(),
+      });
+      const ownedMap = expectMap(owned.getCurrentContent());
+      // the account's own agent authors → agentInAccountOrMemberInGroup resolves
+      // the account id to its static header agent, which is admin on the account.
+      ownedMap.set("foo", "bar", "trusting");
+      ownedMap.set("baz", "qux", "trusting");
+
+      const fixture = exportScenario("owned_by_account", node, {
+        description:
+          "a comap owned by an ACCOUNT: the account-id transactor is resolved to its agent (agentInAccountOrMemberInGroup account→agent branch on the owned path); the account's self-role is admin so its writes are valid",
+        covalueIds: [owned.id, accountID!],
+        verdictIds: [owned.id],
+        roleQueries: [
+          { groupId: accountID!, member: accountID!, atTime: null },
+        ],
+        rich: true,
+      });
+
+      expect(fixture.roleQueries[0]!.expectedRole).toBe("admin");
+      hasValid(fixture, owned.id);
+      expect(fixture.verdicts[owned.id]!.every((v) => v.valid)).toBe(true);
+      await node.gracefulShutdown();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 22. owned_reader_branch_pointer ----------------------------------------
+  test("owned_reader_branch_pointer", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    try {
+      const { node, group } = newGroupHighLevel();
+      const reader = createAccountInNode(node);
+      group.addMember(reader, "reader" as any);
+
+      // the reader's own group, used as the branch owner.
+      const ownerGroup = node.createGroup();
+
+      const map = group.createMap();
+      // admin baseline write → valid
+      map.core.makeTransaction(
+        [{ op: "set", key: "base", value: 1 }],
+        "trusting",
+      );
+
+      // The reader posts a branch pointer. createBranch (branching.ts:158-181)
+      // stores it UNENCRYPTED (trusting) with empty changes and
+      // meta {branch, ownerId} precisely so it can be special-cased in the
+      // permission check. We craft that exact transaction directly: the public
+      // createBranch requires a fully-loaded reader ACCOUNT to pass its local
+      // myRole() check, but the clone helper loads the reader as a bare agent,
+      // so the raw craft is the faithful equivalent.
+      await actAsOnCoValue(node, map.id, reader, (core) => {
+        core.makeTransaction([], "trusting", {
+          branch: "feature-branch",
+          ownerId: ownerGroup.id,
+        });
+      });
+
+      const fixture = exportScenario("owned_reader_branch_pointer", node, {
+        description:
+          "a reader posts an unencrypted branch-pointer transaction (meta {branch, ownerId}, empty changes) on a map owned by a group. TS (permissions.ts:124-137) forces meta to {branch, ownerId}, changes to [], and marks it VALID (outcome validBranchPointerOnly) — the reader-branch-pointer trim. The native/Rust ownedByGroup engine does not yet port this and would mark it invalid, so this fixture is captured with the native kill switch forced.",
+        covalueIds: [map.id, group.id, reader.id, ownerGroup.id],
+        verdictIds: [map.id],
+        roleQueries: [{ groupId: group.id, member: reader.id, atTime: null }],
+        rich: true,
+      });
+
+      const branchPointer = fixture.verdicts[map.id]!.find(
+        (v) => v.metaJson != null && v.metaJson.includes("feature-branch"),
+      );
+      expect(branchPointer).toBeDefined();
+      expect(branchPointer!.valid).toBe(true);
+      expect(branchPointer!.reason).toBe(null);
+      expect(branchPointer!.outcome).toBe("validBranchPointerOnly");
+      // the trim leaves meta = exactly {branch, ownerId}
+      expect(JSON.parse(branchPointer!.metaJson!)).toEqual({
+        branch: "feature-branch",
+        ownerId: ownerGroup.id,
+      });
+      expect(fixture.roleQueries[0]!.expectedRole).toBe("reader");
+      await node.gracefulShutdown();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 23. owned_private_tx_meta_unavailable ----------------------------------
+  test("owned_private_tx_meta_unavailable", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    try {
+      const { node, group } = newGroupHighLevel();
+      const reader = createAccountInNode(node);
+      group.addMember(reader, "reader" as any);
+
+      const ownerGroup = node.createGroup();
+
+      const map = group.createMap();
+      map.core.makeTransaction(
+        [{ op: "set", key: "base", value: 1 }],
+        "trusting",
+      );
+
+      // The reader posts the SAME branch-pointer meta, but PRIVATE (encrypted).
+      // It is authored in a cloned node and imported, so the master has no
+      // parsing cache for it: validation runs BEFORE decryption, so meta is
+      // `undefined` at validation, the reader-branch-pointer trim does NOT fire,
+      // and the reader (no write permission) is rejected. Contrast scenario 22,
+      // where the same author + meta are trusting and therefore trimmed to VALID.
+      await actAsOnCoValue(node, map.id, reader, (core) => {
+        core.makeTransaction(
+          [{ op: "set", key: "secret", value: 1 }],
+          "private",
+          {
+            branch: "feature-branch",
+            ownerId: ownerGroup.id,
+          },
+        );
+      });
+
+      const fixture = exportScenario(
+        "owned_private_tx_meta_unavailable",
+        node,
+        {
+          description:
+            "a received PRIVATE transaction on an owned map validates with meta === undefined (validation precedes decryption — the pipeline-order contract). Even though the reader supplied branch-pointer meta, TS cannot see it at validation, so no trim occurs and the reader write is rejected. metaJson is null (meta unavailable at validation).",
+          covalueIds: [map.id, group.id, reader.id],
+          verdictIds: [map.id],
+          roleQueries: [],
+          rich: true,
+        },
+      );
+
+      const priv = fixture.verdicts[map.id]!.find(
+        (v) => v.sessionId.startsWith(reader.id) && !v.valid,
+      );
+      expect(priv).toBeDefined();
+      expect(priv!.reason).toBe("Transactor has no write permissions");
+      expect(priv!.outcome).toBe("invalid");
+      expect(priv!.metaJson).toBe(null);
+      await node.gracefulShutdown();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 24. unsafe_allow_all ----------------------------------------------------
+  test("unsafe_allow_all", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    try {
+      const { node } = newGroupHighLevel();
+
+      const covalue = node.createCoValue({
+        type: "comap",
+        ruleset: { type: "unsafeAllowAll" },
+        meta: null,
+        ...Crypto.createdNowUnique(),
+      });
+
+      // a well-formed change → valid
+      covalue.makeTransaction([{ op: "set", key: "ok", value: 1 }], "trusting");
+      // garbage changes (not even valid map ops) → still valid under unsafeAllowAll
+      covalue.makeTransaction(
+        [{ nonsense: true } as any, "not a change", 42 as any],
+        "trusting",
+      );
+      // arbitrary meta, empty changes → still valid
+      covalue.makeTransaction([], "trusting", { arbitrary: "meta" });
+
+      const fixture = exportScenario("unsafe_allow_all", node, {
+        description:
+          "a covalue with the unsafeAllowAll ruleset: every transaction is marked valid, including garbage changes and arbitrary meta (permissions.ts:176-181).",
+        covalueIds: [covalue.id],
+        verdictIds: [covalue.id],
+        roleQueries: [],
+        rich: true,
+      });
+
+      expect(fixture.verdicts[covalue.id]!.length).toBe(3);
+      expect(fixture.verdicts[covalue.id]!.every((v) => v.valid)).toBe(true);
+      expect(
+        fixture.verdicts[covalue.id]!.every((v) => v.outcome === "valid"),
+      ).toBe(true);
+      await node.gracefulShutdown();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // 25. merged_tx_ties ------------------------------------------------------
+  test("merged_tx_ties", async () => {
+    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { node, group } = newGroupHighLevel();
+
+      const map = group.createMap();
+      map.set("base", "v", "trusting");
+
+      // Create a branch and add TWO transactions at the SAME madeAt, so after a
+      // merge they share an effective (source) madeAt and source session and are
+      // ordered only by their source txIndex (compareTransactions tie-break:
+      // txID = sourceTxID ?? currentTxID).
+      const branch = expectMap(
+        map.core.createBranch("feature-branch", group.id).getCurrentContent(),
+      );
+
+      vi.setSystemTime(1_700_000_010_000);
+      branch.set("k1", "a", "trusting");
+      branch.set("k2", "b", "trusting"); // same madeAt as k1
+
+      // Merge the branch back into the source map. The merged transactions carry
+      // merge meta ({mi, t?, s?, b?}) from which TS recomputes sourceTxMadeAt and
+      // sourceTxID during parseMetaInformation.
+      vi.setSystemTime(1_700_000_020_000);
+      branch.core.mergeBranch();
+
+      const fixture = exportScenario("merged_tx_ties", node, {
+        description:
+          "a branch with two same-madeAt transactions merged into its owned source map. The merged transactions carry sourceMadeAt + sourceTxId (source identity), and TS compareTransactions tie-breaks equal-madeAt / same-source-session transactions by source txIndex. All transactions are valid (authored by the admin), so verdicts are pinned as a multiset. GAP for the Rust port: a tie where the two transactions share a SOURCE session but land in DIFFERENT CURRENT sessions (so TS orders by source txIndex while a current-(session,txIndex) tie-break would diverge — porter note 9) cannot be produced through the public branch/merge APIs, because a single merge writes every merged transaction into one merger session. This fixture exercises the source-identity computation but not that cross-current-session divergence.",
+        covalueIds: [map.id, group.id],
+        verdictIds: [map.id],
+        roleQueries: [],
+        rich: true,
+      });
+
+      // every transaction on the source map is valid (multiset)
+      expect(fixture.verdicts[map.id]!.every((v) => v.valid)).toBe(true);
+      // the admin's own branch pointer is valid via write permissions, NOT the
+      // reader trim, so nothing here is validBranchPointerOnly.
+      expect(
+        fixture.verdicts[map.id]!.some(
+          (v) => v.outcome === "validBranchPointerOnly",
+        ),
+      ).toBe(false);
+      // the two merged transactions carry source identity + source madeAt
+      const merged = fixture.verdicts[map.id]!.filter(
+        (v) => v.sourceTxId !== undefined,
+      );
+      expect(merged.length).toBe(2);
+      expect(merged.every((v) => v.sourceMadeAt !== undefined)).toBe(true);
+      // both merged txs share a source session (the branch session) and differ
+      // only by source txIndex — the tie-break the Rust port must reproduce.
+      expect(merged[0]!.sourceTxId!.sessionID).toBe(
+        merged[1]!.sourceTxId!.sessionID,
+      );
+      expect(merged[0]!.sourceTxId!.txIndex).not.toBe(
+        merged[1]!.sourceTxId!.txIndex,
+      );
+      await node.gracefulShutdown();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
   });
 });
