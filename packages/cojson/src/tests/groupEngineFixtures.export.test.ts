@@ -15,6 +15,20 @@
  * When `EXPORT_GROUP_ENGINE_FIXTURES=1` the fixtures are written to
  * `crates/cojson-core/data/group_engine/<scenario>.json`. Regardless of export,
  * the suite always asserts internal consistency so it has value in CI.
+ *
+ * Oracle inversion (post Part C): the `COJSON_DISABLE_NATIVE_VALIDATION` kill
+ * switch is gone, so this exporter no longer captures an INDEPENDENT TS oracle —
+ * it captures whatever the native NodeCore produces. The committed fixtures are
+ * frozen golden files originating from the TypeScript engine (commit
+ * `b84f15310`). They are now the authority; the exporter is only a *regenerator*.
+ * Regeneration MUST NOT change verdict CONTENT — only tx/session identities may
+ * churn. Any content diff on regeneration is a native-engine regression, not a
+ * fixture update. Before landing a change that touches the native engine,
+ * regenerate once and diff the previously-kill-switch-forced scenarios
+ * (owned_by_group_roles and the reader-branch-pointer / merged-tx cases) against
+ * the committed fixtures to confirm the native ownedByGroup engine reproduces
+ * `validBranchPointerOnly` and the "Transactor has no write permissions"
+ * verdicts byte-for-byte (identities aside).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -1183,22 +1197,17 @@ describe("group engine fixtures", () => {
   // =========================================================================
   // Stage-3 scenarios: ownedByGroup / unsafeAllowAll / merged transactions.
   //
-  // Every Stage-3 scenario forces the native-validation kill switch
-  // (COJSON_DISABLE_NATIVE_VALIDATION=1) around scenario building AND verdict
-  // reading. TS never delegates the ownedByGroup / unsafeAllowAll branches of
-  // determineValidTransactions to the native engine (permissions.ts:100 gates
-  // native on ruleset.type === "group" only), so in this build the two paths
-  // already agree on these verdicts. But the native/Rust ownedByGroup engine
-  // (crates/.../group_engine/engine.rs:build_owned_by_group) does NOT yet port
-  // the reader-branch-pointer trim and would mark it invalid; forcing the kill
-  // switch guarantees the fixture records the authoritative TS-fallback
-  // semantics (validBranchPointerOnly) that Stage-3's unified validateTransactions
-  // must reproduce.
+  // These verdicts are now produced by the native NodeCore (the kill switch is
+  // gone). Their committed fixtures are the frozen golden files captured from
+  // the original TypeScript engine (commit b84f15310) — including the
+  // reader-branch-pointer trim (validBranchPointerOnly) and the "Transactor has
+  // no write permissions" rejections. The native unified validateTransactions
+  // must reproduce this verdict CONTENT byte-for-byte on regeneration; see the
+  // oracle-inversion note at the top of this file.
   // =========================================================================
 
   // 19. owned_by_group_roles -----------------------------------------------
   test("owned_by_group_roles", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     try {
       const { node, group } = newGroupHighLevel();
 
@@ -1287,7 +1296,6 @@ describe("group engine fixtures", () => {
 
   // 20. owned_by_group_role_change_over_time -------------------------------
   test("owned_by_group_role_change_over_time", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     vi.useFakeTimers();
     try {
       vi.setSystemTime(1_700_000_000_000);
@@ -1362,7 +1370,6 @@ describe("group engine fixtures", () => {
 
   // 21. owned_by_account ----------------------------------------------------
   test("owned_by_account", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     try {
       const { node, accountID } = await LocalNode.withNewlyCreatedAccount({
         peers: [],
@@ -1405,7 +1412,6 @@ describe("group engine fixtures", () => {
 
   // 22. owned_reader_branch_pointer ----------------------------------------
   test("owned_reader_branch_pointer", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     try {
       const { node, group } = newGroupHighLevel();
       const reader = createAccountInNode(node);
@@ -1465,7 +1471,6 @@ describe("group engine fixtures", () => {
 
   // 23. owned_private_tx_meta_unavailable ----------------------------------
   test("owned_private_tx_meta_unavailable", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     try {
       const { node, group } = newGroupHighLevel();
       const reader = createAccountInNode(node);
@@ -1524,7 +1529,6 @@ describe("group engine fixtures", () => {
 
   // 24. unsafe_allow_all ----------------------------------------------------
   test("unsafe_allow_all", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     try {
       const { node } = newGroupHighLevel();
 
@@ -1567,7 +1571,6 @@ describe("group engine fixtures", () => {
 
   // 25. merged_tx_ties ------------------------------------------------------
   test("merged_tx_ties", async () => {
-    vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
     vi.useFakeTimers();
     try {
       vi.setSystemTime(1_700_000_000_000);

@@ -21,9 +21,7 @@
  * writer, giving us a valid revocation of a valid earlier grant.)
  *
  * After the late revocation arrives, B was not a manager at t3, so B's "add C"
- * must flip to invalid. This test asserts that on the native path (default,
- * with NapiCrypto) and, when run under COJSON_DISABLE_NATIVE_VALIDATION=1,
- * on the TS path too (parity).
+ * must flip to invalid. This test asserts that on the native path (NapiCrypto).
  */
 import { expect, test, vi } from "vitest";
 import { ControlledAccount, ControlledAgent } from "../coValues/account.js";

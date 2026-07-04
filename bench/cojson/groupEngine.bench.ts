@@ -3,15 +3,11 @@ import { ControlledAccount, EVERYONE, LocalNode, RawGroup } from "cojson";
 import { NapiCrypto } from "cojson/crypto/NapiCrypto";
 
 /**
- * Benchmarks for the native (napi) group engine vs. the TypeScript fallback
- * path, toggled via the COJSON_DISABLE_NATIVE_VALIDATION kill switch. Both
- * variants run against the same NapiCrypto-backed node/group structures —
- * the kill switch is what routes validation/role-resolution through the
- * pure-TS algorithm instead of the native NodeCore, so this is an
- * apples-to-apples comparison of the two code paths, not two crypto
- * backends. (WasmCrypto/RNCrypto have no native validateTransactions/roleOf at all,
- * so they always run the TS path regardless of the kill switch — see
- * permissions.ts/group.ts capability gates.)
+ * Benchmarks for the native group engine: roleOf on a 3-level parent chain and
+ * full re-validation of a 200-transaction group. Both run against
+ * NapiCrypto-backed node/group structures and exercise the native NodeCore
+ * validation/role-resolution path (all providers now validate natively; napi is
+ * used here for a stable local runner).
  */
 
 const Crypto = await NapiCrypto.create();
@@ -94,8 +90,8 @@ function queryRolesRepeatedly(scenario: RoleChainScenario) {
 }
 
 // ---------------------------------------------------------------------------
-// (b) full validation of a 200-transaction group (native vs TS, via kill
-// switch), forcing a full invalidate + re-validate pass each iteration.
+// (b) full validation of a 200-transaction group, forcing a full invalidate +
+// re-validate pass each iteration.
 // ---------------------------------------------------------------------------
 
 const VALIDATION_TX_COUNT = 200;
@@ -126,14 +122,10 @@ function buildValidationScenario(): ValidationScenario {
 function revalidateFully(scenario: ValidationScenario) {
   // resetParsedTransactions() marks every verified transaction as
   // to-validate again and re-runs parseNewTransactions over the whole
-  // (200-transaction) history. NOTE what each variant then measures:
-  // - TS fallback: a genuine full recompute (fresh MemberRoleResolver) per call.
-  // - Native: the Rust engine's (session_id, tx_count) cache SHORT-CIRCUITS
-  //   (no new transactions), so the native number is the end-to-end
-  //   DELEGATION-PATH cost — pending[] build, napi crossing, marshaling ~200
-  //   verdicts back, byKey map + verdict application — NOT Rust compute time.
-  // Both numbers are real user-visible costs of their paths; they are not a
-  // compute-vs-compute comparison.
+  // (200-transaction) history. The Rust engine's (session_id, tx_count) cache
+  // SHORT-CIRCUITS (no new transactions), so this number is the end-to-end
+  // DELEGATION-PATH cost — pending[] build, napi crossing, marshaling ~200
+  // verdicts back, byKey map + verdict application — NOT Rust compute time.
   scenario.group.core.resetParsedTransactions();
 }
 
@@ -161,48 +153,18 @@ await cronometro(
   {
     "roleOf - 3-level parent chain, 20 members x1000 (native)": {
       async before() {
-        delete (process.env as Record<string, string | undefined>)
-          .COJSON_DISABLE_NATIVE_VALIDATION;
         roleChainScenario = buildRoleChainScenario();
       },
       test() {
         queryRolesRepeatedly(roleChainScenario);
-      },
-    },
-    "roleOf - 3-level parent chain, 20 members x1000 (TS fallback)": {
-      async before() {
-        process.env.COJSON_DISABLE_NATIVE_VALIDATION = "1";
-        roleChainScenario = buildRoleChainScenario();
-      },
-      test() {
-        queryRolesRepeatedly(roleChainScenario);
-      },
-      async after() {
-        delete (process.env as Record<string, string | undefined>)
-          .COJSON_DISABLE_NATIVE_VALIDATION;
       },
     },
     "validateTransactions - 200-tx group, full revalidate (native)": {
       async before() {
-        delete (process.env as Record<string, string | undefined>)
-          .COJSON_DISABLE_NATIVE_VALIDATION;
         validationScenario = buildValidationScenario();
       },
       test() {
         revalidateFully(validationScenario);
-      },
-    },
-    "validateTransactions - 200-tx group, full revalidate (TS fallback)": {
-      async before() {
-        process.env.COJSON_DISABLE_NATIVE_VALIDATION = "1";
-        validationScenario = buildValidationScenario();
-      },
-      test() {
-        revalidateFully(validationScenario);
-      },
-      async after() {
-        delete (process.env as Record<string, string | undefined>)
-          .COJSON_DISABLE_NATIVE_VALIDATION;
       },
     },
   },
