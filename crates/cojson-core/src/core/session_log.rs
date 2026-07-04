@@ -461,6 +461,19 @@ impl SessionLogInternal {
         self.pending_tx_infos.push(tx_info);
     }
 
+    /// Stage an already-canonical transaction directly.
+    ///
+    /// `tx_json` MUST be the exact canonical serialization of the transaction
+    /// (byte-identical to what `build_private_canonical`/`build_trusting_canonical`
+    /// would produce) and `tx_info` its matching payload span table (spans
+    /// relative to the start of `tx_json`). Used by the canonical-shape fast
+    /// scan import path to avoid re-serializing already-canonical input.
+    /// The transaction is NOT committed until commit_transactions() succeeds.
+    pub fn stage_canonical(&mut self, tx_json: String, tx_info: TxInfo) {
+        self.pending_transactions.push(tx_json);
+        self.pending_tx_infos.push(tx_info);
+    }
+
     /// Commit pending transactions to the main state.
     /// If `skip_validate` is false, validates the signature first.
     /// If `skip_validate` is true, commits without validation.
