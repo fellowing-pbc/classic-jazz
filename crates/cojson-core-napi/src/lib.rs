@@ -1,6 +1,7 @@
 use cojson_core::core::{
   CoJsonCoreError, KnownState as RustKnownState, NodeCore as RustNodeCore,
   PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
+  VerdictOutcome as RustVerdictOutcome,
 };
 use napi_derive::napi;
 use std::collections::HashMap;
@@ -339,13 +340,29 @@ fn to_napi_err<E: std::fmt::Display>(e: E) -> napi::Error {
   napi::Error::new(napi::Status::GenericFailure, e.to_string())
 }
 
-/// A pending (not-yet-persisted) transaction handed to `validate_group`,
+/// A merged transaction's source identity, mirroring the `(session_id,
+/// tx_index)` tuple carried by `PendingTxIn::source_tx_id` on the Rust side.
+/// napi lower-cases struct field names to plain camelCase (`sessionId`, not
+/// `sessionID`) — unlike the JSON wire format elsewhere in this codebase
+/// (`TransactionID`'s `sessionID`), napi objects bypass serde entirely, so
+/// there is no `#[serde(rename)]` to apply here. The TS adapter is
+/// responsible for bridging its `sessionID`-cased public type to this
+/// `sessionId`-cased napi object.
+#[napi(object)]
+pub struct SourceTxId {
+  pub session_id: String,
+  pub tx_index: u32,
+}
+
+/// A pending (not-yet-persisted) transaction handed to `validate_transactions`,
 /// mirroring `PendingTxIn` on the Rust side.
 #[napi(object)]
 pub struct PendingTx {
   pub session_id: String,
   pub tx_index: u32,
   pub source_made_at: Option<f64>,
+  pub meta_json: Option<String>,
+  pub source_tx_id: Option<SourceTxId>,
 }
 
 /// Validation verdict for a single transaction, mirroring `Verdict` on the
@@ -355,7 +372,18 @@ pub struct GroupVerdict {
   pub session_id: String,
   pub tx_index: u32,
   pub valid: bool,
+  /// One of "valid" / "invalid" / "validBranchPointerOnly", mirroring
+  /// `VerdictOutcome` on the Rust side.
+  pub outcome: String,
   pub reason: Option<String>,
+}
+
+fn verdict_outcome_to_str(outcome: RustVerdictOutcome) -> String {
+  match outcome {
+    RustVerdictOutcome::Valid => "valid".to_string(),
+    RustVerdictOutcome::Invalid => "invalid".to_string(),
+    RustVerdictOutcome::ValidBranchPointerOnly => "validBranchPointerOnly".to_string(),
+  }
 }
 
 #[napi]
@@ -707,7 +735,7 @@ impl NodeCore {
   /// Throws "Unknown CoValue: <id>" if `co_id` itself is not registered, and
   /// "CoValue not loaded: <id>" if a dependency (parent group / owning account) is missing.
   #[napi]
-  pub fn validate_group(
+  pub fn validate_transactions(
     &mut self,
     co_id: String,
     pending: Vec<PendingTx>,
@@ -718,10 +746,8 @@ impl NodeCore {
         session_id: p.session_id,
         tx_index: p.tx_index,
         source_made_at: p.source_made_at.map(|v| v as u64),
-        // Not yet exposed on the `PendingTx` napi binding — stage 3 plumbs
-        // decrypted meta and merge source identity through from JS.
-        meta_json: None,
-        source_tx_id: None,
+        meta_json: p.meta_json,
+        source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
       })
       .collect();
     let verdicts = self
@@ -735,10 +761,20 @@ impl NodeCore {
           session_id: v.session_id,
           tx_index: v.tx_index,
           valid: v.valid,
+          outcome: verdict_outcome_to_str(v.outcome),
           reason: v.reason,
         })
         .collect(),
     )
+  }
+
+  /// Drop the cached validation engine for `co_id`, forcing a full recompute
+  /// on the next `validate_transactions` / `role_of`. An absent `co_id` is a
+  /// no-op (not `UnknownCoValue`): callers invoke this on dependants that may
+  /// never have been registered on this node, so erroring would be hostile.
+  #[napi]
+  pub fn reset_validation(&mut self, co_id: String) {
+    self.internal.reset_validation(&co_id);
   }
 
   /// Role of member in group at time (ms). Returns the role string or null.

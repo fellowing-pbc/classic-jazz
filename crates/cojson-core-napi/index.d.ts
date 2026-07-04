@@ -68,7 +68,14 @@ export declare class NodeCore {
    * Throws "Unknown CoValue: <id>" if `co_id` itself is not registered, and
    * "CoValue not loaded: <id>" if a dependency (parent group / owning account) is missing.
    */
-  validateGroup(coId: string, pending: Array<PendingTx>): Array<GroupVerdict>
+  validateTransactions(coId: string, pending: Array<PendingTx>): Array<GroupVerdict>
+  /**
+   * Drop the cached validation engine for `co_id`, forcing a full recompute
+   * on the next `validate_transactions` / `role_of`. An absent `co_id` is a
+   * no-op (not `UnknownCoValue`): callers invoke this on dependants that may
+   * never have been registered on this node, so erroring would be hostile.
+   */
+  resetValidation(coId: string): void
   /**
    * Role of member in group at time (ms). Returns the role string or null.
    * Throws "Unknown CoValue: <id>" if `group_id` itself is not registered, and
@@ -276,6 +283,11 @@ export interface GroupVerdict {
   sessionId: string
   txIndex: number
   valid: boolean
+  /**
+   * One of "valid" / "invalid" / "validBranchPointerOnly", mirroring
+   * `VerdictOutcome` on the Rust side.
+   */
+  outcome: string
   reason?: string
 }
 
@@ -300,13 +312,15 @@ export declare function newEd25519SigningKey(): Uint8Array
 export declare function newX25519PrivateKey(): Uint8Array
 
 /**
- * A pending (not-yet-persisted) transaction handed to `validate_group`,
+ * A pending (not-yet-persisted) transaction handed to `validate_transactions`,
  * mirroring `PendingTxIn` on the Rust side.
  */
 export interface PendingTx {
   sessionId: string
   txIndex: number
   sourceMadeAt?: number
+  metaJson?: string
+  sourceTxId?: SourceTxId
 }
 
 /**
@@ -344,6 +358,21 @@ export declare function shortHash(value: string): string
  * Returns base58-encoded signature with "signature_z" prefix or throws JsError if signing fails.
  */
 export declare function sign(message: Uint8Array, secret: Uint8Array): string
+
+/**
+ * A merged transaction's source identity, mirroring the `(session_id,
+ * tx_index)` tuple carried by `PendingTxIn::source_tx_id` on the Rust side.
+ * napi lower-cases struct field names to plain camelCase (`sessionId`, not
+ * `sessionID`) — unlike the JSON wire format elsewhere in this codebase
+ * (`TransactionID`'s `sessionID`), napi objects bypass serde entirely, so
+ * there is no `#[serde(rename)]` to apply here. The TS adapter is
+ * responsible for bridging its `sessionID`-cased public type to this
+ * `sessionId`-cased napi object.
+ */
+export interface SourceTxId {
+  sessionId: string
+  txIndex: number
+}
 
 /**
  * NAPI-exposed function for unsealing a message using X25519 + XSalsa20-Poly1305.
