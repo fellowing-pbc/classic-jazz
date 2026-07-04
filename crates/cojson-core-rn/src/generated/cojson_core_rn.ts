@@ -899,6 +899,79 @@ const FfiConverterTypeGroupVerdict = (() => {
 })();
 
 /**
+ * The compact result of the R3 stage-1 single-call ingest, mirroring
+ * `IngestOutcome` on the Rust side: `{generation, count, viewVersion,
+ * deltaJson}`, with no per-transaction verdict array (validation happens
+ * in-crate). `generation`/`viewVersion` are `f64` for lossless JS-number
+ * round-tripping of the u64 counters.
+ */
+export type IngestOutcome = {
+  generation: /*f64*/ number;
+  count: /*u32*/ number;
+  viewVersion: /*f64*/ number;
+  deltaJson: string;
+};
+
+/**
+ * Generated factory for {@link IngestOutcome} record objects.
+ */
+export const IngestOutcome = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<IngestOutcome, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link IngestOutcome}, with defaults specified
+     * in Rust, in the {@link cojson_core_rn} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link IngestOutcome}, with defaults specified
+     * in Rust, in the {@link cojson_core_rn} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link cojson_core_rn} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<IngestOutcome>,
+  });
+})();
+
+const FfiConverterTypeIngestOutcome = (() => {
+  type TypeName = IngestOutcome;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        generation: FfiConverterFloat64.read(from),
+        count: FfiConverterUInt32.read(from),
+        viewVersion: FfiConverterFloat64.read(from),
+        deltaJson: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterFloat64.write(value.generation, into);
+      FfiConverterUInt32.write(value.count, into);
+      FfiConverterFloat64.write(value.viewVersion, into);
+      FfiConverterString.write(value.deltaJson, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterFloat64.allocationSize(value.generation) +
+        FfiConverterUInt32.allocationSize(value.count) +
+        FfiConverterFloat64.allocationSize(value.viewVersion) +
+        FfiConverterString.allocationSize(value.deltaJson)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+/**
  * KnownState as a native Record (no JSON serialization needed)
  */
 export type KnownState = {
@@ -1097,6 +1170,74 @@ const FfiConverterTypeSourceTxId = (() => {
       return (
         FfiConverterString.allocationSize(value.sessionId) +
         FfiConverterUInt32.allocationSize(value.txIndex)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+/**
+ * A DELTA of validation verdicts, mirroring `VerdictDelta` on the Rust side:
+ * the verdicts the caller has not yet seen, tagged with the engine `generation`
+ * and the `from_index` where they begin in the full list. `generation` is an
+ * `f64` for lossless JS-number round-tripping of the u64 counter.
+ */
+export type VerdictDelta = {
+  generation: /*f64*/ number;
+  fromIndex: /*u32*/ number;
+  verdicts: Array<GroupVerdict>;
+};
+
+/**
+ * Generated factory for {@link VerdictDelta} record objects.
+ */
+export const VerdictDelta = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<VerdictDelta, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link VerdictDelta}, with defaults specified
+     * in Rust, in the {@link cojson_core_rn} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link VerdictDelta}, with defaults specified
+     * in Rust, in the {@link cojson_core_rn} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link cojson_core_rn} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<VerdictDelta>,
+  });
+})();
+
+const FfiConverterTypeVerdictDelta = (() => {
+  type TypeName = VerdictDelta;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        generation: FfiConverterFloat64.read(from),
+        fromIndex: FfiConverterUInt32.read(from),
+        verdicts: FfiConverterArrayTypeGroupVerdict.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterFloat64.write(value.generation, into);
+      FfiConverterUInt32.write(value.fromIndex, into);
+      FfiConverterArrayTypeGroupVerdict.write(value.verdicts, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterFloat64.allocationSize(value.generation) +
+        FfiConverterUInt32.allocationSize(value.fromIndex) +
+        FfiConverterArrayTypeGroupVerdict.allocationSize(value.verdicts)
       );
     }
   }
@@ -2233,6 +2374,23 @@ export interface NodeCoreInterface {
    */
   hasKeySecret(keyId: string) /*throws*/ : boolean;
   /**
+   * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+   * them in-crate, and materialize the coMap view in ONE crossing — returning
+   * only the compact `IngestOutcome` (no per-transaction verdict array). The raw
+   * session log is still written, so the TS sync/storage paths are unaffected.
+   * See `NodeCore::ingest_and_materialize`.
+   */
+  ingestAndMaterialize(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+    sinceVersion: /*f64*/ number,
+    pending: Array<PendingTx>
+  ) /*throws*/ : IngestOutcome;
+  /**
    * Check if this CoValue is deleted
    */
   isDeleted(coId: string) /*throws*/ : boolean;
@@ -2266,6 +2424,54 @@ export interface NodeCoreInterface {
     metaJson: string | undefined,
     madeAt: /*f64*/ number
   ) /*throws*/ : string;
+  /**
+   * Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`.
+   */
+  mapDelta(coId: string, sinceVersion: /*f64*/ number) /*throws*/ : string;
+  /**
+   * Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+   * each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+   * `RawCoMap` rebuilds `ops`/`latest` from.
+   */
+  mapDeltaRich(coId: string, sinceVersion: /*f64*/ number) /*throws*/ : string;
+  /**
+   * Boundary (a): latest JSON value for `key`, or null.
+   */
+  mapGet(coId: string, key: string) /*throws*/ : string | undefined;
+  /**
+   * Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
+   */
+  mapGetAt(
+    coId: string,
+    key: string,
+    atTime: /*f64*/ number | undefined
+  ) /*throws*/ : string | undefined;
+  /**
+   * Frontier read: latest frontier-visible value of `key` (null = absent).
+   * `frontier_json` is `{ sessionID: txCount }`.
+   */
+  mapGetAtFrontier(
+    coId: string,
+    key: string,
+    frontierJson: string
+  ) /*throws*/ : string | undefined;
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coMap view; returns its
+   * current monotonic version. Call after each ingest batch.
+   */
+  mapMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ) /*throws*/ : /*f64*/ number;
+  /**
+   * Boundary (b): whole materialized map as a JSON object string.
+   */
+  mapSnapshot(coId: string) /*throws*/ : string;
+  /**
+   * Frontier read: whole `{key: latestVisibleValue}` snapshot under
+   * `frontier_json` as a JSON object string.
+   */
+  mapSnapshotAtFrontier(coId: string, frontierJson: string) /*throws*/ : string;
   /**
    * Mark this CoValue as deleted
    */
@@ -2314,6 +2520,19 @@ export interface NodeCoreInterface {
     coId: string,
     pending: Array<PendingTx>
   ) /*throws*/ : Array<GroupVerdict>;
+  /**
+   * Delta counterpart of `validate_transactions`: given the caller's
+   * `(since_generation, since_count)` cursor, return only the verdicts it has
+   * not seen. On a generation match returns `verdicts[since_count..]` with
+   * `from_index = since_count`; on a mismatch returns the whole list with
+   * `from_index = 0`. Same error contract as `validate_transactions`.
+   */
+  validateTransactionsDelta(
+    coId: string,
+    sinceGeneration: /*f64*/ number,
+    sinceCount: /*u32*/ number,
+    pending: Array<PendingTx>
+  ) /*throws*/ : VerdictDelta;
 }
 
 export class NodeCore
@@ -2758,6 +2977,47 @@ export class NodeCore
   }
 
   /**
+   * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+   * them in-crate, and materialize the coMap view in ONE crossing — returning
+   * only the compact `IngestOutcome` (no per-transaction verdict array). The raw
+   * session log is still written, so the TS sync/storage paths are unaffected.
+   * See `NodeCore::ingest_and_materialize`.
+   */
+  public ingestAndMaterialize(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+    sinceVersion: /*f64*/ number,
+    pending: Array<PendingTx>
+  ): IngestOutcome /*throws*/ {
+    return FfiConverterTypeIngestOutcome.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_ingest_and_materialize(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterString.lower(sessionId),
+            FfiConverterOptionalString.lower(signerId),
+            FfiConverterString.lower(transactionsJson),
+            FfiConverterString.lower(signature),
+            FfiConverterBool.lower(skipVerify),
+            FfiConverterFloat64.lower(sinceVersion),
+            FfiConverterArrayTypePendingTx.lower(pending),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
    * Check if this CoValue is deleted
    */
   public isDeleted(coId: string): boolean /*throws*/ {
@@ -2863,6 +3123,208 @@ export class NodeCore
             FfiConverterString.lower(changesJson),
             FfiConverterOptionalString.lower(metaJson),
             FfiConverterFloat64.lower(madeAt),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`.
+   */
+  public mapDelta(
+    coId: string,
+    sinceVersion: /*f64*/ number
+  ): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_delta(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterFloat64.lower(sinceVersion),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+   * each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+   * `RawCoMap` rebuilds `ops`/`latest` from.
+   */
+  public mapDeltaRich(
+    coId: string,
+    sinceVersion: /*f64*/ number
+  ): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_delta_rich(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterFloat64.lower(sinceVersion),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Boundary (a): latest JSON value for `key`, or null.
+   */
+  public mapGet(coId: string, key: string): string | undefined /*throws*/ {
+    return FfiConverterOptionalString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterString.lower(key),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
+   */
+  public mapGetAt(
+    coId: string,
+    key: string,
+    atTime: /*f64*/ number | undefined
+  ): string | undefined /*throws*/ {
+    return FfiConverterOptionalString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get_at(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterString.lower(key),
+            FfiConverterOptionalFloat64.lower(atTime),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Frontier read: latest frontier-visible value of `key` (null = absent).
+   * `frontier_json` is `{ sessionID: txCount }`.
+   */
+  public mapGetAtFrontier(
+    coId: string,
+    key: string,
+    frontierJson: string
+  ): string | undefined /*throws*/ {
+    return FfiConverterOptionalString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get_at_frontier(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterString.lower(key),
+            FfiConverterString.lower(frontierJson),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coMap view; returns its
+   * current monotonic version. Call after each ingest batch.
+   */
+  public mapMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ): /*f64*/ number /*throws*/ {
+    return FfiConverterFloat64.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_materialize(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterArrayTypePendingTx.lower(pending),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Boundary (b): whole materialized map as a JSON object string.
+   */
+  public mapSnapshot(coId: string): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_snapshot(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Frontier read: whole `{key: latestVisibleValue}` snapshot under
+   * `frontier_json` as a JSON object string.
+   */
+  public mapSnapshotAtFrontier(
+    coId: string,
+    frontierJson: string
+  ): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_snapshot_at_frontier(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterString.lower(frontierJson),
             callStatus
           );
         },
@@ -3046,6 +3508,39 @@ export class NodeCore
           return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_validate_transactions(
             uniffiTypeNodeCoreObjectFactory.clonePointer(this),
             FfiConverterString.lower(coId),
+            FfiConverterArrayTypePendingTx.lower(pending),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Delta counterpart of `validate_transactions`: given the caller's
+   * `(since_generation, since_count)` cursor, return only the verdicts it has
+   * not seen. On a generation match returns `verdicts[since_count..]` with
+   * `from_index = since_count`; on a mismatch returns the whole list with
+   * `from_index = 0`. Same error contract as `validate_transactions`.
+   */
+  public validateTransactionsDelta(
+    coId: string,
+    sinceGeneration: /*f64*/ number,
+    sinceCount: /*u32*/ number,
+    pending: Array<PendingTx>
+  ): VerdictDelta /*throws*/ {
+    return FfiConverterTypeVerdictDelta.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_validate_transactions_delta(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterFloat64.lower(sinceGeneration),
+            FfiConverterUInt32.lower(sinceCount),
             FfiConverterArrayTypePendingTx.lower(pending),
             callStatus
           );
@@ -4307,6 +4802,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_ingest_and_materialize() !==
+    13677
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_ingest_and_materialize'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_deleted() !==
     44155
   ) {
@@ -4336,6 +4839,70 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_cojson_core_rn_checksum_method_nodecore_make_new_trusting_transaction'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_delta() !==
+    20871
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_delta'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_delta_rich() !==
+    5815
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_delta_rich'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get() !==
+    20227
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_get'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at() !==
+    7328
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at_frontier() !==
+    12611
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at_frontier'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_materialize() !==
+    42279
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_materialize'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot() !==
+    5214
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot_at_frontier() !==
+    46186
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot_at_frontier'
     );
   }
   if (
@@ -4400,6 +4967,14 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions_delta() !==
+    23780
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions_delta'
     );
   }
   if (
@@ -4587,11 +5162,13 @@ export default Object.freeze({
     FfiConverterTypeBlake3Hasher,
     FfiConverterTypeCryptoErrorUniffi,
     FfiConverterTypeGroupVerdict,
+    FfiConverterTypeIngestOutcome,
     FfiConverterTypeKnownState,
     FfiConverterTypeNodeCore,
     FfiConverterTypePendingTx,
     FfiConverterTypeSessionMap,
     FfiConverterTypeSessionMapError,
     FfiConverterTypeSourceTxId,
+    FfiConverterTypeVerdictDelta,
   },
 });

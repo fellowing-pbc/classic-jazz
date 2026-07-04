@@ -1057,6 +1057,34 @@ export class NodeCore {
         return ret !== 0;
     }
     /**
+     * Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+     * each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+     * `RawCoMap` rebuilds `ops`/`latest` from.
+     * @param {string} co_id
+     * @param {number} since_version
+     * @returns {string}
+     */
+    mapDeltaRich(co_id, since_version) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_mapDeltaRich(this.__wbg_ptr, ptr0, len0, since_version);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Creates or replaces; replacing drops the previous session state.
      * Mirrors TS semantics where constructing a new VerifiedState for an
      * already-known id creates a fresh SessionMap.
@@ -1301,6 +1329,32 @@ export class NodeCore {
         return v3;
     }
     /**
+     * Frontier read: latest frontier-visible value of `key` (undefined =
+     * absent). `frontier_json` is `{ sessionID: txCount }`.
+     * @param {string} co_id
+     * @param {string} key
+     * @param {string} frontier_json
+     * @returns {string | undefined}
+     */
+    mapGetAtFrontier(co_id, key, frontier_json) {
+        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(frontier_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_mapGetAtFrontier(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        let v4;
+        if (ret[0] !== 0) {
+            v4 = getStringFromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v4;
+    }
+    /**
      * Get transaction count for a session (returns -1 if session not found)
      * @param {string} co_id
      * @param {string} session_id
@@ -1332,6 +1386,40 @@ export class NodeCore {
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_validateTransactions(this.__wbg_ptr, ptr0, len0, pending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+     * them in-crate, and materialize the coMap view in ONE crossing — returning
+     * only the compact `IngestOutcomeWire` (`{generation, count, viewVersion,
+     * deltaJson}`), with no per-transaction verdict array. The raw session log is
+     * still written, so TS sync/storage are unaffected. See
+     * `NodeCore::ingest_and_materialize`.
+     * @param {string} co_id
+     * @param {string} session_id
+     * @param {string | null | undefined} signer_id
+     * @param {string} transactions_json
+     * @param {string} signature
+     * @param {boolean} skip_verify
+     * @param {number} since_version
+     * @param {any} pending
+     * @returns {any}
+     */
+    ingestAndMaterialize(co_id, session_id, signer_id, transactions_json, signature, skip_verify, since_version, pending) {
+        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        var ptr2 = isLikeNone(signer_id) ? 0 : passStringToWasm0(signer_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(transactions_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(signature, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_ingestAndMaterialize(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, skip_verify, since_version, pending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -1385,6 +1473,35 @@ export class NodeCore {
             wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         }
         return v3;
+    }
+    /**
+     * Frontier read: whole `{key: latestVisibleValue}` snapshot under
+     * `frontier_json` as a JSON object string.
+     * @param {string} co_id
+     * @param {string} frontier_json
+     * @returns {string}
+     */
+    mapSnapshotAtFrontier(co_id, frontier_json) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(frontier_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_mapSnapshotAtFrontier(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var ptr3 = ret[0];
+            var len3 = ret[1];
+            if (ret[3]) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
     }
     /**
      * Set streaming known state

@@ -240,6 +240,12 @@ export class NodeCore {
    */
   hasKeySecret(key_id: string): boolean;
   /**
+   * Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+   * each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+   * `RawCoMap` rebuilds `ops`/`latest` from.
+   */
+  mapDeltaRich(co_id: string, since_version: number): string;
+  /**
    * Creates or replaces; replacing drops the previous session state.
    * Mirrors TS semantics where constructing a new VerifiedState for an
    * already-known id creates a fresh SessionMap.
@@ -300,6 +306,11 @@ export class NodeCore {
    */
   getSignatureAfter(co_id: string, session_id: string, tx_index: number): string | undefined;
   /**
+   * Frontier read: latest frontier-visible value of `key` (undefined =
+   * absent). `frontier_json` is `{ sessionID: txCount }`.
+   */
+  mapGetAtFrontier(co_id: string, key: string, frontier_json: string): string | undefined;
+  /**
    * Get transaction count for a session (returns -1 if session not found)
    */
   getTransactionCount(co_id: string, session_id: string): number;
@@ -313,6 +324,15 @@ export class NodeCore {
    */
   validateTransactions(co_id: string, pending: any): any;
   /**
+   * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
+   * them in-crate, and materialize the coMap view in ONE crossing — returning
+   * only the compact `IngestOutcomeWire` (`{generation, count, viewVersion,
+   * deltaJson}`), with no per-transaction verdict array. The raw session log is
+   * still written, so TS sync/storage are unaffected. See
+   * `NodeCore::ingest_and_materialize`.
+   */
+  ingestAndMaterialize(co_id: string, session_id: string, signer_id: string | null | undefined, transactions_json: string, signature: string, skip_verify: boolean, since_version: number, pending: any): any;
+  /**
    * Decrypt transaction meta
    */
   decryptTransactionMeta(co_id: string, session_id: string, tx_index: number, key_secret: string): string | undefined;
@@ -320,6 +340,11 @@ export class NodeCore {
    * Get transactions for a session from index as JSON strings (returns undefined if session not found)
    */
   getSessionTransactions(co_id: string, session_id: string, from_index: number): string[] | undefined;
+  /**
+   * Frontier read: whole `{key: latestVisibleValue}` snapshot under
+   * `frontier_json` as a JSON object string.
+   */
+  mapSnapshotAtFrontier(co_id: string, frontier_json: string): string;
   /**
    * Set streaming known state
    */
@@ -485,15 +510,19 @@ export interface InitOutput {
   readonly nodecore_getTransactionCount: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
   readonly nodecore_hasCoValue: (a: number, b: number, c: number) => number;
   readonly nodecore_hasKeySecret: (a: number, b: number, c: number) => number;
+  readonly nodecore_ingestAndMaterialize: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number];
   readonly nodecore_isDeleted: (a: number, b: number, c: number) => [number, number, number];
   readonly nodecore_isStreaming: (a: number, b: number, c: number) => [number, number, number];
   readonly nodecore_makeNewPrivateTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number) => [number, number, number, number];
   readonly nodecore_makeNewTrustingTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number, number];
   readonly nodecore_mapDelta: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly nodecore_mapDeltaRich: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly nodecore_mapGet: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
   readonly nodecore_mapGetAt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+  readonly nodecore_mapGetAtFrontier: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
   readonly nodecore_mapMaterialize: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly nodecore_mapSnapshot: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_mapSnapshotAtFrontier: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
   readonly nodecore_markAsDeleted: (a: number, b: number, c: number) => [number, number];
   readonly nodecore_missingKeyIds: (a: number, b: number, c: number) => [number, number];
   readonly nodecore_new: () => number;

@@ -165,6 +165,18 @@ interface NativeModuleInterface {
     keyId: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_ingest_and_materialize(
+    ptr: bigint,
+    coId: Uint8Array,
+    sessionId: Uint8Array,
+    signerId: Uint8Array,
+    transactionsJson: Uint8Array,
+    signature: Uint8Array,
+    skipVerify: number,
+    sinceVersion: number,
+    pending: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_is_deleted(
     ptr: bigint,
     coId: Uint8Array,
@@ -195,6 +207,55 @@ interface NativeModuleInterface {
     changesJson: Uint8Array,
     metaJson: Uint8Array,
     madeAt: number,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_delta(
+    ptr: bigint,
+    coId: Uint8Array,
+    sinceVersion: number,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_delta_rich(
+    ptr: bigint,
+    coId: Uint8Array,
+    sinceVersion: number,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get(
+    ptr: bigint,
+    coId: Uint8Array,
+    key: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get_at(
+    ptr: bigint,
+    coId: Uint8Array,
+    key: Uint8Array,
+    atTime: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_get_at_frontier(
+    ptr: bigint,
+    coId: Uint8Array,
+    key: Uint8Array,
+    frontierJson: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_materialize(
+    ptr: bigint,
+    coId: Uint8Array,
+    pending: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_snapshot(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_map_snapshot_at_frontier(
+    ptr: bigint,
+    coId: Uint8Array,
+    frontierJson: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): Uint8Array;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_mark_as_deleted(
@@ -239,6 +300,14 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_validate_transactions(
     ptr: bigint,
     coId: Uint8Array,
+    pending: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_validate_transactions_delta(
+    ptr: bigint,
+    coId: Uint8Array,
+    sinceGeneration: number,
+    sinceCount: number,
     pending: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): Uint8Array;
@@ -566,10 +635,19 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_get_transaction_count(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_has_co_value(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_has_key_secret(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_ingest_and_materialize(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_deleted(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_streaming(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_private_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_trusting_transaction(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_delta(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_delta_rich(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_get_at_frontier(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_materialize(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_snapshot_at_frontier(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_mark_as_deleted(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_missing_key_ids(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_provide_key_secret(): number;
@@ -578,6 +656,7 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_role_of(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_set_streaming_known_state(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions_delta(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_sessionmap_add_transactions(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_sessionmap_decrypt_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_sessionmap_decrypt_transaction_meta(): number;
