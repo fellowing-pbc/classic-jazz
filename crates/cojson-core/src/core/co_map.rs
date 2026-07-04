@@ -1370,3 +1370,138 @@ mod tests {
         assert_eq!(snap_empty, serde_json::json!({}));
     }
 }
+
+// =====================================================================
+// Stage-3 CONTENT fixtures — replay coMap fixtures captured from the CURRENT
+// TS `RawCoMap` (exported by
+// `packages/cojson/src/tests/coMapContentFixtures.export.test.ts`) and assert
+// the Rust materialization reproduces snapshot + atTime grid + frontier views +
+// per-op MapOp metadata byte-for-byte. One test per `data/co_map_content/*.json`.
+// These FREEZE the coMap content contract before any future TS-path deletion.
+// =====================================================================
+#[cfg(test)]
+mod content_fixture_tests {
+    use crate::core::group_engine::tx_view::fixtures::FixtureCovalue;
+    use crate::core::node::NodeCore;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct ProvideKey {
+        #[serde(rename = "keyId")]
+        key_id: String,
+        #[serde(rename = "keySecret")]
+        key_secret: String,
+    }
+    #[derive(Deserialize)]
+    struct AtTimeExpect {
+        t: u64,
+        key: String,
+        value: serde_json::Value, // JSON value or null
+    }
+    #[derive(Deserialize)]
+    struct FrontierExpect {
+        frontier: std::collections::HashMap<String, i64>,
+        snapshot: serde_json::Value,
+    }
+    #[derive(Deserialize)]
+    struct ContentFixture {
+        covalues: Vec<FixtureCovalue>,
+        #[serde(rename = "mapId")]
+        map_id: String,
+        #[serde(rename = "provideKeys")]
+        provide_keys: Vec<ProvideKey>,
+        snapshot: serde_json::Value,
+        ops: serde_json::Value,
+        #[serde(rename = "atTime")]
+        at_time: Vec<AtTimeExpect>,
+        frontier: Vec<FrontierExpect>,
+    }
+
+    fn load(name: &str) -> ContentFixture {
+        let path = format!("data/co_map_content/{name}.json");
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"))
+    }
+
+    fn run(name: &str) {
+        let fix = load(name);
+        let mut node = NodeCore::new();
+        // Ingest every covalue's raw sessions (owning group first, then the map).
+        for cov in &fix.covalues {
+            node.create_co_value(&cov.co_id, &cov.header_json, None, true)
+                .unwrap_or_else(|e| panic!("[{name}] create {}: {e}", cov.co_id));
+            for s in &cov.sessions {
+                let txs_json = format!("[{}]", s.transactions.join(","));
+                node.get_mut(&cov.co_id)
+                    .unwrap()
+                    .add_transactions(&s.session_id, None, &txs_json, &s.last_signature, true)
+                    .unwrap_or_else(|e| panic!("[{name}] add txs {}: {e}", s.session_id));
+            }
+        }
+        // Feed read-key secrets so private txs decrypt natively.
+        for k in &fix.provide_keys {
+            node.provide_key_secret(&k.key_id, &k.key_secret);
+        }
+        node.map_materialize(&fix.map_id, &[])
+            .unwrap_or_else(|e| panic!("[{name}] materialize: {e}"));
+
+        // (1) snapshot == asObject().
+        let snap: serde_json::Value =
+            serde_json::from_str(&node.map_snapshot(&fix.map_id).unwrap()).unwrap();
+        assert_eq!(snap, fix.snapshot, "[{name}] snapshot mismatch");
+
+        // (2) per-op MapOp metadata: rich-delta changedKeys == fixture.ops.
+        let delta: serde_json::Value =
+            serde_json::from_str(&node.map_delta_rich(&fix.map_id, 0).unwrap()).unwrap();
+        assert_eq!(
+            delta["changedKeys"], fix.ops,
+            "[{name}] rich op metadata mismatch"
+        );
+
+        // (3) atTime grid: map_get_at(key, t) == expected (null => None).
+        for e in &fix.at_time {
+            let got = node.map_get_at(&fix.map_id, &e.key, Some(e.t)).unwrap();
+            match (&e.value, got) {
+                (serde_json::Value::Null, g) => assert!(
+                    g.is_none(),
+                    "[{name}] atTime {}@{} expected absent, got {g:?}",
+                    e.key,
+                    e.t
+                ),
+                (expected, Some(g)) => {
+                    let gv: serde_json::Value = serde_json::from_str(&g).unwrap();
+                    assert_eq!(&gv, expected, "[{name}] atTime {}@{} mismatch", e.key, e.t);
+                }
+                (expected, None) => {
+                    panic!("[{name}] atTime {}@{} expected {expected}, got absent", e.key, e.t)
+                }
+            }
+        }
+
+        // (4) frontier snapshots: map_snapshot_at_frontier(f) == expected.
+        for e in &fix.frontier {
+            let fj = serde_json::to_string(&e.frontier).unwrap();
+            let got: serde_json::Value =
+                serde_json::from_str(&node.map_snapshot_at_frontier(&fix.map_id, &fj).unwrap())
+                    .unwrap();
+            assert_eq!(got, e.snapshot, "[{name}] frontier {fj} snapshot mismatch");
+        }
+    }
+
+    #[test]
+    fn lww_and_delete() {
+        run("lww_and_delete");
+    }
+    #[test]
+    fn fww_races() {
+        run("fww_races");
+    }
+    #[test]
+    fn at_time_history() {
+        run("atTime_history");
+    }
+    #[test]
+    fn private_content() {
+        run("private_content");
+    }
+}
