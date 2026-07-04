@@ -25,7 +25,9 @@
  * as a side effect, immediately re-runs `determineValidTransactions` under the
  * TS path (confirmed via the same native-call spy: 0 native calls, verdicts
  * recomputed). Order matters — reset before stubbing would just re-run the
- * native path again.
+ * native path again. NOTE for future extenders: this reset requirement applies
+ * to EVERY ownedByGroup covalue (CoList, CoFeed, ...), not just maps — any new
+ * owned covalue type added to the harness needs the same post-stub reset.
  *
  * Seed is logged on failure and overridable via DIFF_SEED so a divergence can
  * be reproduced deterministically. Reproduction is STRUCTURAL, not bitwise:
