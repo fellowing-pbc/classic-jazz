@@ -94,6 +94,9 @@ export function determineValidTransactions(coValue: CoValueCore): void {
     // Native NodeCore validates ALL rulesets (group, ownedByGroup,
     // unsafeAllowAll). The TS dispatch below remains a byte-identical fallback
     // for providers without a native NodeCore, or when the kill switch is set.
+    // Per-ruleset guards there (incl. the "Group must have initialAdmin"
+    // throw) apply on the fallback path only — natively, a header missing
+    // initialAdmin cannot even deserialize/register (fail-closed).
     determineValidTransactionsNative(coValue, nodeCore);
     return;
   }
