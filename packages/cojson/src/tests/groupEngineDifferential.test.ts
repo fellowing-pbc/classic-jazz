@@ -4,10 +4,28 @@
  * Builds N random group scenarios (native crypto, native validation enabled by
  * default), snapshots verdicts + role queries, then flips the
  * `COJSON_DISABLE_NATIVE_VALIDATION` kill switch on and forces a second
- * validation pass over the SAME already-ingested transactions (both
- * `determineValidTransactions` and `RawGroup#roleOfInternal` recompute from
- * scratch on every call - see permissions.ts/group.ts - so no extra plumbing
- * is needed to force a revalidation), and asserts the two passes agree.
+ * validation pass over the SAME already-ingested transactions, and asserts the
+ * two passes agree.
+ *
+ * For the GROUP ruleset, `determineValidTransactions` and
+ * `RawGroup#roleOfInternal` recompute from scratch on every call (see
+ * permissions.ts/group.ts), so no extra plumbing is needed to force a
+ * revalidation. The OWNED-COVALUE (ownedByGroup) ruleset is different: its TS
+ * fallback iterates `coValue.toValidateTransactions`, which the
+ * `determineValidTransactions` wrapper DRAINS to `[]` after every call
+ * (coValueCore.ts). So after pass 1 (native) runs, that list is already empty
+ * and, without intervention, pass 2 (TS-forced) would iterate nothing and
+ * silently retain pass 1's verdicts for every owned-map transaction — a
+ * self-comparison that would make the whole owned-covalue extension a no-op
+ * (verified experimentally: native-call spying showed 0 native calls but
+ * `isValid` unchanged when reset was skipped). The fix (and the "reset
+ * wrappers between passes" mitigation from the stage-3 porter notes) is to
+ * call `core.resetParsedTransactions()` on each owned map's core AFTER
+ * stubbing the kill switch on: that repopulates `toValidateTransactions` and,
+ * as a side effect, immediately re-runs `determineValidTransactions` under the
+ * TS path (confirmed via the same native-call spy: 0 native calls, verdicts
+ * recomputed). Order matters — reset before stubbing would just re-run the
+ * native path again.
  *
  * Seed is logged on failure and overridable via DIFF_SEED so a divergence can
  * be reproduced deterministically. Reproduction is STRUCTURAL, not bitwise:
@@ -16,11 +34,13 @@
  * ID-ordering-sensitive constructions (see tick()).
  */
 import { expect, test, vi } from "vitest";
+import { expectMap } from "../coValue.js";
 import {
   ControlledAccount,
   ControlledAgent,
   type RawAccountID,
 } from "../coValues/account.js";
+import type { RawCoMap } from "../coValues/coMap.js";
 import { EVERYONE, type Everyone, type RawGroup } from "../coValues/group.js";
 import type { CoValueCore } from "../coValueCore/coValueCore.js";
 import { NapiCrypto } from "../crypto/NapiCrypto.js";
@@ -110,6 +130,29 @@ async function actAs(
   }
 }
 
+/**
+ * Same idiom as {@link actAs}, but for an owned RawCoMap rather than a group:
+ * runs `fn` against the map's content as authored by `account`, then imports
+ * the resulting session(s) back into `node`.
+ */
+async function actAsOnMap(
+  node: LocalNode,
+  coId: RawCoMap["id"],
+  account: ControlledAccount | ControlledAgent,
+  fn: (map: RawCoMap) => void,
+) {
+  const core = node.getCoValue(coId);
+  const content = await core.contentInClonedNodeWithDifferentAccount(account);
+  const map = expectMap(content);
+  fn(map);
+  const newContent = map.core.newContentSince(undefined);
+  if (newContent) {
+    for (const chunk of newContent) {
+      node.syncManager.handleNewContent(chunk, "import");
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Scenario op script: generated up-front from the seeded PRNG so it can be
 // logged verbatim as a minimal repro on divergence.
@@ -127,6 +170,9 @@ const CAP_ROLES = ["inherit", "reader", "writer", "manager", "admin"] as const;
 
 type TargetRef = { kind: "member"; idx: number } | { kind: "everyone" };
 type AuthorRef = { kind: "admin" } | { kind: "member"; idx: number };
+// Owned-map writes additionally allow a "nonMember" author: a fresh agent
+// never added to the scenario group, exercising the unauthorized-write path.
+type MapAuthorRef = AuthorRef | { kind: "nonMember" };
 
 type OpEntry =
   | { kind: "setRole"; author: AuthorRef; target: TargetRef; role: Role }
@@ -138,7 +184,24 @@ type OpEntry =
     }
   | { kind: "extend"; cap: (typeof CAP_ROLES)[number] }
   | { kind: "revokeExtend" }
-  | { kind: "parentSetRole"; targetIdx: number; role: Role };
+  | { kind: "parentSetRole"; targetIdx: number; role: Role }
+  // ownedByGroup coverage: create a RawCoMap owned by the scenario's main
+  // group (created early, before the random op mix below runs).
+  | { kind: "createMap" }
+  // A random write to one of the previously-created owned maps, authored by
+  // the admin, a random member (whatever role they hold at that point in the
+  // script), or a non-member agent. Always a plain `set` — RawCoMap.set()
+  // always emits a single non-empty "set" change, so this can never hit the
+  // ownedByGroup ruleset's "unmarked" edges (there is no !changes skip in
+  // that ruleset, and we never construct tx.meta.branch/ownerId, so the
+  // reader branch-pointer trim path is also never exercised here).
+  | {
+      kind: "mapWrite";
+      mapIdx: number;
+      author: MapAuthorRef;
+      key: string;
+      value: number;
+    };
 
 function genOpScript(rng: () => number, memberCount: number): OpEntry[] {
   const ops: OpEntry[] = [];
@@ -153,10 +216,17 @@ function genOpScript(rng: () => number, memberCount: number): OpEntry[] {
     });
   }
 
+  // Create 1-2 owned maps early, before the random op mix below runs, so
+  // every mapWrite op below has a guaranteed-existing target.
+  const mapCount = randInt(rng, 1, 2);
+  for (let i = 0; i < mapCount; i++) {
+    ops.push({ kind: "createMap" });
+  }
+
   const extraOps = randInt(rng, 6, 11);
   for (let i = 0; i < extraOps; i++) {
     const r = rng();
-    if (r < 0.45) {
+    if (r < 0.35) {
       const author: AuthorRef =
         rng() < 0.55
           ? { kind: "admin" }
@@ -171,7 +241,7 @@ function genOpScript(rng: () => number, memberCount: number): OpEntry[] {
         target,
         role: pick(rng, SETTABLE_ROLES),
       });
-    } else if (r < 0.65) {
+    } else if (r < 0.5) {
       const inviteRole = pick(rng, ACCOUNT_ROLES);
       const mismatch = rng() < 0.3;
       ops.push({
@@ -180,15 +250,30 @@ function genOpScript(rng: () => number, memberCount: number): OpEntry[] {
         targetIdx: randInt(rng, 0, memberCount - 1),
         acceptRole: mismatch ? pick(rng, ACCOUNT_ROLES) : inviteRole,
       });
-    } else if (r < 0.8) {
+    } else if (r < 0.62) {
       ops.push({ kind: "extend", cap: pick(rng, CAP_ROLES) });
-    } else if (r < 0.9) {
+    } else if (r < 0.7) {
       ops.push({ kind: "revokeExtend" });
-    } else {
+    } else if (r < 0.78) {
       ops.push({
         kind: "parentSetRole",
         targetIdx: randInt(rng, 0, memberCount - 1),
         role: pick(rng, SETTABLE_ROLES),
+      });
+    } else {
+      const authorRoll = rng();
+      const author: MapAuthorRef =
+        authorRoll < 0.15
+          ? { kind: "nonMember" }
+          : authorRoll < 0.35
+            ? { kind: "admin" }
+            : { kind: "member", idx: randInt(rng, 0, memberCount - 1) };
+      ops.push({
+        kind: "mapWrite",
+        mapIdx: randInt(rng, 0, mapCount - 1),
+        author,
+        key: `k${randInt(rng, 0, 999_999)}`,
+        value: randInt(rng, 0, 1000),
       });
     }
   }
@@ -202,6 +287,8 @@ function genOpScript(rng: () => number, memberCount: number): OpEntry[] {
 
 type Member = { account: ControlledAccount };
 
+type OpScriptResult = { timestamps: number[]; maps: RawCoMap[] };
+
 async function executeOpScript(
   node: LocalNode,
   mainGroup: RawGroup,
@@ -209,8 +296,9 @@ async function executeOpScript(
   members: Member[],
   ops: OpEntry[],
   tick: () => number,
-): Promise<number[]> {
+): Promise<OpScriptResult> {
   const timestamps: number[] = [];
+  const maps: RawCoMap[] = [];
   let extended = false;
 
   for (const op of ops) {
@@ -267,10 +355,35 @@ async function executeOpScript(
         (parentGroup.set as any)(key, op.role, "trusting");
         break;
       }
+      case "createMap": {
+        maps.push(mainGroup.createMap());
+        break;
+      }
+      case "mapWrite": {
+        const map = maps[op.mapIdx]!;
+        if (op.author.kind === "admin") {
+          map.set(op.key, op.value, "trusting");
+        } else if (op.author.kind === "member") {
+          await actAsOnMap(
+            node,
+            map.id,
+            members[op.author.idx]!.account,
+            (m) => {
+              m.set(op.key, op.value, "trusting");
+            },
+          );
+        } else {
+          const nonMember = freshAgent();
+          await actAsOnMap(node, map.id, nonMember.controlled, (m) => {
+            m.set(op.key, op.value, "trusting");
+          });
+        }
+        break;
+      }
     }
   }
 
-  return timestamps;
+  return { timestamps, maps };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,12 +436,16 @@ function snapshotRoles(
 function snapshotPass(
   mainGroup: RawGroup,
   parentGroup: RawGroup,
+  maps: RawCoMap[],
   subjects: (RawAccountID | AgentID | Everyone)[],
   timestampSamples: number[],
 ) {
   const verdicts = new Map<string, VerdictSnapshot>();
   snapshotVerdicts(mainGroup.core, verdicts);
   snapshotVerdicts(parentGroup.core, verdicts);
+  for (const map of maps) {
+    snapshotVerdicts(map.core, verdicts);
+  }
 
   const roles = new Map<string, Role | null>();
   snapshotRoles(mainGroup, parentGroup, subjects, timestampSamples, roles);
@@ -340,7 +457,7 @@ function snapshotPass(
 // The harness
 // ---------------------------------------------------------------------------
 
-// ~270ms total at N=50 (well under the 60s timeout, ~200x headroom). NOTE if
+// ~350ms total at N=50 (well under the 60s timeout, ~170x headroom). NOTE if
 // you raise N substantially: scenario nodes are not gracefully shut down
 // (deliberate — short-lived process), so very large N grows memory.
 const N = 50;
@@ -349,6 +466,13 @@ const SEED = process.env.DIFF_SEED ? Number(process.env.DIFF_SEED) : 424242;
 test(`randomized differential harness: TS vs native group engine (N=${N}, seed=${SEED})`, async () => {
   const rng = mulberry32(SEED);
   let simTime = 1_700_000_000_000;
+
+  // Canary counts across the whole run: proves the owned-map extension
+  // genuinely exercises both the authorized and unauthorized write paths
+  // (reader/writeOnly-elsewhere/non-member writes), rather than only ever
+  // generating trivially-valid ops.
+  let totalMapValidVerdicts = 0;
+  let totalMapInvalidVerdicts = 0;
 
   vi.useFakeTimers();
   try {
@@ -375,7 +499,7 @@ test(`randomized differential harness: TS vs native group engine (N=${N}, seed=$
           return Date.now();
         };
 
-        const timestamps = await executeOpScript(
+        const { timestamps, maps } = await executeOpScript(
           node,
           mainGroup,
           parentGroup,
@@ -398,20 +522,48 @@ test(`randomized differential harness: TS vs native group engine (N=${N}, seed=$
         const nativePass = snapshotPass(
           mainGroup,
           parentGroup,
+          maps,
           subjects,
           timestampSamples,
         );
 
+        const mapIds = new Set(maps.map((m) => m.id as string));
+        for (const [key, v] of nativePass.verdicts) {
+          if (mapIds.has(key.slice(0, key.indexOf("/")))) {
+            if (v.valid) {
+              totalMapValidVerdicts++;
+            } else {
+              totalMapInvalidVerdicts++;
+            }
+          }
+        }
+
         // (b) TS path: re-validate the SAME already-ingested transactions
-        // with the kill switch stubbed on. determineValidTransactions and
+        // with the kill switch stubbed on.
+        //
+        // For the group ruleset, determineValidTransactions and
         // roleOfInternal both recompute from scratch on every call, so no
         // extra revalidation plumbing is needed - just force another pass.
+        //
+        // For owned maps (ownedByGroup), that is NOT true: the TS fallback
+        // iterates coValue.toValidateTransactions, which the wrapper drains
+        // to [] after pass (a) ran. Left alone, pass (b) would iterate
+        // nothing and silently keep pass (a)'s verdicts for every owned-map
+        // tx (see file header). So each map's core must be explicitly reset
+        // AFTER stubbing the kill switch on - resetParsedTransactions()
+        // repopulates toValidateTransactions and, as a side effect,
+        // immediately re-runs determineValidTransactions under the
+        // now-active TS path.
         vi.stubEnv("COJSON_DISABLE_NATIVE_VALIDATION", "1");
         let tsPass: typeof nativePass;
         try {
+          for (const map of maps) {
+            map.core.resetParsedTransactions();
+          }
           tsPass = snapshotPass(
             mainGroup,
             parentGroup,
+            maps,
             subjects,
             timestampSamples,
           );
@@ -459,4 +611,11 @@ test(`randomized differential harness: TS vs native group engine (N=${N}, seed=$
   } finally {
     vi.useRealTimers();
   }
+
+  // Canary: make sure the owned-map extension actually generated both valid
+  // and invalid map writes across the run (not just always-valid admin
+  // writes) - otherwise the verdict-equality checks above would be trivially
+  // satisfied without exercising the unauthorized-write path at all.
+  expect(totalMapValidVerdicts).toBeGreaterThan(0);
+  expect(totalMapInvalidVerdicts).toBeGreaterThan(0);
 }, 60_000);
