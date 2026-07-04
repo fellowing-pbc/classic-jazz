@@ -1,0 +1,39 @@
+{
+  "description": "large per-session counters near u32 range exercise no overflow in the max",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 4000000000,
+      "s2": 1
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 3999999999,
+      "s2": 2000000000
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 4000000000,
+        "s2": 2000000000
+      }
+    },
+    "combinedSessions": {
+      "s1": 4000000000,
+      "s2": 2000000000
+    },
+    "toSend": {
+      "s1": 4000000000
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

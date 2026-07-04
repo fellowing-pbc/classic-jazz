@@ -1,0 +1,36 @@
+{
+  "description": "explicit zero counters: a missing target entry (default 0) equals an explicit 0",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 0,
+      "s2": 3
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s2": 3
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 0,
+        "s2": 3
+      }
+    },
+    "combinedSessions": {
+      "s1": 0,
+      "s2": 3
+    },
+    "toSend": {},
+    "subsetOf": true,
+    "inSync": true,
+    "peerHasAllContent": true
+  }
+}

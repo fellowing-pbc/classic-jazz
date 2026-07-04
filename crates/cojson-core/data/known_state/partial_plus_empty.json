@@ -1,0 +1,33 @@
+{
+  "description": "target with content combined with an empty source is unchanged; source has no header",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 3
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": false,
+    "sessions": {}
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 3
+      }
+    },
+    "combinedSessions": {
+      "s1": 3
+    },
+    "toSend": {
+      "s1": 3
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

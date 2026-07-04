@@ -1,0 +1,69 @@
+{
+  "description": "8 overlapping sessions plus a peer-only session; realistic active-group merge",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "session_0": 1,
+      "session_1": 4,
+      "session_2": 7,
+      "session_3": 10,
+      "session_4": 13,
+      "session_5": 16,
+      "session_6": 19,
+      "session_7": 22
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "session_0": 4,
+      "session_1": 3,
+      "session_2": 10,
+      "session_3": 9,
+      "session_4": 16,
+      "session_5": 15,
+      "session_6": 22,
+      "session_7": 21,
+      "session_peer_only": 42
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "session_0": 4,
+        "session_1": 4,
+        "session_2": 10,
+        "session_3": 10,
+        "session_4": 16,
+        "session_5": 16,
+        "session_6": 22,
+        "session_7": 22,
+        "session_peer_only": 42
+      }
+    },
+    "combinedSessions": {
+      "session_0": 4,
+      "session_1": 4,
+      "session_2": 10,
+      "session_3": 10,
+      "session_4": 16,
+      "session_5": 16,
+      "session_6": 22,
+      "session_7": 22,
+      "session_peer_only": 42
+    },
+    "toSend": {
+      "session_1": 4,
+      "session_3": 10,
+      "session_5": 16,
+      "session_7": 22
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

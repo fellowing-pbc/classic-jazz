@@ -1,0 +1,46 @@
+{
+  "description": "some sessions ahead in target, some in source, some disjoint",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 10,
+      "s2": 2,
+      "s3": 5
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 4,
+      "s2": 9,
+      "s4": 1
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 10,
+        "s2": 9,
+        "s3": 5,
+        "s4": 1
+      }
+    },
+    "combinedSessions": {
+      "s1": 10,
+      "s2": 9,
+      "s3": 5,
+      "s4": 1
+    },
+    "toSend": {
+      "s1": 10,
+      "s3": 5
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

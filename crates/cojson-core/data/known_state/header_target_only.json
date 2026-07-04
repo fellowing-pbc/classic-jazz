@@ -1,0 +1,33 @@
+{
+  "description": "target has header, source does not: combined stays true; peer missing header",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 2
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": false,
+    "sessions": {
+      "s1": 2
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 2
+      }
+    },
+    "combinedSessions": {
+      "s1": 2
+    },
+    "toSend": {},
+    "subsetOf": true,
+    "inSync": true,
+    "peerHasAllContent": false
+  }
+}

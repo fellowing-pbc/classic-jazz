@@ -5,6 +5,7 @@ pub use lzy;
 pub mod core {
     pub mod keys;
     pub mod nonce;
+    pub mod known_state;
     pub mod session_log;
     pub mod session_map;
     pub use keys::*;

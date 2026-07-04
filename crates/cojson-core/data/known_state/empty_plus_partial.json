@@ -1,0 +1,34 @@
+{
+  "description": "empty target absorbs a source with a header and sessions",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": false,
+    "sessions": {}
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 3,
+      "s2": 7
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 3,
+        "s2": 7
+      }
+    },
+    "combinedSessions": {
+      "s1": 3,
+      "s2": 7
+    },
+    "toSend": {},
+    "subsetOf": true,
+    "inSync": true,
+    "peerHasAllContent": true
+  }
+}

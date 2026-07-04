@@ -1,0 +1,44 @@
+{
+  "description": "non-overlapping sessions are unioned; ordering appends source-only keys",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "a": 2,
+      "b": 4
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "c": 1,
+      "d": 9
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "a": 2,
+        "b": 4,
+        "c": 1,
+        "d": 9
+      }
+    },
+    "combinedSessions": {
+      "a": 2,
+      "b": 4,
+      "c": 1,
+      "d": 9
+    },
+    "toSend": {
+      "a": 2,
+      "b": 4
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

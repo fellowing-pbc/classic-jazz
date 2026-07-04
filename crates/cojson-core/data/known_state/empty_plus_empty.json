@@ -1,0 +1,25 @@
+{
+  "description": "two empty states combine to empty; peer trivially has all content",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": false,
+    "sessions": {}
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": false,
+    "sessions": {}
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": false,
+      "sessions": {}
+    },
+    "combinedSessions": {},
+    "toSend": {},
+    "subsetOf": true,
+    "inSync": true,
+    "peerHasAllContent": true
+  }
+}

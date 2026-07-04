@@ -1,0 +1,37 @@
+{
+  "description": "identical states: combine is a no-op, states are in sync, nothing to send",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 4,
+      "s2": 6
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 4,
+      "s2": 6
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 4,
+        "s2": 6
+      }
+    },
+    "combinedSessions": {
+      "s1": 4,
+      "s2": 6
+    },
+    "toSend": {},
+    "subsetOf": true,
+    "inSync": true,
+    "peerHasAllContent": true
+  }
+}

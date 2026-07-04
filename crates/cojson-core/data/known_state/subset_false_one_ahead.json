@@ -1,0 +1,39 @@
+{
+  "description": "target ahead on a single session breaks the subset relation",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 5,
+      "s2": 3
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 4,
+      "s2": 3
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 5,
+        "s2": 3
+      }
+    },
+    "combinedSessions": {
+      "s1": 5,
+      "s2": 3
+    },
+    "toSend": {
+      "s1": 5
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "description": "target counters exceed source: combine keeps the target values, source ignored",
+  "target": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 9,
+      "s2": 8
+    }
+  },
+  "source": {
+    "id": "co_zKnownStateFixture",
+    "header": true,
+    "sessions": {
+      "s1": 5,
+      "s2": 3
+    }
+  },
+  "expected": {
+    "combined": {
+      "id": "co_zKnownStateFixture",
+      "header": true,
+      "sessions": {
+        "s1": 9,
+        "s2": 8
+      }
+    },
+    "combinedSessions": {
+      "s1": 9,
+      "s2": 8
+    },
+    "toSend": {
+      "s1": 9,
+      "s2": 8
+    },
+    "subsetOf": false,
+    "inSync": false,
+    "peerHasAllContent": false
+  }
+}
