@@ -150,9 +150,12 @@ function readCoValue(
 
 /**
  * Resolves the author's role in the OWNING group at a transaction's
- * currentMadeAt — mirroring the lookup the ownedByGroup branch performs
- * (permissions.ts:104-107). Used to disambiguate the reader-branch-pointer
- * trim from an equally-shaped admin/writer branch pointer. Returns undefined
+ * currentMadeAt — approximating the lookup the ownedByGroup branch performs
+ * (permissions.ts:104-107). CAVEAT: unlike production, this skips the
+ * `agentInAccountOrMemberInGroup` account→agent resolution; the two coincide
+ * except for an ACCOUNT-owned covalue whose transactor is the account itself
+ * (always admin, so never a reader-trim) — a stage-4 author adding an
+ * account-owned branch-pointer scenario must revisit this. Returns undefined
  * when the covalue is not group-owned or the group cannot be resolved.
  */
 function roleOfAuthorAtTxTime(
@@ -168,6 +171,9 @@ function roleOfAuthorAtTxTime(
       group.atTime(t.currentMadeAt).roleOfInternal(t.author as any) ?? null
     );
   } catch {
+    // A throw is treated as "not a reader" and silently DOWNGRADES a would-be
+    // validBranchPointerOnly outcome to plain "valid" — scenarios relying on
+    // the trim outcome must pin it with an explicit expect() (scenario 22 does).
     return undefined;
   }
 }
