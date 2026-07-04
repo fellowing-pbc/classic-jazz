@@ -457,6 +457,9 @@ export class RawGroup<
     // parent-group inheritance, everyone fallback, RawAccount self→admin) and
     // only models an `atTime` view, so skip it for branch/frontier views that
     // the native side has no equivalent of (stage 2 keeps those on the TS path).
+    // Do NOT collapse the two view checks into `!this.isTimeTravelEntity()`:
+    // that would also block plain `atTime` views — which native DOES support
+    // (passed as the third arg below) — and it doesn't cover branchSourceId.
     const nodeCore = this.core.node.nodeCore;
     if (
       nodeCore.roleOf &&
