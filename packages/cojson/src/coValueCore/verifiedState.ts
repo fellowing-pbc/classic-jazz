@@ -20,7 +20,7 @@ import {
   SessionID,
   TransactionID,
 } from "../ids.js";
-import { Stringified, parseJSON } from "../jsonStringify.js";
+import { Stringified, parseJSON, safeParseJSON } from "../jsonStringify.js";
 import { JsonObject, JsonValue } from "../jsonValue.js";
 import { PermissionsDef as RulesetDef } from "../permissions.js";
 import { NewContentMessage } from "../sync.js";
@@ -628,21 +628,16 @@ export class VerifiedState {
   }
 
   /**
-   * Batch-decrypt private transactions. Returns undefined when the native
-   * implementation has no batch support (callers must fall back to
-   * decryptTransaction). Element i corresponds to txIndices[i]; undefined
-   * entries failed to decrypt.
+   * Batch-decrypt private transactions. Element i corresponds to
+   * txIndices[i]; undefined entries failed to decrypt. Uses the native batch
+   * fast path when available, transparently falling back to per-transaction
+   * decryptTransaction otherwise.
    */
   decryptTransactionsBatch(
     sessionID: SessionID,
     txIndices: number[],
     keySecret: KeySecret,
-  ): (JsonValue[] | undefined)[] | undefined {
-    const batch = this.impl.decryptTransactions;
-    if (!batch) {
-      return undefined;
-    }
-
+  ): (JsonValue[] | undefined)[] {
     // Per-transaction fallback matching the batch's per-tx-failure semantics:
     // each failed/throwing transaction becomes undefined.
     const perTransactionFallback = (): (JsonValue[] | undefined)[] =>
@@ -653,6 +648,11 @@ export class VerifiedState {
           return undefined;
         }
       });
+
+    const batch = this.impl.decryptTransactions;
+    if (!batch) {
+      return perTransactionFallback();
+    }
 
     const combined = batch.call(
       this.impl,
@@ -665,13 +665,10 @@ export class VerifiedState {
       return perTransactionFallback();
     }
 
-    let parsed: unknown;
-    try {
-      parsed = parseJSON(combined as Stringified<(JsonValue[] | null)[]>);
-    } catch {
-      // Corrupt combined plaintext: fall back to the per-transaction path.
-      return perTransactionFallback();
-    }
+    // Corrupt combined plaintext parses to undefined: fall back per-tx.
+    const parsed = safeParseJSON(
+      combined as Stringified<(JsonValue[] | null)[]>,
+    );
 
     if (!Array.isArray(parsed) || parsed.length !== txIndices.length) {
       return perTransactionFallback();

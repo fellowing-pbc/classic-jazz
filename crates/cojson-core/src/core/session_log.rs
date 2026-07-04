@@ -393,29 +393,6 @@ impl SessionLogInternal {
         Ok((new_signature, new_tx))
     }
 
-    /// Add an existing private transaction to the staging area.
-    /// The transaction is NOT committed until commit_transactions() succeeds.
-    /// Used for batch loading where signature is validated at the end.
-    ///
-    /// # Arguments
-    /// * `encrypted_changes` - The encrypted changes string (e.g., "encrypted_U...")
-    /// * `key_used` - The key ID used for encryption
-    /// * `made_at` - Timestamp in milliseconds
-    /// * `meta` - Optional encrypted metadata
-    ///
-    /// # Errors
-    /// Returns `CoJsonCoreError::Json` if serialization fails (clears pending transactions).
-    pub fn add_existing_private_transaction(
-        &mut self,
-        encrypted_changes: String,
-        key_used: String,
-        made_at: u64,
-        meta: Option<String>,
-    ) -> Result<(), CoJsonCoreError> {
-        self.stage_existing_private(&encrypted_changes, &key_used, made_at, meta.as_deref());
-        Ok(())
-    }
-
     /// Stage a private transaction from borrowed inputs (no big owned
     /// allocations beyond the canonical JSON we must store anyway).
     /// The transaction is NOT committed until commit_transactions() succeeds.
@@ -430,27 +407,6 @@ impl SessionLogInternal {
             build_private_canonical(encrypted_changes, key_used, made_at, meta);
         self.pending_transactions.push(tx_json);
         self.pending_tx_infos.push(tx_info);
-    }
-
-    /// Add an existing trusting transaction to the staging area.
-    /// The transaction is NOT committed until commit_transactions() succeeds.
-    /// Used for batch loading where signature is validated at the end.
-    ///
-    /// # Arguments
-    /// * `changes` - The stringified JSON changes
-    /// * `made_at` - Timestamp in milliseconds
-    /// * `meta` - Optional metadata
-    ///
-    /// # Errors
-    /// Returns `CoJsonCoreError::Json` if serialization fails (clears pending transactions).
-    pub fn add_existing_trusting_transaction(
-        &mut self,
-        changes: String,
-        made_at: u64,
-        meta: Option<String>,
-    ) -> Result<(), CoJsonCoreError> {
-        self.stage_existing_trusting(&changes, made_at, meta.as_deref());
-        Ok(())
     }
 
     /// Stage a trusting transaction from borrowed inputs.
@@ -742,8 +698,7 @@ mod tests {
 
         // Stage a trusting transaction
         session
-            .add_existing_trusting_transaction(r#"{"test": "data"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data"}"#, 1234567890, None);
 
         assert!(session.has_pending());
         assert_eq!(session.transactions_json.len(), 0);
@@ -780,8 +735,7 @@ mod tests {
 
         // Stage a trusting transaction
         session
-            .add_existing_trusting_transaction(r#"{"test": "data"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data"}"#, 1234567890, None);
 
         // Create a wrong signature
         let wrong_signing_key = SigningKey::generate(&mut csprng);
@@ -814,8 +768,7 @@ mod tests {
 
         // Stage a trusting transaction
         session
-            .add_existing_trusting_transaction(r#"{"test": "data"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data"}"#, 1234567890, None);
 
         // Use a completely wrong signature but skip validation
         let wrong_signature: Signature = signing_key.sign(b"completely wrong data").into();
@@ -840,8 +793,7 @@ mod tests {
 
         // Stage a trusting transaction
         session
-            .add_existing_trusting_transaction(r#"{"test": "data"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data"}"#, 1234567890, None);
 
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
@@ -869,11 +821,9 @@ mod tests {
 
         // Stage multiple transactions
         session
-            .add_existing_trusting_transaction(r#"{"test": "data1"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data1"}"#, 1234567890, None);
         session
-            .add_existing_trusting_transaction(r#"{"test": "data2"}"#.to_string(), 1234567891, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test": "data2"}"#, 1234567891, None);
 
         assert_eq!(session.pending_transactions.len(), 2);
 
@@ -895,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_existing_private_transaction() {
+    fn test_stage_existing_private() {
         let mut session = SessionLogInternal::new(
             CoID("co_test".to_string()),
             SessionID("session_test".to_string()),
@@ -903,14 +853,8 @@ mod tests {
         );
 
         // Stage a private transaction
-        let result = session.add_existing_private_transaction(
-            "encrypted_Utest_data".to_string(),
-            "test_key_id".to_string(),
-            1234567890,
-            None,
-        );
+        session.stage_existing_private("encrypted_Utest_data", "test_key_id", 1234567890, None);
 
-        assert!(result.is_ok());
         assert!(session.has_pending());
         assert_eq!(session.pending_transactions.len(), 1);
 
@@ -929,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_existing_trusting_transaction() {
+    fn test_stage_existing_trusting() {
         let mut session = SessionLogInternal::new(
             CoID("co_test".to_string()),
             SessionID("session_test".to_string()),
@@ -937,13 +881,12 @@ mod tests {
         );
 
         // Stage a trusting transaction with meta
-        let result = session.add_existing_trusting_transaction(
-            r#"{"test": "data"}"#.to_string(),
+        session.stage_existing_trusting(
+            r#"{"test": "data"}"#,
             1234567890,
-            Some(r#"{"meta": "test"}"#.to_string()),
+            Some(r#"{"meta": "test"}"#),
         );
 
-        assert!(result.is_ok());
         assert!(session.has_pending());
         assert_eq!(session.pending_transactions.len(), 1);
 
@@ -1072,13 +1015,12 @@ mod tests {
         match created_tx {
             Transaction::Private(tx) => {
                 session2
-                    .add_existing_private_transaction(
-                        tx.encrypted_changes.value,
-                        tx.key_used.0,
+                    .stage_existing_private(
+                        &tx.encrypted_changes.value,
+                        &tx.key_used.0,
                         tx.made_at.as_u64().unwrap(),
-                        tx.meta.map(|m| m.value),
-                    )
-                    .unwrap();
+                        tx.meta.as_ref().map(|m| m.value.as_str()),
+                        );
             }
             _ => panic!("Expected PrivateTransaction"),
         }
@@ -1132,22 +1074,16 @@ mod tests {
             match tx {
                 Transaction::Private(ptx) => {
                     session
-                        .add_existing_private_transaction(
-                            ptx.encrypted_changes.value,
-                            ptx.key_used.0,
+                        .stage_existing_private(
+                            &ptx.encrypted_changes.value,
+                            &ptx.key_used.0,
                             ptx.made_at.as_u64().unwrap(),
-                            ptx.meta.map(|m| m.value),
-                        )
-                        .unwrap();
+                            ptx.meta.as_ref().map(|m| m.value.as_str()),
+                            );
                 }
                 Transaction::Trusting(ttx) => {
                     session
-                        .add_existing_trusting_transaction(
-                            ttx.changes,
-                            ttx.made_at.as_u64().unwrap(),
-                            ttx.meta,
-                        )
-                        .unwrap();
+                        .stage_existing_trusting(&ttx.changes, ttx.made_at.as_u64().unwrap(), ttx.meta.as_deref());
                 }
             }
         }
@@ -1210,22 +1146,16 @@ mod tests {
             match tx {
                 Transaction::Private(ptx) => {
                     session
-                        .add_existing_private_transaction(
-                            ptx.encrypted_changes.value,
-                            ptx.key_used.0,
+                        .stage_existing_private(
+                            &ptx.encrypted_changes.value,
+                            &ptx.key_used.0,
                             ptx.made_at.as_u64().unwrap(),
-                            ptx.meta.map(|m| m.value),
-                        )
-                        .unwrap();
+                            ptx.meta.as_ref().map(|m| m.value.as_str()),
+                            );
                 }
                 Transaction::Trusting(ttx) => {
                     session
-                        .add_existing_trusting_transaction(
-                            ttx.changes,
-                            ttx.made_at.as_u64().unwrap(),
-                            ttx.meta,
-                        )
-                        .unwrap();
+                        .stage_existing_trusting(&ttx.changes, ttx.made_at.as_u64().unwrap(), ttx.meta.as_deref());
                 }
             }
         }
@@ -1319,13 +1249,12 @@ mod tests {
         match created_tx {
             Transaction::Private(tx) => {
                 session2
-                    .add_existing_private_transaction(
-                        tx.encrypted_changes.value,
-                        tx.key_used.0,
+                    .stage_existing_private(
+                        &tx.encrypted_changes.value,
+                        &tx.key_used.0,
                         tx.made_at.as_u64().unwrap(),
-                        tx.meta.map(|m| m.value),
-                    )
-                    .unwrap();
+                        tx.meta.as_ref().map(|m| m.value.as_str()),
+                        );
             }
             _ => panic!("Expected PrivateTransaction"),
         }
@@ -1708,11 +1637,9 @@ mod tests {
 
         // Add multiple transactions using direct calls
         test_session
-            .add_existing_trusting_transaction(r#"{"test":"data1"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test":"data1"}"#, 1234567890, None);
         test_session
-            .add_existing_trusting_transaction(r#"{"test":"data2"}"#.to_string(), 1234567890, None)
-            .unwrap();
+            .stage_existing_trusting(r#"{"test":"data2"}"#, 1234567890, None);
 
         let signature: Signature = SigningKey::generate(&mut OsRng).sign(b"test").into();
 

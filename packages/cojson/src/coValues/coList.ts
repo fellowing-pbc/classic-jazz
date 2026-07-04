@@ -254,17 +254,20 @@ export class RawCoList<
       this._cachedEntries !== undefined && !this.isTimeTravelEntity()
         ? []
         : null;
+    // A block attached to a parent entry is reversed on close; a block
+    // attached to "start" (no parent entry) keeps insertion order.
     let block: InsertionEntry<Item>[] | null = null;
-    let blockIsReversed = false;
-    let blockParentOpID: OpID | undefined = undefined;
-    let tailOpID: OpID | undefined =
+    let blockParentEntry: InsertionEntry<Item> | undefined = undefined;
+    let tailEntry: InsertionEntry<Item> | undefined =
       fastVisible && this._cachedEntries!.length > 0
-        ? this._cachedEntries![this._cachedEntries!.length - 1]!.opID
+        ? this.getInsertionsEntry(
+            this._cachedEntries![this._cachedEntries!.length - 1]!.opID,
+          )
         : undefined;
 
     const closeBlock = () => {
       if (block) {
-        if (blockIsReversed) {
+        if (blockParentEntry) {
           block.reverse();
         }
         for (const entry of block) {
@@ -356,16 +359,15 @@ export class RawCoList<
               // item only if there are no beforeEnd roots.
               if (fastVisible && isValid) {
                 if (this.beforeEnd.length === 0) {
-                  if (block && blockIsReversed) {
+                  if (block && blockParentEntry) {
                     closeBlock();
                   }
                   if (!block) {
                     block = [];
-                    blockIsReversed = false;
-                    blockParentOpID = undefined;
+                    blockParentEntry = undefined;
                   }
                   block.push(entry);
-                  tailOpID = opID;
+                  tailEntry = entry;
                 } else {
                   fastVisible = null;
                 }
@@ -385,22 +387,16 @@ export class RawCoList<
               afterEntry.successors.push(entry);
 
               if (fastVisible && isValid) {
-                if (
-                  block &&
-                  blockIsReversed &&
-                  blockParentOpID &&
-                  opIDsEqual(change.after, blockParentOpID)
-                ) {
+                if (block && afterEntry === blockParentEntry) {
                   // Sibling of the open block: renders before its previously
                   // processed siblings (successors traverse in reverse)
                   block.push(entry);
-                } else if (tailOpID && opIDsEqual(change.after, tailOpID)) {
+                } else if (afterEntry === tailEntry) {
                   // Extends the current visible tail: start a new block
                   closeBlock();
                   block = [entry];
-                  blockIsReversed = true;
-                  blockParentOpID = tailOpID;
-                  tailOpID = opID;
+                  blockParentEntry = tailEntry;
+                  tailEntry = entry;
                 } else {
                   // Insertion somewhere else in the list: fall back
                   fastVisible = null;
@@ -884,13 +880,4 @@ function getSessionIndex(txID: TransactionID): SessionIndex {
     return `${txID.sessionID}_branch_${txID.branch}`;
   }
   return txID.sessionID;
-}
-
-function opIDsEqual(a: OpID, b: OpID): boolean {
-  return (
-    a.txIndex === b.txIndex &&
-    a.changeIdx === b.changeIdx &&
-    a.sessionID === b.sessionID &&
-    (a.branch ?? undefined) === (b.branch ?? undefined)
-  );
 }
