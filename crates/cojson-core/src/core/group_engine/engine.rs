@@ -16,7 +16,7 @@
 //! Two role structures are kept, and they are deliberately different (spec:
 //! "TWO role structures"):
 //!
-//! - The **validation-order plain map** ([`ResolverState::member_roles`]) mirrors
+//! - The **validation-order plain map** (`ResolverState::member_roles`) mirrors
 //!   `MemberRoleResolver.memberRoles`. Direct-role lookups here IGNORE time
 //!   (`permissions.ts:207-212`); only the parent walk is time-based.
 //! - The **time-indexed histories** ([`GroupEngineState::role_history`],
@@ -762,6 +762,9 @@ fn build_owned_by_group(
         // The reader branch-pointer special case (permissions.ts:124-137)
         // requires `tx.meta.branch`, which no fixture exercises and which the
         // transaction view does not surface; it is intentionally not ported.
+        // Stage 3 ports it: `validateTransactions`' PendingTx will carry
+        // decrypted meta and the verdict gains a `validBranchPointerOnly`
+        // outcome.
         let has_write = matches!(
             role,
             Some(Role::Admin) | Some(Role::Manager) | Some(Role::Writer) | Some(Role::WriteOnly)
