@@ -1,5 +1,6 @@
 use cojson_core::core::{
-  CoJsonCoreError, KnownState as RustKnownState, NodeCore as RustNodeCore, SessionMapImpl,
+  CoJsonCoreError, KnownState as RustKnownState, NodeCore as RustNodeCore,
+  PendingTxIn as RustPendingTxIn, SessionMapImpl, Verdict as RustVerdict,
 };
 use napi_derive::napi;
 use std::collections::HashMap;
@@ -336,6 +337,25 @@ impl SessionMap {
 /// registry lookup errors map cleanly.
 fn to_napi_err<E: std::fmt::Display>(e: E) -> napi::Error {
   napi::Error::new(napi::Status::GenericFailure, e.to_string())
+}
+
+/// A pending (not-yet-persisted) transaction handed to `validate_group`,
+/// mirroring `PendingTxIn` on the Rust side.
+#[napi(object)]
+pub struct PendingTx {
+  pub session_id: String,
+  pub tx_index: u32,
+  pub source_made_at: Option<f64>,
+}
+
+/// Validation verdict for a single transaction, mirroring `Verdict` on the
+/// Rust side.
+#[napi(object)]
+pub struct GroupVerdict {
+  pub session_id: String,
+  pub tx_index: u32,
+  pub valid: bool,
+  pub reason: Option<String>,
 }
 
 #[napi]
@@ -675,6 +695,59 @@ impl NodeCore {
       .map_err(to_napi_err)?
       .decrypt_transaction_meta(&session_id, tx_index, &key_secret)
       .map_err(to_napi_err)
+  }
+
+  // === Stage 2: Group engine surface ===
+  // These two methods are NodeCore-ONLY — there is no SessionMap twin (the
+  // group engine is inherently cross-CoValue, so it can't live on a single
+  // SessionMap). Do not go looking for a `parallel copy` in `impl SessionMap`
+  // above; the "lifted verbatim" breadcrumb on that section doesn't apply here.
+
+  /// Validate a group/account CoValue; verdicts for ALL its transactions in validation order.
+  #[napi]
+  pub fn validate_group(
+    &mut self,
+    co_id: String,
+    pending: Vec<PendingTx>,
+  ) -> napi::Result<Vec<GroupVerdict>> {
+    let pending: Vec<RustPendingTxIn> = pending
+      .into_iter()
+      .map(|p| RustPendingTxIn {
+        session_id: p.session_id,
+        tx_index: p.tx_index,
+        source_made_at: p.source_made_at.map(|v| v as u64),
+      })
+      .collect();
+    let verdicts = self
+      .internal
+      .validate_group(&co_id, &pending)
+      .map_err(to_napi_err)?;
+    Ok(
+      verdicts
+        .into_iter()
+        .map(|v: RustVerdict| GroupVerdict {
+          session_id: v.session_id,
+          tx_index: v.tx_index,
+          valid: v.valid,
+          reason: v.reason,
+        })
+        .collect(),
+    )
+  }
+
+  /// Role of member in group at time (ms). Returns the role string or null.
+  #[napi]
+  pub fn role_of(
+    &mut self,
+    group_id: String,
+    member: String,
+    at_time: Option<f64>,
+  ) -> napi::Result<Option<String>> {
+    let role = self
+      .internal
+      .role_of(&group_id, &member, at_time.map(|v| v as u64))
+      .map_err(to_napi_err)?;
+    Ok(role.map(|r| r.as_str().to_string()))
   }
 }
 

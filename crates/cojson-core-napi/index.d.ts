@@ -63,6 +63,10 @@ export declare class NodeCore {
   decryptTransaction(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
   /** Decrypt transaction meta */
   decryptTransactionMeta(coId: string, sessionId: string, txIndex: number, keySecret: string): string | null
+  /** Validate a group/account CoValue; verdicts for ALL its transactions in validation order. */
+  validateGroup(coId: string, pending: Array<PendingTx>): Array<GroupVerdict>
+  /** Role of member in group at time (ms). Returns the role string or null. */
+  roleOf(groupId: string, member: string, atTime?: number | undefined | null): string | null
 }
 
 export declare class SessionMap {
@@ -256,6 +260,17 @@ export declare function getSealerId(secret: Uint8Array): string
  */
 export declare function getSignerId(secret: Uint8Array): string
 
+/**
+ * Validation verdict for a single transaction, mirroring `Verdict` on the
+ * Rust side.
+ */
+export interface GroupVerdict {
+  sessionId: string
+  txIndex: number
+  valid: boolean
+  reason?: string
+}
+
 /** KnownState as a native JavaScript object (no JSON serialization needed) */
 export interface KnownState {
   id: string
@@ -275,6 +290,16 @@ export declare function newEd25519SigningKey(): Uint8Array
  * This key can be reused for multiple Diffie-Hellman exchanges.
  */
 export declare function newX25519PrivateKey(): Uint8Array
+
+/**
+ * A pending (not-yet-persisted) transaction handed to `validate_group`,
+ * mirroring `PendingTxIn` on the Rust side.
+ */
+export interface PendingTx {
+  sessionId: string
+  txIndex: number
+  sourceMadeAt?: number
+}
 
 /**
  * NAPI-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.
