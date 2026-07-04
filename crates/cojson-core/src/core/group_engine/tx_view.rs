@@ -124,14 +124,10 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
 /// so the stable sort preserves the session-insertion order built by
 /// [`collect_group_txs`].
 pub fn sort_for_validation(txs: &mut [GroupTxView]) {
-    txs.sort_by(|a, b| {
-        match a.effective_made_at.cmp(&b.effective_made_at) {
-            core::cmp::Ordering::Equal if a.session_id == b.session_id => {
-                a.tx_index.cmp(&b.tx_index)
-            }
-            core::cmp::Ordering::Equal => core::cmp::Ordering::Equal,
-            other => other,
-        }
+    txs.sort_by(|a, b| match a.effective_made_at.cmp(&b.effective_made_at) {
+        core::cmp::Ordering::Equal if a.session_id == b.session_id => a.tx_index.cmp(&b.tx_index),
+        core::cmp::Ordering::Equal => core::cmp::Ordering::Equal,
+        other => other,
     });
 }
 
@@ -220,8 +216,7 @@ pub(crate) mod fixtures {
             let path = format!("data/group_engine/{name}.json");
             let text =
                 std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
-            serde_json::from_str(&text)
-                .unwrap_or_else(|e| panic!("parse {path}: {e}"))
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"))
         }
     }
 
@@ -423,9 +418,13 @@ mod tests {
             .find(|v| v.session_id == b_session)
             .expect("session B present");
         assert_eq!(b.current_made_at, 1_700_000_000_000, "current unchanged");
-        assert_eq!(b.effective_made_at, 1_800_000_000_000, "effective overridden");
         assert_eq!(
-            views.last().unwrap().session_id, b_session,
+            b.effective_made_at, 1_800_000_000_000,
+            "effective overridden"
+        );
+        assert_eq!(
+            views.last().unwrap().session_id,
+            b_session,
             "later effective time sorts last"
         );
     }
