@@ -9,9 +9,19 @@ import type {
 } from "../crypto/crypto.js";
 import type { RawCoID } from "../ids.js";
 
-// ShimNodeCore's remaining consumer is RNCrypto (no native NodeCore port yet
-// — see Part B of the cleanup-phase plan) — keep the shim arm/tests below
-// until that lands.
+// RNCrypto now has a native NodeCore adapter (RNNodeCoreAdapter, mirroring
+// NapiNodeCoreAdapter's casing bridge) — see Part B of the cleanup-phase
+// plan. It can't be added to nodeCoreSuite here: `RNCrypto.create()` loads
+// `cojson-core-rn`'s generated bindings, which register a React Native
+// TurboModule (`NativeCojsonCoreRn` via `TurboModuleRegistry.getEnforcing`)
+// at import time — that requires the RN runtime and cannot be instantiated
+// under vitest/node. RN NodeCore capability is exercised by CI/e2e only
+// (rn-build-reusable + the Maestro e2e run); `tsc --noEmit` covers
+// RNNodeCoreAdapter's `NodeCoreImpl` conformance in the meantime. ShimNodeCore
+// no longer has any production consumer (Napi/Wasm/RN all override
+// `createNodeCore()`), but it's kept until Part C's deletion pass — its
+// dispose-semantics tests below still exercise real behavior via a fake
+// SessionMapImpl.
 let crypto: CryptoProvider;
 let wasmCrypto: CryptoProvider;
 
