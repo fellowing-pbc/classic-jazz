@@ -74,6 +74,22 @@ export function enablePermissionErrors() {
   logPermissionErrors = true;
 }
 
+// The native coMap materialization path (rich per-op delta pulled on every
+// ingest) is measured SLOWER than the TS path on cold-build/ingest shapes —
+// the delta transfer cost exceeds the JS materialization it replaces (see
+// docs/superpowers/specs/2026-07-04-covaluecore-in-rust.md, R3 stage 2b
+// yardstick: INGEST ~0.4x vs main). Off by default until a cheaper transfer
+// (e.g. lazy per-key reads deferring full history) closes that gap.
+let nativeCoMapMaterializationEnabled = false;
+
+export function enableNativeCoMapMaterialization() {
+  nativeCoMapMaterializationEnabled = true;
+}
+
+export function disableNativeCoMapMaterialization() {
+  nativeCoMapMaterializationEnabled = false;
+}
+
 export class VerifiedTransaction {
   // The ID of the CoValue that the transaction belongs to
   coValueId: RawCoID;
@@ -1101,6 +1117,7 @@ export class CoValueCore {
   isNativeCoMap(): this is AvailableCoValueCore {
     const verified = this._verified;
     return (
+      nativeCoMapMaterializationEnabled &&
       !!verified &&
       verified.header.type === "comap" &&
       verified.header.ruleset.type !== "group" &&
