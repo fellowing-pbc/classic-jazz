@@ -148,3 +148,29 @@ report against the pre-migration baseline closes the migration.
   without it.
 - Execution continues phase-by-phase (R2→R5 + a dedicated perf phase) until
   done; orchestration stays thin, work is delegated.
+
+## R3 status update (2026-07-04)
+
+Stages 1, 2a, 3 (single-call ingest kernel, rich op store + delta + frontier
+reads, content fixtures) are landed, tested, and hold no regression on reads.
+Stage 2b (wiring `RawCoMap` onto the native path by default) was implemented
+completely and correctly — all functional gates green, real bugs found and
+fixed along the way (deterministic delta key order, undefined-vs-null,
+an fww/permission-validity race) — but its own yardstick showed INGEST at
+~0.39-0.40x vs main, WORSE than the pre-2b 0.49-0.61x. Root cause (profiled):
+the rich per-op delta transfer for a cold/full materialization costs more
+than the JS materialization loop it replaces — the per-op field count (5
+fields x N ops) dominates serialization, not tree-allocation overhead.
+
+**Decision:** `isNativeCoMap()` gated off by default via
+`nativeCoMapMaterializationEnabled` (coValueCore.ts) — commit 4c07b76cc.
+This restores the R2.5 ingest baseline (~0.5-0.6x, matching pre-2b) while
+keeping every tested Rust/binding surface in place for a cheaper transfer
+design. The capability is NOT deleted — `enableNativeCoMapMaterialization()`
+is exported for opt-in use once the transfer cost is fixed.
+
+**Open path to close this (R3.5, not yet attempted):** a lazy/incremental
+transfer — e.g. a per-key on-demand native read for `editsAt`/`lastEditAt`
+(rarely called) instead of pulling the full rich op history on every cold
+build, or a binary (non-JSON) delta channel. Until one of these beats the TS
+baseline on INGEST, native coMap materialization stays opt-in only.
