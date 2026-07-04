@@ -315,6 +315,30 @@ export class VerifiedState {
     this.invalidateKnownStateCache();
   }
 
+  /**
+   * TS-side cache bookkeeping for transactions that were already written to the
+   * native log by a path that bypasses {@link tryAddTransactions} — the
+   * stage-2b `ingestAndMaterialize` single-crossing coMap ingest. Performs
+   * exactly the post-add work `tryAddTransactions` does (session-log cache
+   * append + known-state cache invalidation); MUST be called once per
+   * successfully-ingested chunk or `knownState()`/`newContentSince` serve stale
+   * data.
+   */
+  noteTransactionsAdded(
+    sessionID: SessionID,
+    signerID: SignerID | undefined,
+    newTransactions: Transaction[],
+    newSignature: Signature,
+  ) {
+    this.updateSessionLogCache(
+      sessionID,
+      signerID,
+      newTransactions,
+      newSignature,
+    );
+    this.invalidateKnownStateCache();
+  }
+
   makeNewTrustingTransaction(
     sessionID: SessionID,
     signerAgent: ControlledAccountOrAgent,
