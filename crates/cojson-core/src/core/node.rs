@@ -23,6 +23,27 @@ pub struct NodeCore {
     /// keyed like `engines` by per-session tx-counts. A separate field so a
     /// build can borrow `covalues`/`engines` while mutating this store.
     co_maps: HashMap<String, CoMapView>,
+    /// R1 key store: `KeyID -> KeySecret`, GLOBAL (not per-covalue). TS unseals
+    /// read-key secrets (via account sealer keys + revelation chains — that
+    /// stays in TS) and feeds each one here as it learns it; native private-tx
+    /// decryption during materialization is the ONLY consumer. A given `KeyID`
+    /// always resolves to the same secret regardless of which covalue asks, so a
+    /// global map mirrors TS's effective behavior: TS's `readKeyCache` is
+    /// per-covalue, but `getUncachedReadKey`/`getReadKey` are pure functions of
+    /// the `KeyID` (content-addressed key material), so caching globally is
+    /// equivalent.
+    ///
+    /// SECURITY: providing a secret moves it into native memory for the process
+    /// lifetime. Under wasm this is the SAME trust domain as the page (linear
+    /// memory is already inspectable by the host JS); under napi it is process
+    /// memory. Neither is worse than the secret's existing residence on the TS
+    /// heap. There is deliberately NO getter that hands a secret back across the
+    /// boundary — decryption keeps secrets inside Rust.
+    keys: HashMap<String, String>,
+    /// Bumped whenever a NEW (or changed) secret is provided. Part of each
+    /// coMap view's freshness key so a view lazily rebuilds when a
+    /// previously-missing key finally arrives (the retry path).
+    keys_version: u64,
 }
 
 impl NodeCore {
@@ -31,7 +52,41 @@ impl NodeCore {
             covalues: HashMap::new(),
             engines: HashMap::new(),
             co_maps: HashMap::new(),
+            keys: HashMap::new(),
+            keys_version: 0,
         }
+    }
+
+    // === R1 key store (experimental) ===
+
+    /// Feed a `KeyID -> KeySecret` mapping learned by TS (idempotent). A brand
+    /// new key — or a changed secret for a known id — bumps the keys-version so
+    /// coMap views that skipped a private tx for want of this key rebuild on
+    /// their next materialize. Re-providing an identical secret is a no-op (no
+    /// version bump, no spurious rebuild). Secrets never leave Rust again.
+    pub fn provide_key_secret(&mut self, key_id: &str, key_secret: &str) {
+        match self.keys.get(key_id) {
+            Some(existing) if existing == key_secret => {}
+            _ => {
+                self.keys.insert(key_id.to_string(), key_secret.to_string());
+                self.keys_version += 1;
+            }
+        }
+    }
+
+    /// Whether a secret for `key_id` has been provided.
+    pub fn has_key_secret(&self, key_id: &str) -> bool {
+        self.keys.contains_key(key_id)
+    }
+
+    /// The `KeyID`s that `co_id`'s materialized view still needs a secret for
+    /// (private txs skipped for want of a key). Empty if the view is fully
+    /// decrypted or not yet materialized.
+    pub fn missing_key_ids(&self, co_id: &str) -> Vec<String> {
+        self.co_maps
+            .get(co_id)
+            .map(|v| v.missing_key_ids())
+            .unwrap_or_default()
     }
 
     /// Create (or replace) the SessionMapImpl for a CoValue.
@@ -82,7 +137,13 @@ impl NodeCore {
         if !self.covalues.contains_key(co_id) {
             return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
         }
-        let Self { covalues, engines, co_maps: _ } = self;
+        let Self {
+            covalues,
+            engines,
+            co_maps: _,
+            keys: _,
+            keys_version: _,
+        } = self;
         engine_validate_transactions(covalues, engines, co_id, pending)
     }
 
@@ -132,8 +193,18 @@ impl NodeCore {
             covalues,
             engines,
             co_maps,
+            keys,
+            keys_version,
         } = self;
-        ensure_co_map(covalues, engines, co_maps, co_id, pending)
+        ensure_co_map(
+            covalues,
+            engines,
+            co_maps,
+            keys,
+            *keys_version,
+            co_id,
+            pending,
+        )
     }
 
     /// Boundary (a): latest value of `key` as a JSON string (`None` = absent /
@@ -183,11 +254,7 @@ impl NodeCore {
 
     /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`
     /// as a JSON string.
-    pub fn map_delta(
-        &self,
-        co_id: &str,
-        since_version: u64,
-    ) -> Result<String, SessionMapError> {
+    pub fn map_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
         if !self.covalues.contains_key(co_id) {
             return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
         }
@@ -195,11 +262,13 @@ impl NodeCore {
             .co_maps
             .get(co_id)
             .map(|v| v.delta(since_version))
-            .unwrap_or_else(|| serde_json::json!({
-                "version": 0,
-                "changedKeys": {},
-                "deletedKeys": [],
-            }));
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "version": 0,
+                    "changedKeys": {},
+                    "deletedKeys": [],
+                })
+            });
         Ok(delta.to_string())
     }
 
@@ -219,7 +288,13 @@ impl NodeCore {
         if !self.covalues.contains_key(group_id) {
             return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
         }
-        let Self { covalues, engines, co_maps: _ } = self;
+        let Self {
+            covalues,
+            engines,
+            co_maps: _,
+            keys: _,
+            keys_version: _,
+        } = self;
         engine_role_of(covalues, engines, group_id, member, at_time)
     }
 

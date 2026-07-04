@@ -106,6 +106,11 @@ pub struct GroupTxView {
     /// Source tx index of a merged transaction (`sourceTxId.txIndex`); always
     /// present together with [`GroupTxView::source_session_id`].
     pub source_tx_index: Option<u32>,
+    /// `keyUsed` (a `KeyID`) of a PRIVATE transaction — the key whose secret is
+    /// needed to decrypt its changes. `None` for trusting transactions (their
+    /// changes are plaintext). Consumed by coMap materialization (R1) to resolve
+    /// the secret from `NodeCore`'s key store; the permission engine ignores it.
+    pub key_used: Option<String>,
 }
 
 /// Collect every transaction of `sm` into views, in session-insertion order,
@@ -133,18 +138,18 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
             let tx: Transaction = serde_json::from_str(tx_json)
                 .expect("stored transaction JSON must re-parse as Transaction");
 
-            let (privacy, current_made_at, changes, trusting_meta) = match tx {
+            let (privacy, current_made_at, changes, trusting_meta, key_used) = match tx {
                 Transaction::Trusting(t) => {
                     // Cojson producers always stringify a valid JSON array; a
                     // parse failure is defensive only (treated as no usable
                     // changes, which downstream validation will reject).
                     let changes = serde_json::from_str(&t.changes).ok();
                     let made_at = t.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Trusting, made_at, changes, t.meta)
+                    (Privacy::Trusting, made_at, changes, t.meta, None)
                 }
                 Transaction::Private(p) => {
                     let made_at = p.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Private, made_at, None, None)
+                    (Privacy::Private, made_at, None, None, Some(p.key_used.0))
                 }
             };
 
@@ -179,6 +184,7 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
                 meta,
                 source_session_id,
                 source_tx_index,
+                key_used,
             });
         }
     }
@@ -472,6 +478,7 @@ mod tests {
                 meta: None,
                 source_session_id: None,
                 source_tx_index: None,
+                key_used: None,
             }
         }
 
@@ -565,6 +572,7 @@ mod tests {
                 meta: None,
                 source_session_id: Some(source_session.to_string()),
                 source_tx_index: Some(source_tx_index),
+                key_used: None,
             }
         }
 
