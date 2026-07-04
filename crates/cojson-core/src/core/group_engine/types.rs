@@ -229,6 +229,24 @@ impl<T> TimeBasedEntry<T> {
                 .map(|(_, v)| v),
         }
     }
+
+    /// The last stored value whose payload satisfies `pred` (TS `findLast`).
+    /// Used by the coMap frontier filter, which tests each op's own `txID`
+    /// (carried in the value) rather than its `made_at`.
+    pub fn find_last<F: Fn(&T) -> bool>(&self, pred: F) -> Option<&T> {
+        self.changes
+            .iter()
+            .rev()
+            .find(|(_, v)| pred(v))
+            .map(|(_, v)| v)
+    }
+
+    /// Values in stored (chronological, `compareTransactions`) order — the
+    /// order `editsAt` yields and the order a rich delta serializes a key's
+    /// op-list in.
+    pub fn iter_values(&self) -> impl Iterator<Item = &T> {
+        self.changes.iter().map(|(_, v)| v)
+    }
 }
 
 impl<T> Default for TimeBasedEntry<T> {

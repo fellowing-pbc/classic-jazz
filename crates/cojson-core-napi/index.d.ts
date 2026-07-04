@@ -104,6 +104,22 @@ export declare class NodeCore {
   /** Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`. */
   mapDelta(coId: string, sinceVersion: number): string
   /**
+   * Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+   * each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+   * `RawCoMap` rebuilds `ops`/`latest` from.
+   */
+  mapDeltaRich(coId: string, sinceVersion: number): string
+  /**
+   * Frontier read: latest frontier-visible value of `key` (null = absent).
+   * `frontier_json` is `{ sessionID: txCount }`.
+   */
+  mapGetAtFrontier(coId: string, key: string, frontierJson: string): string | null
+  /**
+   * Frontier read: whole `{key: latestVisibleValue}` snapshot under
+   * `frontier_json` as a JSON object string.
+   */
+  mapSnapshotAtFrontier(coId: string, frontierJson: string): string
+  /**
    * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
    * them in-crate, and materialize the coMap view in ONE crossing — returning
    * only the compact `IngestOutcome` (no per-transaction verdict array). The raw

@@ -96,6 +96,69 @@ pub enum MapVal {
     Del,
 }
 
+/// One materialized coMap operation, carrying the FULL per-op metadata the TS
+/// `RawCoMap` surface exposes (`ops`/`getRaw`/`lastEditAt`/`editsAt`). This is
+/// the `MapOp` shape from `packages/cojson/src/coValues/coMap.ts:14-20`:
+///
+/// ```ts
+/// type MapOp = { txID: TransactionID; madeAt: number; changeIdx: number;
+///                change: MapOpPayload; trusting?: boolean };
+/// ```
+///
+/// - `txID = sourceTxID ?? currentTxID` (`coValueCore.ts:157`) — for a merged
+///   transaction the SOURCE identity, otherwise the stored `(session_id,
+///   tx_index)`. This is the frontier filter's key (`op.txID.txIndex <
+///   frontier[op.txID.sessionID]`) and the author key
+///   (`accountOrAgentIDfromSessionID(op.txID.sessionID)`).
+/// - `made_at = sourceTxMadeAt ?? currentMadeAt` (`coValueCore.ts:163`), the
+///   effective ordering time and the TS `madeAt` field (also the
+///   [`TimeBasedEntry`] sort key so `get_at`/`atTime` stay correct).
+/// - `change_idx` — index of this change within its transaction's `changes`
+///   array (`RawCoMap.processNewTransactions`'s `changeIdx`).
+/// - `trusting` — `tx.privacy === "trusting"`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapOp {
+    /// `txID.sessionID` (source-adjusted).
+    pub session_id: String,
+    /// `txID.txIndex` (source-adjusted).
+    pub tx_index: u32,
+    /// `madeAt` (effective; equals the [`TimeBasedEntry`] sort key).
+    pub made_at: u64,
+    /// Index of this change within its transaction's `changes` array.
+    pub change_idx: u32,
+    /// The change payload: a value (`set`) or a deletion (`del`).
+    pub val: MapVal,
+    /// `tx.privacy === "trusting"`.
+    pub trusting: bool,
+}
+
+impl MapOp {
+    /// Serialize to the TS `MapOp` JSON shape. `key` is the map key this op
+    /// lives under (the op is stored keyed by it, so it is not duplicated in the
+    /// struct); it is re-embedded into the `change` payload here to match TS.
+    fn to_json(&self, key: &str) -> JsonValue {
+        let change = match &self.val {
+            MapVal::Set(v) => serde_json::json!({ "op": "set", "key": key, "value": v }),
+            MapVal::Del => serde_json::json!({ "op": "del", "key": key }),
+        };
+        serde_json::json!({
+            "txID": { "sessionID": self.session_id, "txIndex": self.tx_index },
+            "madeAt": self.made_at,
+            "changeIdx": self.change_idx,
+            "change": change,
+            "trusting": self.trusting,
+        })
+    }
+
+    /// `op.txID.txIndex < (frontier[op.txID.sessionID] ?? -1)` — the
+    /// `atFrontierFilter` predicate (`coMap.ts:238-240`). Default-exclude: a
+    /// session absent from the frontier reads as `-1`, so every op of it is
+    /// excluded.
+    fn in_frontier(&self, frontier: &HashMap<String, i64>) -> bool {
+        (self.tx_index as i64) < frontier.get(&self.session_id).copied().unwrap_or(-1)
+    }
+}
+
 /// A cached, materialized coMap view for one covalue.
 pub struct CoMapView {
     /// `(session_id, tx_count)` snapshot — the cache-validity key (same pattern
@@ -103,8 +166,10 @@ pub struct CoMapView {
     session_counts: Vec<(String, u32)>,
     /// Per-key ordered ops. `IndexMap` so key iteration is first-appearance
     /// order (snapshots are compared order-independently, so this is only for
-    /// stable/deterministic output).
-    ops: IndexMap<String, TimeBasedEntry<MapVal>>,
+    /// stable/deterministic output). Each op carries full `MapOp` metadata
+    /// (`txID`/`madeAt`/`changeIdx`/`change`/`trusting`) so a rich delta can
+    /// rebuild the TS `RawCoMap.ops`/`latest` verbatim.
+    ops: IndexMap<String, TimeBasedEntry<MapOp>>,
     /// The number of verdicts the engine had produced when this view was last
     /// materialized. The append fast-path treats `verdicts[verdict_count..]` as
     /// exactly the newly-validated transactions — no full re-scan of the verdict
@@ -122,6 +187,13 @@ pub struct CoMapView {
     /// Monotonic version, bumped once per ingest batch (append or full
     /// recompute). The delta boundary's cursor.
     version: u64,
+    /// The `version` assigned by the most recent FULL recompute. A rich-delta
+    /// caller whose cursor predates this missed a recompute (fww flip, key
+    /// arrival, or a verdict flip could have REMOVED ops from a key or dropped a
+    /// key entirely — things an append-only patch cannot express), so it is told
+    /// to `reset` and rebuild from the complete op map. On the append fast-path
+    /// this stays put, so a caller that is caught up gets an incremental patch.
+    last_full_version: u64,
     /// `key -> version at which this key last changed`. Drives `map_delta`.
     key_versions: HashMap<String, u64>,
     /// The `NodeCore` keys-version this view was built against. Part of the
@@ -154,7 +226,7 @@ impl CoMapView {
     /// Latest value for `key` (`None` = absent / deleted).
     pub fn get(&self, key: &str) -> Option<&JsonValue> {
         match self.ops.get(key).and_then(|e| e.get_latest()) {
-            Some(MapVal::Set(v)) => Some(v),
+            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
             _ => None,
         }
     }
@@ -162,7 +234,25 @@ impl CoMapView {
     /// Value for `key` at `at_time` (`None` = latest); `None` result = absent.
     pub fn get_at(&self, key: &str, at_time: Option<u64>) -> Option<&JsonValue> {
         match self.ops.get(key).and_then(|e| e.get_at_time(at_time)) {
-            Some(MapVal::Set(v)) => Some(v),
+            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Value for `key` under an `atFrontier` view (`None` result = absent). Ports
+    /// `getRaw`'s `atFrontierFilter` branch (`coMap.ts:238-240`): the last op
+    /// whose `txID.txIndex < frontier[txID.sessionID]` (default-exclude).
+    pub fn get_at_frontier(
+        &self,
+        key: &str,
+        frontier: &HashMap<String, i64>,
+    ) -> Option<&JsonValue> {
+        match self
+            .ops
+            .get(key)
+            .and_then(|e| e.find_last(|op| op.in_frontier(frontier)))
+        {
+            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
             _ => None,
         }
     }
@@ -172,7 +262,21 @@ impl CoMapView {
     pub fn snapshot(&self) -> JsonValue {
         let mut obj = serde_json::Map::new();
         for (k, e) in &self.ops {
-            if let Some(MapVal::Set(v)) = e.get_latest() {
+            if let Some(MapOp { val: MapVal::Set(v), .. }) = e.get_latest() {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+        JsonValue::Object(obj)
+    }
+
+    /// `asObject` under an `atFrontier` view: each key's latest frontier-visible
+    /// op, deleted/absent omitted. Mirrors `RawCoMap.atFrontier(f).asObject()`.
+    pub fn snapshot_at_frontier(&self, frontier: &HashMap<String, i64>) -> JsonValue {
+        let mut obj = serde_json::Map::new();
+        for (k, e) in &self.ops {
+            if let Some(MapOp { val: MapVal::Set(v), .. }) =
+                e.find_last(|op| op.in_frontier(frontier))
+            {
                 obj.insert(k.clone(), v.clone());
             }
         }
@@ -189,7 +293,7 @@ impl CoMapView {
         for (k, ver) in &self.key_versions {
             if *ver > since_version {
                 match self.ops.get(k).and_then(|e| e.get_latest()) {
-                    Some(MapVal::Set(v)) => {
+                    Some(MapOp { val: MapVal::Set(v), .. }) => {
                         changed.insert(k.clone(), v.clone());
                     }
                     _ => deleted.push(k.clone()),
@@ -200,6 +304,44 @@ impl CoMapView {
             "version": self.version,
             "changedKeys": changed,
             "deletedKeys": deleted,
+        })
+    }
+
+    /// RICH delta: `{version, reset, changedKeys}` where each `changedKeys[k]` is
+    /// the FULL ordered op-list (`MapOp[]`) for a key that changed since
+    /// `since_version`. This is what a TS `RawCoMap` needs to rebuild its
+    /// `ops[k]`/`latest[k]` verbatim (per-op `txID`/`madeAt`/`changeIdx`/
+    /// `change`/`trusting`), serialized ONCE per delta so it stays O(changed
+    /// keys × ops-per-changed-key), never O(history).
+    ///
+    /// `reset` is set when `since_version < last_full_version` — the caller
+    /// missed a full recompute, which can retroactively REMOVE ops from a key or
+    /// drop a key entirely (fww flip / verdict flip / a private key arriving and
+    /// re-timing history), things an append-only patch cannot express. On
+    /// `reset` the caller clears its `ops`/`latest` and rebuilds from
+    /// `changedKeys` (which, because a full recompute stamps every current key at
+    /// the new version, carries the COMPLETE current op map). On the append
+    /// fast-path `reset` is false and only the grown keys are sent, so a
+    /// caught-up caller applies an incremental patch. Because appends never drop
+    /// a key, no `deletedKeys` are needed on this path — a rich delta never
+    /// removes a key except via a `reset` full rebuild.
+    pub fn delta_rich(&self, since_version: u64) -> JsonValue {
+        let reset = since_version < self.last_full_version;
+        let mut changed = serde_json::Map::new();
+        for (k, ver) in &self.key_versions {
+            if reset || *ver > since_version {
+                if let Some(e) = self.ops.get(k) {
+                    let list: Vec<JsonValue> = e.iter_values().map(|op| op.to_json(k)).collect();
+                    if !list.is_empty() {
+                        changed.insert(k.clone(), JsonValue::Array(list));
+                    }
+                }
+            }
+        }
+        serde_json::json!({
+            "version": self.version,
+            "reset": reset,
+            "changedKeys": changed,
         })
     }
 }
@@ -220,23 +362,48 @@ fn fww_key(tx: &GroupTxView) -> Option<&str> {
     tx.meta.as_ref()?.get("fww")?.as_str()
 }
 
+/// The `txID` of a transaction: its SOURCE identity when merged
+/// (`sourceTxID ?? currentTxID`, `coValueCore.ts:157`), else its stored
+/// `(session_id, tx_index)`.
+fn tx_id_of(tx: &GroupTxView) -> (String, u32) {
+    (
+        tx.source_session_id
+            .clone()
+            .unwrap_or_else(|| tx.session_id.clone()),
+        tx.source_tx_index.unwrap_or(tx.tx_index),
+    )
+}
+
 /// Apply one coMap change to the per-key ops, returning the key it touched (so
 /// the caller can bump its version). A missing `key` field is skipped (never
 /// produced by real cojson). `op === "del"` is a deletion; anything else reads
-/// as its `value` (matching TS `get`: `op === "del" ? undefined : value`).
+/// as its `value` (matching TS `get`: `op === "del" ? undefined : value`). The
+/// op is stored with full `MapOp` metadata: its (source-adjusted) `txID`, the
+/// effective `made_at`, its `change_idx` within the transaction, and whether the
+/// transaction is `trusting`.
 fn apply_change(
-    ops: &mut IndexMap<String, TimeBasedEntry<MapVal>>,
+    ops: &mut IndexMap<String, TimeBasedEntry<MapOp>>,
+    tx: &GroupTxView,
     change: &JsonValue,
-    made_at: u64,
+    change_idx: u32,
 ) -> Option<String> {
     let key = change.get("key").and_then(|v| v.as_str())?;
     let val = match change.get("op").and_then(|v| v.as_str()) {
         Some("del") => MapVal::Del,
         _ => MapVal::Set(change.get("value").cloned().unwrap_or(JsonValue::Null)),
     };
-    ops.entry(key.to_string())
-        .or_default()
-        .add_change(made_at, val);
+    let (session_id, tx_index) = tx_id_of(tx);
+    ops.entry(key.to_string()).or_default().add_change(
+        tx.effective_made_at,
+        MapOp {
+            session_id,
+            tx_index,
+            made_at: tx.effective_made_at,
+            change_idx,
+            val,
+            trusting: matches!(tx.privacy, Privacy::Trusting),
+        },
+    );
     Some(key.to_string())
 }
 
@@ -261,7 +428,7 @@ fn decrypt_private_changes(
 /// nothing) when its secret is not yet available. `touched` collects the keys
 /// this tx changed so the caller can bump their versions.
 fn index_tx(
-    ops: &mut IndexMap<String, TimeBasedEntry<MapVal>>,
+    ops: &mut IndexMap<String, TimeBasedEntry<MapOp>>,
     sm: &SessionMapImpl,
     keys: &HashMap<String, String>,
     missing: &mut HashSet<String>,
@@ -271,8 +438,8 @@ fn index_tx(
     match tx.privacy {
         Privacy::Trusting => {
             if let Some(changes) = &tx.changes {
-                for change in changes {
-                    if let Some(k) = apply_change(ops, change, tx.effective_made_at) {
+                for (idx, change) in changes.iter().enumerate() {
+                    if let Some(k) = apply_change(ops, tx, change, idx as u32) {
                         touched(k);
                     }
                 }
@@ -291,8 +458,8 @@ fn index_tx(
                 }
             };
             if let Some(changes) = decrypt_private_changes(sm, tx, secret) {
-                for change in &changes {
-                    if let Some(k) = apply_change(ops, change, tx.effective_made_at) {
+                for (idx, change) in changes.iter().enumerate() {
+                    if let Some(k) = apply_change(ops, tx, change, idx as u32) {
                         touched(k);
                     }
                 }
@@ -342,7 +509,7 @@ fn build_full_view(
         }
     }
 
-    let mut ops: IndexMap<String, TimeBasedEntry<MapVal>> = IndexMap::new();
+    let mut ops: IndexMap<String, TimeBasedEntry<MapOp>> = IndexMap::new();
     let mut missing_key_ids: HashSet<String> = HashSet::new();
     let mut touched = |_k: String| {}; // full recompute marks all keys below
     for tx in &txs {
@@ -367,6 +534,7 @@ fn build_full_view(
         engine_generation,
         has_fww,
         version,
+        last_full_version: version,
         key_versions,
         keys_version,
         missing_key_ids,
@@ -1066,5 +1234,139 @@ mod tests {
             snap,
             serde_json::json!({"p": "private-val", "t": "trusting-val"})
         );
+    }
+
+    // ===== Stage 2a: rich op metadata + frontier reads =====
+
+    #[test]
+    fn rich_delta_carries_per_op_metadata_in_compare_order() {
+        let session = "co_zA_session_zS";
+        let (mut node, co_id) = make_map(
+            session,
+            &[
+                ("a", serde_json::json!(1), None), // tx 0
+                ("a", serde_json::json!(2), None), // tx 1 (later write)
+                ("b", serde_json::json!("x"), None), // tx 2
+            ],
+        );
+        node.map_materialize(&co_id, &[]).unwrap();
+        let delta: serde_json::Value =
+            serde_json::from_str(&node.map_delta_rich(&co_id, 0).unwrap()).unwrap();
+        assert_eq!(delta["reset"], serde_json::json!(true));
+
+        // Key "a" carries BOTH ops, in compareTransactions (madeAt asc / txIndex) order.
+        let a = delta["changedKeys"]["a"].as_array().unwrap();
+        assert_eq!(a.len(), 2);
+        // op 0: txIndex 0, changeIdx 0, set 1, trusting
+        assert_eq!(a[0]["txID"], serde_json::json!({"sessionID": session, "txIndex": 0}));
+        assert_eq!(a[0]["changeIdx"], serde_json::json!(0));
+        assert_eq!(a[0]["trusting"], serde_json::json!(true));
+        assert_eq!(a[0]["change"], serde_json::json!({"op":"set","key":"a","value":1}));
+        // op 1: txIndex 1, later — is LAST (latest)
+        assert_eq!(a[1]["txID"]["txIndex"], serde_json::json!(1));
+        assert_eq!(a[1]["change"]["value"], serde_json::json!(2));
+        assert!(a[1]["madeAt"].as_u64().unwrap() > a[0]["madeAt"].as_u64().unwrap());
+
+        // Key "b": single set op.
+        let b = delta["changedKeys"]["b"].as_array().unwrap();
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0]["change"], serde_json::json!({"op":"set","key":"b","value":"x"}));
+    }
+
+    #[test]
+    fn rich_delta_del_op_shape() {
+        let session = "co_zA_session_zS";
+        let (mut node, co_id) = make_map(session, &[("a", serde_json::json!(1), None)]);
+        let del = format!(
+            r#"[{{"privacy":"trusting","madeAt":{},"changes":{}}}]"#,
+            1_700_000_000_100u64,
+            serde_json::to_string(
+                &serde_json::to_string(&serde_json::json!([{"op": "del", "key": "a"}])).unwrap()
+            )
+            .unwrap()
+        );
+        node.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(session, None, &del, "signature_zFake", true)
+            .unwrap();
+        node.map_materialize(&co_id, &[]).unwrap();
+        let delta: serde_json::Value =
+            serde_json::from_str(&node.map_delta_rich(&co_id, 0).unwrap()).unwrap();
+        let a = delta["changedKeys"]["a"].as_array().unwrap();
+        assert_eq!(a.len(), 2, "set + del both retained in the op-list");
+        // A del op has NO value field in its change (TS `{op:"del", key}`).
+        assert_eq!(a[1]["change"], serde_json::json!({"op":"del","key":"a"}));
+    }
+
+    #[test]
+    fn rich_delta_append_patch_is_not_reset_and_carries_only_changed_key() {
+        let session = "co_zA_session_zS";
+        let (mut node, co_id) = make_map(session, &[("a", serde_json::json!(1), None)]);
+        let v1 = node.map_materialize(&co_id, &[]).unwrap();
+
+        // Append a second tx touching only "b".
+        let chunk = format!(
+            r#"[{{"privacy":"trusting","madeAt":{},"changes":{}}}]"#,
+            1_700_000_000_100u64,
+            serde_json::to_string(
+                &serde_json::to_string(&serde_json::json!([{"op": "set", "key": "b", "value": 9}]))
+                    .unwrap()
+            )
+            .unwrap()
+        );
+        node.get_mut(&co_id)
+            .unwrap()
+            .add_transactions(session, None, &chunk, "signature_zFake", true)
+            .unwrap();
+        node.map_materialize(&co_id, &[]).unwrap();
+
+        // A caller caught up to v1 gets an incremental patch: reset false, only "b".
+        let delta: serde_json::Value =
+            serde_json::from_str(&node.map_delta_rich(&co_id, v1).unwrap()).unwrap();
+        assert_eq!(delta["reset"], serde_json::json!(false));
+        let changed = delta["changedKeys"].as_object().unwrap();
+        assert_eq!(changed.len(), 1);
+        assert!(changed.contains_key("b"));
+    }
+
+    #[test]
+    fn frontier_reads_exclude_ops_at_or_after_frontier_index() {
+        // Three writes to "a" in one session: txIndex 0,1,2 with values 1,2,3.
+        let session = "co_zA_session_zS";
+        let (mut node, co_id) = make_map(
+            session,
+            &[
+                ("a", serde_json::json!(1), None),
+                ("a", serde_json::json!(2), None),
+                ("a", serde_json::json!(3), None),
+            ],
+        );
+        node.map_materialize(&co_id, &[]).unwrap();
+
+        // frontier[session] = 2 admits ops with txIndex < 2 → indices 0,1 → latest = 2.
+        let f2 = serde_json::json!({ session: 2 }).to_string();
+        assert_eq!(
+            node.map_get_at_frontier(&co_id, "a", &f2).unwrap(),
+            Some("2".to_string())
+        );
+        // frontier[session] = 1 → only txIndex 0 → latest = 1.
+        let f1 = serde_json::json!({ session: 1 }).to_string();
+        assert_eq!(
+            node.map_get_at_frontier(&co_id, "a", &f1).unwrap(),
+            Some("1".to_string())
+        );
+        // A session absent from the frontier defaults to -1 → all excluded.
+        let empty = "{}";
+        assert_eq!(
+            node.map_get_at_frontier(&co_id, "a", empty).unwrap(),
+            None
+        );
+        // snapshot_at_frontier honors the same filter.
+        let snap: serde_json::Value =
+            serde_json::from_str(&node.map_snapshot_at_frontier(&co_id, &f2).unwrap()).unwrap();
+        assert_eq!(snap, serde_json::json!({"a": 2}));
+        let snap_empty: serde_json::Value =
+            serde_json::from_str(&node.map_snapshot_at_frontier(&co_id, empty).unwrap()).unwrap();
+        assert_eq!(snap_empty, serde_json::json!({}));
     }
 }

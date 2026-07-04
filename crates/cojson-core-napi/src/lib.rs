@@ -966,6 +966,46 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
+  /// Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+  /// each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+  /// `RawCoMap` rebuilds `ops`/`latest` from.
+  #[napi]
+  pub fn map_delta_rich(&self, co_id: String, since_version: f64) -> napi::Result<String> {
+    self
+      .internal
+      .map_delta_rich(&co_id, since_version as u64)
+      .map_err(to_napi_err)
+  }
+
+  /// Frontier read: latest frontier-visible value of `key` (null = absent).
+  /// `frontier_json` is `{ sessionID: txCount }`.
+  #[napi]
+  pub fn map_get_at_frontier(
+    &self,
+    co_id: String,
+    key: String,
+    frontier_json: String,
+  ) -> napi::Result<Option<String>> {
+    self
+      .internal
+      .map_get_at_frontier(&co_id, &key, &frontier_json)
+      .map_err(to_napi_err)
+  }
+
+  /// Frontier read: whole `{key: latestVisibleValue}` snapshot under
+  /// `frontier_json` as a JSON object string.
+  #[napi]
+  pub fn map_snapshot_at_frontier(
+    &self,
+    co_id: String,
+    frontier_json: String,
+  ) -> napi::Result<String> {
+    self
+      .internal
+      .map_snapshot_at_frontier(&co_id, &frontier_json)
+      .map_err(to_napi_err)
+  }
+
   /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
   /// them in-crate, and materialize the coMap view in ONE crossing — returning
   /// only the compact `IngestOutcome` (no per-transaction verdict array). The raw

@@ -65,8 +65,11 @@ pub struct IngestOutcome {
     pub count: u32,
     /// The coMap view's monotonic version after materialization (the delta cursor).
     pub view_version: u64,
-    /// `{version, changedKeys, deletedKeys}` since the caller's `since_version`,
-    /// as a JSON string — the patch a TS-side read cache applies.
+    /// RICH delta `{version, reset, changedKeys}` since the caller's
+    /// `since_version` — each `changedKeys[k]` is the full `MapOp[]` op-list for
+    /// a changed key, the payload a TS `RawCoMap` rebuilds `ops`/`latest` from.
+    /// `reset` signals the caller to clear and rebuild (a full recompute
+    /// happened). Serialized ONCE per ingest, O(changed keys).
     pub delta_json: String,
 }
 
@@ -332,6 +335,73 @@ impl NodeCore {
         Ok(delta.to_string())
     }
 
+    /// Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+    /// where each `changedKeys[k]` is the full ordered `MapOp[]` op-list for a
+    /// changed key — the payload a TS `RawCoMap` rebuilds its `ops`/`latest`
+    /// from. See [`crate::core::co_map::CoMapView::delta_rich`].
+    pub fn map_delta_rich(
+        &self,
+        co_id: &str,
+        since_version: u64,
+    ) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let delta = self
+            .co_maps
+            .get(co_id)
+            .map(|v| v.delta_rich(since_version))
+            .unwrap_or_else(|| {
+                serde_json::json!({ "version": 0, "reset": true, "changedKeys": {} })
+            });
+        Ok(delta.to_string())
+    }
+
+    /// Parse a `{ sessionID: txCount }` frontier JSON object into the map the
+    /// coMap frontier reads expect. A malformed frontier is treated as empty
+    /// (every op excluded — the `?? -1` default).
+    fn parse_frontier(frontier_json: &str) -> HashMap<String, i64> {
+        serde_json::from_str(frontier_json).unwrap_or_default()
+    }
+
+    /// Frontier read: latest frontier-visible value of `key` as a JSON string
+    /// (`None` = absent). `frontier_json` is `{ sessionID: txCount }`.
+    pub fn map_get_at_frontier(
+        &self,
+        co_id: &str,
+        key: &str,
+        frontier_json: &str,
+    ) -> Result<Option<String>, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let frontier = Self::parse_frontier(frontier_json);
+        Ok(self
+            .co_maps
+            .get(co_id)
+            .and_then(|v| v.get_at_frontier(key, &frontier))
+            .map(|val| val.to_string()))
+    }
+
+    /// Frontier read: whole `{key: latestVisibleValue}` snapshot under
+    /// `frontier_json` as a JSON string.
+    pub fn map_snapshot_at_frontier(
+        &self,
+        co_id: &str,
+        frontier_json: &str,
+    ) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let frontier = Self::parse_frontier(frontier_json);
+        let snapshot = self
+            .co_maps
+            .get(co_id)
+            .map(|v| v.snapshot_at_frontier(&frontier))
+            .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+        Ok(snapshot.to_string())
+    }
+
     /// Stage-1 single-call ingest (R3): add a content chunk's transactions to the
     /// raw session log, validate them in-crate, and materialize the coMap view —
     /// all in one FFI crossing, returning only the compact [`IngestOutcome`].
@@ -378,7 +448,9 @@ impl NodeCore {
 
         let generation = generation_of(&self.engines, co_id);
         let count = verdicts_of(&self.engines, co_id).len() as u32;
-        let delta_json = self.map_delta(co_id, since_version)?;
+        // RICH delta: full per-op `MapOp[]` for each changed key — the payload a
+        // TS `RawCoMap` rebuilds `ops`/`latest` from in one FFI crossing.
+        let delta_json = self.map_delta_rich(co_id, since_version)?;
 
         Ok(IngestOutcome {
             generation,
@@ -556,9 +628,16 @@ mod tests {
             .unwrap();
         assert_eq!(out.count, 1, "one verdict after one tx");
         assert!(out.view_version >= 1);
+        // The ingest payload is the RICH delta: full MapOp[] per changed key.
         let delta: serde_json::Value = serde_json::from_str(&out.delta_json).unwrap();
         assert_eq!(delta["version"], out.view_version);
-        assert_eq!(delta["changedKeys"], serde_json::json!({"a": 1}));
+        assert_eq!(delta["reset"], serde_json::json!(true), "fresh cursor resyncs");
+        let a_ops = delta["changedKeys"]["a"].as_array().unwrap();
+        assert_eq!(a_ops.len(), 1);
+        assert_eq!(a_ops[0]["change"], serde_json::json!({"op":"set","key":"a","value":1}));
+        assert_eq!(a_ops[0]["changeIdx"], serde_json::json!(0));
+        assert_eq!(a_ops[0]["trusting"], serde_json::json!(true));
+        assert_eq!(a_ops[0]["txID"]["sessionID"], serde_json::json!(session));
 
         // Second chunk: sets "b" = 2. Delta SINCE the previous view version must
         // carry only the newly-changed key (O(changed), not O(history)).
@@ -578,11 +657,11 @@ mod tests {
         assert_eq!(out2.count, 2);
         assert!(out2.view_version > prev, "version bumps on the second ingest");
         let delta2: serde_json::Value = serde_json::from_str(&out2.delta_json).unwrap();
-        assert_eq!(
-            delta2["changedKeys"],
-            serde_json::json!({"b": 2}),
-            "delta since prev carries only the new key"
-        );
+        assert_eq!(delta2["reset"], serde_json::json!(false), "caught-up cursor patches");
+        let changed2 = delta2["changedKeys"].as_object().unwrap();
+        assert_eq!(changed2.len(), 1, "delta since prev carries only the new key");
+        let b_ops = delta2["changedKeys"]["b"].as_array().unwrap();
+        assert_eq!(b_ops[0]["change"], serde_json::json!({"op":"set","key":"b","value":2}));
 
         // The materialized view is identical to what the separate
         // add+materialize path would produce.

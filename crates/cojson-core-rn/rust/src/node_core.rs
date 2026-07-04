@@ -649,6 +649,125 @@ impl NodeCore {
         Ok(IngestOutcome::from(out))
     }
 
+    // === R0/R3 coMap materialization (previously absent on RN) ===
+
+    /// Materialize (or incrementally refresh) `co_id`'s coMap view; returns its
+    /// current monotonic version. Call after each ingest batch.
+    pub fn map_materialize(
+        &self,
+        co_id: String,
+        pending: Vec<PendingTx>,
+    ) -> Result<f64, SessionMapError> {
+        let pending = rn_pending_to_rust(pending);
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_materialize(&co_id, &pending)
+            .map(|v| v as f64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Boundary (a): latest JSON value for `key`, or null.
+    pub fn map_get(&self, co_id: String, key: String) -> Result<Option<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_get(&co_id, &key)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
+    pub fn map_get_at(
+        &self,
+        co_id: String,
+        key: String,
+        at_time: Option<f64>,
+    ) -> Result<Option<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_get_at(&co_id, &key, at_time.map(|v| v as u64))
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Boundary (b): whole materialized map as a JSON object string.
+    pub fn map_snapshot(&self, co_id: String) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_snapshot(&co_id)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`.
+    pub fn map_delta(&self, co_id: String, since_version: f64) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_delta(&co_id, since_version as u64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Boundary (c-rich): `{version, reset, changedKeys}` since `since_version`,
+    /// each `changedKeys[k]` the full `MapOp[]` op-list — the payload a TS
+    /// `RawCoMap` rebuilds `ops`/`latest` from.
+    pub fn map_delta_rich(
+        &self,
+        co_id: String,
+        since_version: f64,
+    ) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_delta_rich(&co_id, since_version as u64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Frontier read: latest frontier-visible value of `key` (null = absent).
+    /// `frontier_json` is `{ sessionID: txCount }`.
+    pub fn map_get_at_frontier(
+        &self,
+        co_id: String,
+        key: String,
+        frontier_json: String,
+    ) -> Result<Option<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_get_at_frontier(&co_id, &key, &frontier_json)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Frontier read: whole `{key: latestVisibleValue}` snapshot under
+    /// `frontier_json` as a JSON object string.
+    pub fn map_snapshot_at_frontier(
+        &self,
+        co_id: String,
+        frontier_json: String,
+    ) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .map_snapshot_at_frontier(&co_id, &frontier_json)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
     /// Drop the cached validation engine for `co_id`, forcing a full recompute
     /// on the next `validate_transactions` / `role_of`. An absent `co_id` is a
     /// no-op (not `UnknownCoValue`): callers invoke this on dependants that may
