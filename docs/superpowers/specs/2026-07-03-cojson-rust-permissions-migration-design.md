@@ -320,13 +320,46 @@ Contract points:
   meta decryption/parsing flows through the same existing re-dispatch
   mechanics, unchanged.
 
-### TypeScript deletion (end state)
+### TypeScript deletion (end state) — DONE
 
-Once wasm and RN native ports pass the full suite: delete the rule logic in
-`permissions.ts` (keep the thin dispatch + types), `MemberRoleResolver`, the
-internals of `roleOfInternal` and its supporting indices in `group.ts`
-(`parentGroupsChanges`, `TimeBasedEntry` where unused elsewhere), the
-stage-1 wasm/RN shims, and the `hasNativeValidation` gate.
+With wasm and RN native ports passing the full suite, the cleanup PR deleted:
+
+- the TS group engine in `permissions.ts` (`determineValidTransactionsForGroup`,
+  `MemberRoleResolver`, `isHigherRole`, `canAdmin`,
+  `agentInAccountOrMemberInGroup`, the ownedByGroup/unsafeAllowAll/group
+  fallback branches, and the classifier helpers used only by it);
+- the `nativeValidationDisabled` kill switch and both of its gates (in
+  `permissions.ts` and `group.ts`);
+- `ShimNodeCore` and the base `CryptoProvider.createNodeCore()` default —
+  `createNodeCore()` is now `abstract` and every provider overrides it with a
+  native adapter;
+- the differential test harness (`groupEngineDifferential.test.ts`) and the
+  bench's TS-fallback arms.
+
+`validateTransactions`/`roleOf`/`resetValidation` are now **required** on
+`NodeCoreImpl`. `determineValidTransactions` narrows to an availability guard
+plus an unconditional native call (`determineValidTransactionsNative`).
+
+**Carve-out (honest end state).** `roleOfInternal`'s TypeScript body in
+`group.ts` **survives** for branch/frontier CoMap views only: the native engine
+models an `atTime` view but has no branch/frontier equivalent yet. The gate now
+delegates to native unless `branchSourceId`/`atFrontierFilter` is set (no kill
+switch). `parentGroupsChanges`, `TimeBasedEntry`, and `getParentGroup` are KEPT
+— they are shared by the key-revelation / read-key resolution path, not just
+role resolution. Native branch-view support is future work; only then can this
+TS body be removed.
+
+**Fixture oracle inversion.** With the kill switch gone, the fixture exporter no
+longer captures an independent TS oracle; the committed group-engine fixtures
+are frozen golden files (from the original TS engine, commit `b84f15310`).
+Regeneration must reproduce verdict CONTENT byte-for-byte (identities may churn);
+any content diff is a native-engine regression.
+
+**Deferred to a follow-up PR** (`cojson-delete-sessionmap-layer`): the now-dead
+`createSessionMap` / `SessionMapImpl` / `SessionMapAdapter` layer, its
+`dispose?` plumbing, and the three Rust binding `SessionMap` structs. Kept
+together so the wasm-artifact rebuild is verified exactly once, out of this
+validation-logic deletion.
 
 ## Fidelity constraints (normative)
 
