@@ -130,3 +130,21 @@ report against the pre-migration baseline closes the migration.
   edge cases; the fixture corpus must be generated exhaustively before port.
 - **Dual maintenance window**: every phase keeps the TS path alive until its
   gate+bench pass; the differential-style checks return per CRDT type.
+
+## GOAL DIRECTIVE (2026-07-04, standing)
+
+- **Target: cojson ≥5x faster than the MAIN-branch baseline** on an end-to-end
+  benchmark suite (ingest/validation/materialization pipelines and realistic
+  sync-processing shapes). Per-shape multipliers are reported transparently;
+  shapes that are provably memory-bound (e.g. JS-Map-cache-hit reads, already
+  ~1.2-2.2x and bounded by a hashmap hit) are documented with their ceiling
+  rather than hand-waved — the 5x must come from the pipeline-heavy shapes
+  where today's code is asymptotically wasteful (full revalidation per ingest).
+- **Backward compatibility is a hard gate**: the cojson public API surface
+  (exports.ts), wire format, and storage format stay unchanged; jazz-tools
+  suite + example apps green at every phase.
+- **The yardstick**: a pinned benchmark suite runnable against BOTH the main
+  branch and the migration branch, same shapes, same data. No multiplier claim
+  without it.
+- Execution continues phase-by-phase (R2→R5 + a dedicated perf phase) until
+  done; orchestration stays thin, work is delegated.
