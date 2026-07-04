@@ -179,6 +179,83 @@ export function buildRustMap(ts: TsMap): RustMap {
 }
 
 // ---------------------------------------------------------------------------
+// R1: PRIVATE data. An owned map (group + map) whose writes are private, so the
+// Rust side must decrypt them natively — resolving each tx's `keyUsed` against
+// the key store TS feeds via `provideKeySecret`.
+// ---------------------------------------------------------------------------
+export interface PrivateTsMap extends TsMap {
+  group: any;
+  readKeyId: string;
+  readKeySecret: string;
+}
+
+/** A fresh group + owned map; the group's current read key drives private encryption. */
+export function newPrivateTsMap(node = newNode()): PrivateTsMap {
+  const group = node.createGroup();
+  const map = group.createMap();
+  const rk = group.getCurrentReadKey();
+  return {
+    node,
+    core: map.core,
+    map,
+    coId: map.id,
+    group,
+    readKeyId: rk.id,
+    readKeySecret: rk.secret,
+  };
+}
+
+/** Apply one op as a PRIVATE write (fww is dropped — private fww meta is R2). */
+export function applyPrivateOp(pts: PrivateTsMap, op: Op): void {
+  if (op.op === "del") pts.map.delete(op.key, "private");
+  else pts.map.set(op.key, op.value, "private");
+}
+
+export function buildPrivateTsMap(ops: Op[]): PrivateTsMap {
+  const pts = newPrivateTsMap();
+  for (const op of ops) applyPrivateOp(pts, op);
+  return pts;
+}
+
+/** Register `core` (header) and replay ALL its sessions verbatim into `nc`. */
+function fullReplayCore(nc: NativeNodeCore, core: any): void {
+  const headerJson = JSON.stringify(core.verified.header);
+  if (!nc.hasCoValue(core.id)) {
+    nc.createCoValue(core.id, headerJson, undefined, true);
+  }
+  for (const [sessionID, log] of core.verified.sessionEntries()) {
+    if (log.transactions.length === 0) continue;
+    nc.addTransactions(
+      core.id,
+      sessionID,
+      undefined,
+      JSON.stringify(log.transactions),
+      log.lastSignature,
+      true,
+    );
+  }
+}
+
+/**
+ * Replay an owned map's data (its owning GROUP first, for permission
+ * validation, then the map itself) into a fresh native core. When `provideKey`
+ * is set, feed the group's read secret so private txs decrypt; otherwise the
+ * private txs are skipped (the key-arrives-late path). Returns the RustMap after
+ * an initial `mapMaterialize`.
+ */
+export function buildRustPrivateMap(
+  pts: PrivateTsMap,
+  { provideKey = true }: { provideKey?: boolean } = {},
+): RustMap {
+  const nc = new NativeNodeCore();
+  fullReplayCore(nc, pts.group.core);
+  fullReplayCore(nc, pts.core);
+  if (provideKey) nc.provideKeySecret(pts.readKeyId, pts.readKeySecret);
+  nc.mapMaterialize(pts.coId, []);
+  return { nc, coId: pts.coId, known: new Map() };
+}
+
+// ---------------------------------------------------------------------------
 // Part 2: TS-side delta-cache adapter (boundary c).
 // A local Map warmed/patched by `mapDelta` after each ingest; reads never cross.
 // ---------------------------------------------------------------------------

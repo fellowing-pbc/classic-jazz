@@ -10,10 +10,13 @@
 
 import { describe, expect, test } from "vitest";
 import {
+  buildPrivateTsMap,
   buildRustMap,
+  buildRustPrivateMap,
   buildTsMap,
   DeltaCache,
   generateOps,
+  newPrivateTsMap,
   newRustMap,
   syncRustFromTs,
   type Op,
@@ -145,5 +148,95 @@ describe("Rust coMap materialization matches TS RawCoMap", () => {
         expect(cache.asObject()).toEqual(ts.map.asObject());
       }
     }
+  });
+});
+
+/**
+ * R1: the same equality bar, but on PRIVATE data — the Rust side must DECRYPT
+ * each private tx natively (resolving `keyUsed` against the key store TS feeds)
+ * to reproduce the TS `RawCoMap`. Covers all-private, mixed private/trusting,
+ * and the key-arrives-late retry.
+ */
+describe("Rust coMap materialization matches TS RawCoMap on PRIVATE data", () => {
+  const PRIV_SHAPES: {
+    name: string;
+    opCount: number;
+    keyCount: number;
+    delFraction?: number;
+  }[] = [
+    { name: "private small dense", opCount: 40, keyCount: 5 },
+    { name: "private wide sparse", opCount: 200, keyCount: 60 },
+    { name: "private single-key churn", opCount: 120, keyCount: 1 },
+    {
+      name: "private with deletes",
+      opCount: 150,
+      keyCount: 20,
+      delFraction: 0.25,
+    },
+  ];
+
+  const cases: {
+    label: string;
+    seed: number;
+    cfg: (typeof PRIV_SHAPES)[number];
+  }[] = [];
+  let seed = 500;
+  for (const cfg of PRIV_SHAPES) {
+    for (let s = 0; s < 2; s++) {
+      cases.push({ label: `${cfg.name} #${s}`, seed: seed++, cfg });
+    }
+  }
+
+  test.each(cases)("$label", ({ seed, cfg }) => {
+    const ops: Op[] = generateOps({ seed, ...cfg }); // fwwFraction 0 (private)
+    const pts = buildPrivateTsMap(ops);
+    const rust = buildRustPrivateMap(pts);
+
+    const tsObject = pts.map.asObject();
+    expect(JSON.parse(rust.nc.mapSnapshot(rust.coId))).toEqual(tsObject);
+
+    const keys = [...new Set(ops.map((o) => o.key)), "k_never"];
+    for (const key of keys) {
+      expect(norm(rustGet(rust, key))).toEqual(norm(pts.map.get(key)));
+    }
+
+    // Every private tx decrypted -> nothing outstanding.
+    expect(rust.nc.missingKeyIds(rust.coId)).toEqual([]);
+  });
+
+  test("mixed private + trusting writes materialize identically", () => {
+    const ops = generateOps({ seed: 700, opCount: 200, keyCount: 25 });
+    const pts = newPrivateTsMap();
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i]!;
+      const privacy = i % 2 === 0 ? "private" : "trusting";
+      if (op.op === "del") pts.map.delete(op.key, privacy);
+      else pts.map.set(op.key, op.value, privacy);
+    }
+    const rust = buildRustPrivateMap(pts);
+    expect(JSON.parse(rust.nc.mapSnapshot(rust.coId))).toEqual(
+      pts.map.asObject(),
+    );
+    expect(rust.nc.missingKeyIds(rust.coId)).toEqual([]);
+  });
+
+  test("key arrives late: private txs skipped, then rebuilt after provideKeySecret", () => {
+    const ops = generateOps({ seed: 800, opCount: 60, keyCount: 10 });
+    const pts = buildPrivateTsMap(ops);
+
+    // Build WITHOUT the key: private txs must be skipped, their keyUsed recorded.
+    const rust = buildRustPrivateMap(pts, { provideKey: false });
+    expect(JSON.parse(rust.nc.mapSnapshot(rust.coId))).toEqual({});
+    expect(rust.nc.missingKeyIds(rust.coId)).toContain(pts.readKeyId);
+    const before = rust.nc.mapMaterialize(rust.coId, []); // cache hit (no key yet)
+
+    // Key arrives -> keys-version bump -> next materialize rebuilds (no new txs).
+    rust.nc.provideKeySecret(pts.readKeyId, pts.readKeySecret);
+    const after = rust.nc.mapMaterialize(rust.coId, []);
+    expect(after).toBeGreaterThan(before);
+    expect(JSON.parse(rust.nc.mapSnapshot(rust.coId))).toEqual(
+      pts.map.asObject(),
+    );
+    expect(rust.nc.missingKeyIds(rust.coId)).toEqual([]);
   });
 });
