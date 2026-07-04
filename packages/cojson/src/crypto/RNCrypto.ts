@@ -14,6 +14,7 @@ import {
   CryptoProvider,
   NodeCoreGroupVerdict,
   NodeCoreImpl,
+  NodeCoreIngestOutcome,
   NodeCorePendingTx,
   NodeCoreVerdictDelta,
   Sealed,
@@ -771,5 +772,90 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
         provideKeySecret?: (keyId: string, keySecret: string) => void;
       }
     ).provideKeySecret?.(keyId, keySecret);
+  }
+
+  // === coMap materialization (stage 2b) ===
+  //
+  // The uniffi binding exposes the native stage-2b surface as of the `ubrn`
+  // regeneration these bindings were built from (2026-07-04) — call it
+  // directly, bridging `pending`'s `sourceTxId` casing exactly like
+  // `validateTransactions` above (uniffi records bypass serde's
+  // `#[serde(rename)]`, so the generated `SourceTxId` is plain camelCase).
+  #rnPending(pending: NodeCorePendingTx[]) {
+    return pending.map((p) => ({
+      sessionId: p.sessionId,
+      txIndex: p.txIndex,
+      sourceMadeAt: p.sourceMadeAt,
+      metaJson: p.metaJson,
+      sourceTxId: p.sourceTxId
+        ? { sessionId: p.sourceTxId.sessionID, txIndex: p.sourceTxId.txIndex }
+        : undefined,
+    }));
+  }
+
+  mapMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
+    return this.nodeCore.mapMaterialize(coId, this.#rnPending(pending));
+  }
+
+  mapGet(coId: string, key: string): string | undefined {
+    return this.nodeCore.mapGet(coId, key) ?? undefined;
+  }
+
+  mapGetAt(coId: string, key: string, atTime?: number): string | undefined {
+    return this.nodeCore.mapGetAt(coId, key, atTime) ?? undefined;
+  }
+
+  mapSnapshot(coId: string): string {
+    return this.nodeCore.mapSnapshot(coId);
+  }
+
+  mapDelta(coId: string, sinceVersion: number): string {
+    return this.nodeCore.mapDelta(coId, sinceVersion);
+  }
+
+  mapDeltaRich(coId: string, sinceVersion: number): string {
+    return this.nodeCore.mapDeltaRich(coId, sinceVersion);
+  }
+
+  mapGetAtFrontier(
+    coId: string,
+    key: string,
+    frontierJson: string,
+  ): string | undefined {
+    return this.nodeCore.mapGetAtFrontier(coId, key, frontierJson) ?? undefined;
+  }
+
+  mapSnapshotAtFrontier(coId: string, frontierJson: string): string {
+    return this.nodeCore.mapSnapshotAtFrontier(coId, frontierJson);
+  }
+
+  ingestAndMaterialize(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+    sinceVersion: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreIngestOutcome {
+    return this.nodeCore.ingestAndMaterialize(
+      coId,
+      sessionId,
+      signerId,
+      transactionsJson,
+      signature,
+      skipVerify,
+      sinceVersion,
+      this.#rnPending(pending),
+    );
+  }
+
+  missingKeyIds(coId: string): string[] {
+    return this.nodeCore.missingKeyIds(coId);
+  }
+
+  supportsNativeCoMapMaterialization(): boolean {
+    return true;
   }
 }

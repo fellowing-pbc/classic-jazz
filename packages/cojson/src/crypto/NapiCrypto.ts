@@ -29,6 +29,7 @@ import {
   KeySecret,
   NodeCoreGroupVerdict,
   NodeCoreImpl,
+  NodeCoreIngestOutcome,
   NodeCorePendingTx,
   NodeCoreVerdictDelta,
   Sealed,
@@ -706,5 +707,78 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
 
   provideKeySecret(keyId: string, keySecret: string): void {
     this.nodeCore.provideKeySecret(keyId, keySecret);
+  }
+
+  // === coMap materialization (stage 2b) ===
+  mapMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
+    return this.nodeCore.mapMaterialize(coId, pending.map(napiPendingTx));
+  }
+
+  mapGet(coId: string, key: string): string | undefined {
+    return this.nodeCore.mapGet(coId, key) ?? undefined;
+  }
+
+  mapGetAt(coId: string, key: string, atTime?: number): string | undefined {
+    return this.nodeCore.mapGetAt(coId, key, atTime) ?? undefined;
+  }
+
+  mapSnapshot(coId: string): string {
+    return this.nodeCore.mapSnapshot(coId);
+  }
+
+  mapDelta(coId: string, sinceVersion: number): string {
+    return this.nodeCore.mapDelta(coId, sinceVersion);
+  }
+
+  mapDeltaRich(coId: string, sinceVersion: number): string {
+    return this.nodeCore.mapDeltaRich(coId, sinceVersion);
+  }
+
+  mapGetAtFrontier(
+    coId: string,
+    key: string,
+    frontierJson: string,
+  ): string | undefined {
+    return this.nodeCore.mapGetAtFrontier(coId, key, frontierJson) ?? undefined;
+  }
+
+  mapSnapshotAtFrontier(coId: string, frontierJson: string): string {
+    return this.nodeCore.mapSnapshotAtFrontier(coId, frontierJson);
+  }
+
+  ingestAndMaterialize(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+    sinceVersion: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreIngestOutcome {
+    const outcome = this.nodeCore.ingestAndMaterialize(
+      coId,
+      sessionId,
+      signerId ?? undefined,
+      transactionsJson,
+      signature,
+      skipVerify,
+      sinceVersion,
+      pending.map(napiPendingTx),
+    );
+    return {
+      generation: outcome.generation,
+      count: outcome.count,
+      viewVersion: outcome.viewVersion,
+      deltaJson: outcome.deltaJson,
+    };
+  }
+
+  missingKeyIds(coId: string): string[] {
+    return this.nodeCore.missingKeyIds(coId);
+  }
+
+  supportsNativeCoMapMaterialization(): boolean {
+    return true;
   }
 }

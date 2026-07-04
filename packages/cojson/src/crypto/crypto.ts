@@ -444,6 +444,27 @@ export type NodeCoreVerdictDelta = {
 };
 
 /**
+ * The compact result of {@link NodeCoreImpl.ingestAndMaterialize} (R3 stage-2b):
+ * the ONLY payload that crosses the boundary per content chunk for a native-path
+ * coMap. Validation happens in-crate, so no per-transaction verdict array is
+ * marshalled.
+ *
+ *  - `generation`/`count` advance the caller's `validationCursor` (same cursor
+ *    the {@link NodeCoreVerdictDelta} protocol uses).
+ *  - `viewVersion` is the coMap view's monotonic version after materialization —
+ *    the delta cursor a `RawCoMap` passes as `sinceVersion` on its NEXT pull.
+ *  - `deltaJson` is the RICH delta `{version, reset, changedKeys}` (each
+ *    `changedKeys[k]` a full ordered `MapOp[]`), the payload a `RawCoMap`
+ *    rebuilds its `ops`/`latest` from.
+ */
+export type NodeCoreIngestOutcome = {
+  generation: number;
+  count: number;
+  viewVersion: number;
+  deltaJson: string;
+};
+
+/**
  * NodeCoreImpl - node-level registry of per-CoValue session state.
  * One instance per LocalNode; every method addresses a CoValue by its id.
  */
@@ -603,4 +624,81 @@ export interface NodeCoreImpl {
    * and is never handed back across the boundary (see `NodeCore::provide_key_secret`).
    */
   provideKeySecret(keyId: string, keySecret: string): void;
+
+  /**
+   * R3 stage-2b: native coMap materialization surface. The native side keeps a
+   * Rust-resident materialized view of every gated coMap (plain `comap` with a
+   * non-`group` ruleset); TS consumes it through the delta/frontier reads below
+   * instead of walking `getValidTransactions` in TS.
+   *
+   * Materialize (or incrementally refresh) `coId`'s coMap view against the
+   * currently-known valid transactions; returns the view's monotonic version.
+   * `pending` carries the same per-tx extras as {@link validateTransactions}
+   * (empty for the plain non-branched fast path).
+   */
+  mapMaterialize(coId: string, pending: NodeCorePendingTx[]): number;
+  /** Latest JSON-encoded value for `key` (undefined = absent). */
+  mapGet(coId: string, key: string): string | undefined;
+  /** JSON-encoded value for `key` at `atTime` (ms; omit for latest). */
+  mapGetAt(coId: string, key: string, atTime?: number): string | undefined;
+  /** Whole materialized map as a JSON object string. */
+  mapSnapshot(coId: string): string;
+  /** `{version, changedKeys, deletedKeys}` since `sinceVersion`, as JSON. */
+  mapDelta(coId: string, sinceVersion: number): string;
+  /**
+   * RICH delta `{version, reset, changedKeys}` since `sinceVersion`, as JSON —
+   * each `changedKeys[k]` the full ordered `MapOp[]` op-list for a changed key.
+   * `reset` tells the caller to clear and rebuild its `ops`/`latest` from the
+   * full delta; otherwise it patches the changed keys. See
+   * {@link NodeCoreIngestOutcome}.
+   */
+  mapDeltaRich(coId: string, sinceVersion: number): string;
+  /**
+   * Frontier read: latest frontier-visible value of `key` (undefined = absent).
+   * `frontierJson` is `{ sessionID: txCount }`.
+   */
+  mapGetAtFrontier(
+    coId: string,
+    key: string,
+    frontierJson: string,
+  ): string | undefined;
+  /** Frontier read: whole `{key: latestVisibleValue}` snapshot as JSON. */
+  mapSnapshotAtFrontier(coId: string, frontierJson: string): string;
+  /**
+   * R3 stage-2b single-call ingest: add a content chunk's transactions to the
+   * raw session log, validate them in-crate, and materialize the coMap view in
+   * ONE FFI crossing — returning the compact {@link NodeCoreIngestOutcome}. The
+   * raw session log is still written, so TS sync/storage (which read raw
+   * sessions) are unaffected. Error contract matches {@link addTransactions}
+   * (bad signature / deleted covalue / malformed tx JSON surface unchanged and
+   * leave no view mutation).
+   */
+  ingestAndMaterialize(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+    sinceVersion: number,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreIngestOutcome;
+  /**
+   * The `KeyID`s `coId`'s materialized view still needs a secret for (a private
+   * tx used a key not yet in the native key store). The caller resolves each in
+   * TS ({@link AvailableCoValueCore.getReadKey}), feeds it via
+   * {@link provideKeySecret}, and re-materializes.
+   */
+  missingKeyIds(coId: string): string[];
+
+  /**
+   * Whether this adapter's native binding actually exposes the stage-2b coMap
+   * materialization surface ({@link ingestAndMaterialize} & friends). The napi
+   * and wasm bindings always do; the React Native uniffi binding only does after
+   * an `ubrn` regeneration (like `validateTransactionsDelta`, the RN glue is a
+   * build product). When this is `false` the coMap receive path stays on the TS
+   * `getValidTransactions` materializer, so RN keeps working unchanged until its
+   * bindings are regenerated.
+   */
+  supportsNativeCoMapMaterialization(): boolean;
 }
