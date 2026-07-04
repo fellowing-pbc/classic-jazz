@@ -508,6 +508,7 @@ dependencies = [
  "blake3",
  "bs58",
  "cargo-tarpaulin",
+ "criterion",
  "crypto_secretbox",
  "ed25519-dalek",
  "indexmap 2.11.4",

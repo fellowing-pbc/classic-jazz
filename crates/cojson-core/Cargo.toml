@@ -22,3 +22,8 @@ indexmap = { version = "2.0", features = ["serde"] }
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["getrandom"] }
 cargo-tarpaulin = "0.32.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "known_state_combine"
+harness = false
