@@ -233,6 +233,19 @@ engine) and `validateGroup` is removed from the public surface then.
 
 ## Stage 3 — Unified `validateTransactions`
 
+**Status:** Implemented, napi-first. A single native `validateTransactions`
+dispatches on ruleset (`group`, `ownedByGroup`, `unsafeAllowAll`) behind the
+same capability gate and `COJSON_DISABLE_NATIVE_VALIDATION` kill switch as
+stage 2, with `resetValidation(coId)` replacing ad hoc TS-side cache
+invalidation and `validBranchPointerOnly` carrying the reader/branch-pointer
+outcome across the boundary; `validateGroup` is removed from the public
+surface, superseded by the unified entry point. wasm and RN stay on the TS
+path until their native ports land. What remains for full cleanup: wasm/RN
+native ports of `validateTransactions`/`roleOf`, and — once both land and the
+full suite passes on every provider — deletion of the TS rule logic,
+`MemberRoleResolver`, the stage-1 wasm/RN shims, and the `hasNativeValidation`
+gate, per "TypeScript deletion (end state)" below.
+
 ### Rust
 
 ```
