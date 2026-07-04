@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 /// Wire shape of a merged transaction's source identity: `{"sessionID": ...,
 /// "txIndex": ...}` — same field casing as `TransactionID`
-/// (`session_log.rs`), NOT plain camelCase (`sessionID`, capital ID).
+/// (`session_log.rs`): `sessionID` with a capital ID, not camelCase `sessionId`.
 #[derive(Debug, Clone, serde::Deserialize)]
 struct SourceTxIdWire {
     #[serde(rename = "sessionID")]
