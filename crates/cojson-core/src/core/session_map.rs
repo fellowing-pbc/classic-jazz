@@ -8,7 +8,42 @@ use crate::core::session_log::{SessionID, SessionLogInternal, Transaction, Trans
 use crate::core::CoJsonCoreError;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+
+/// Borrowed view of an incoming transaction for single-pass deserialization.
+/// String fields borrow directly from the source JSON when they contain no
+/// escapes (`Cow::Borrowed`), avoiding owned allocations over large payloads.
+#[derive(Deserialize)]
+struct TxIn<'a> {
+    #[serde(rename = "encryptedChanges", borrow, default)]
+    encrypted_changes: Option<Cow<'a, str>>,
+    #[serde(rename = "keyUsed", borrow, default)]
+    key_used: Option<Cow<'a, str>>,
+    #[serde(borrow, default)]
+    changes: Option<Cow<'a, str>>,
+    #[serde(rename = "madeAt")]
+    made_at: serde_json::Number,
+    #[serde(borrow, default)]
+    meta: Option<Cow<'a, str>>,
+    #[serde(borrow)]
+    privacy: Cow<'a, str>,
+}
+
+/// Pre-validated transaction ready to be staged, borrowing from the parsed batch.
+enum StagedTx<'a> {
+    Private {
+        encrypted_changes: &'a str,
+        key_used: &'a str,
+        made_at: u64,
+        meta: Option<&'a str>,
+    },
+    Trusting {
+        changes: &'a str,
+        made_at: u64,
+        meta: Option<&'a str>,
+    },
+}
 
 /// Result of creating a new transaction, containing the signature and transaction data
 #[derive(Debug, Clone)]
@@ -409,7 +444,62 @@ impl SessionMapImpl {
             return Err(SessionMapError::DeletedCoValue(self.co_id.0.clone()));
         }
 
-        let transactions: Vec<Transaction> = serde_json::from_str(transactions_json)?;
+        // Single-pass borrowed parse: strings borrow directly from
+        // `transactions_json` (Cow::Borrowed) except when they need unescaping.
+        let parsed: Vec<TxIn> = serde_json::from_str(transactions_json)?;
+
+        // Validate + convert the ENTIRE batch up front, before staging anything
+        // into the session log. This guarantees a mid-batch error (e.g. a bad
+        // made_at) can never leave stale entries in the pending staging area.
+        let mut staged: Vec<StagedTx> = Vec::with_capacity(parsed.len());
+        let mut total_size: usize = 0;
+        for tx in &parsed {
+            let made_at = tx.made_at.as_u64().ok_or_else(|| {
+                SessionMapError::InvalidTransaction(
+                    "Failed to convert made_at to u64".to_string(),
+                )
+            })?;
+
+            match tx.privacy.as_ref() {
+                "private" => {
+                    let encrypted_changes = tx.encrypted_changes.as_deref().ok_or_else(|| {
+                        SessionMapError::InvalidTransaction(
+                            "Private transaction missing encryptedChanges".to_string(),
+                        )
+                    })?;
+                    let key_used = tx.key_used.as_deref().ok_or_else(|| {
+                        SessionMapError::InvalidTransaction(
+                            "Private transaction missing keyUsed".to_string(),
+                        )
+                    })?;
+                    total_size += encrypted_changes.len();
+                    staged.push(StagedTx::Private {
+                        encrypted_changes,
+                        key_used,
+                        made_at,
+                        meta: tx.meta.as_deref(),
+                    });
+                }
+                "trusting" => {
+                    let changes = tx.changes.as_deref().ok_or_else(|| {
+                        SessionMapError::InvalidTransaction(
+                            "Trusting transaction missing changes".to_string(),
+                        )
+                    })?;
+                    total_size += changes.len();
+                    staged.push(StagedTx::Trusting {
+                        changes,
+                        made_at,
+                        meta: tx.meta.as_deref(),
+                    });
+                }
+                other => {
+                    return Err(SessionMapError::InvalidTransaction(format!(
+                        "Unknown transaction privacy: {other}"
+                    )));
+                }
+            }
+        }
 
         // Get or create session log
         let session_log = self
@@ -423,48 +513,20 @@ impl SessionMapImpl {
                 )
             });
 
-        // Calculate size of transactions being added (for in-between signature tracking)
-        let mut total_size: usize = 0;
-        for tx in &transactions {
-            let tx_size = match tx {
-                Transaction::Private(private_tx) => private_tx.encrypted_changes.value.len(),
-                Transaction::Trusting(trusting_tx) => trusting_tx.changes.len(),
-            };
-            total_size += tx_size;
-        }
-
-        // Add transactions to staging area
-        for tx in transactions.into_iter() {
-            match tx {
-                Transaction::Private(private_tx) => {
-                    session_log.add_existing_private_transaction(
-                        private_tx.encrypted_changes.value,
-                        private_tx.key_used.0,
-                        private_tx.made_at.as_u64().map_or_else(
-                            || {
-                                Err(SessionMapError::InvalidTransaction(
-                                    "Failed to convert made_at to u64".to_string(),
-                                ))
-                            },
-                            |u| Ok(u),
-                        )?,
-                        private_tx.meta.map(|m| m.value),
-                    )?;
-                }
-                Transaction::Trusting(trusting_tx) => {
-                    session_log.add_existing_trusting_transaction(
-                        trusting_tx.changes,
-                        trusting_tx.made_at.as_u64().map_or_else(
-                            || {
-                                Err(SessionMapError::InvalidTransaction(
-                                    "Failed to convert made_at to u64".to_string(),
-                                ))
-                            },
-                            |u| Ok(u),
-                        )?,
-                        trusting_tx.meta,
-                    )?;
-                }
+        // Stage the pre-validated batch (canonical serialization happens here).
+        for tx in &staged {
+            match *tx {
+                StagedTx::Private {
+                    encrypted_changes,
+                    key_used,
+                    made_at,
+                    meta,
+                } => session_log.stage_existing_private(encrypted_changes, key_used, made_at, meta),
+                StagedTx::Trusting {
+                    changes,
+                    made_at,
+                    meta,
+                } => session_log.stage_existing_trusting(changes, made_at, meta),
             }
         }
 
@@ -825,6 +887,51 @@ impl SessionMapImpl {
 
         Ok(session_log
             .decrypt_next_transaction_meta_json(tx_index, KeySecret(key_secret.to_string()))?)
+    }
+
+    /// Decrypt many transactions in one call. Returns a JSON array string where
+    /// element `i` is the decrypted changes JSON of `indices[i]`, or `null` if
+    /// that transaction could not be decrypted (missing, prefix mismatch, bad
+    /// base64, invalid UTF-8 after decrypt, etc. — a single bad tx must NOT fail
+    /// the batch).
+    ///
+    /// Returns `None` only if the session doesn't exist. The decrypted changes
+    /// are themselves JSON array texts and are embedded verbatim; plaintext is
+    /// not re-validated as JSON here (the JS side falls back to per-tx decrypt if
+    /// the combined parse fails).
+    pub fn decrypt_transactions(
+        &self,
+        session_id: &str,
+        indices: &[u32],
+        key_secret: &str,
+    ) -> Option<String> {
+        let session_log = self.sessions.get(session_id)?;
+        let key_secret = KeySecret(key_secret.to_string());
+
+        // Preallocate: sum of stored tx JSON lengths (an upper bound on the
+        // decrypted sizes) + separators + brackets.
+        let mut capacity = indices.len() + 2;
+        for &idx in indices {
+            if let Some(tx_json) = session_log.get_transaction(idx as usize) {
+                capacity += tx_json.len();
+            } else {
+                capacity += 4; // "null"
+            }
+        }
+
+        let mut out = String::with_capacity(capacity);
+        out.push('[');
+        for (i, &idx) in indices.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            match session_log.decrypt_next_transaction_changes_json(idx, key_secret.clone()) {
+                Ok(decrypted) => out.push_str(&decrypted),
+                Err(_) => out.push_str("null"),
+            }
+        }
+        out.push(']');
+        Some(out)
     }
 }
 
@@ -1280,5 +1387,100 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    // ========================================================================
+    // Batch decrypt + up-front-parse atomicity tests
+    // ========================================================================
+
+    /// Build a session map with `n` private transactions whose plaintext changes
+    /// are `["v0"]`, `["v1"]`, ... Returns (map, session_id, key_secret).
+    fn map_with_private_txs(n: usize) -> (SessionMapImpl, String, String) {
+        use crate::core::keys::SignerSecret;
+        use ed25519_dalek::SigningKey;
+        use rand_core::OsRng;
+
+        let mut map = create_test_session_map("co_test", TEST_HEADER);
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let signer_secret: SignerSecret = signing_key.into();
+        let key_secret = format!("keySecret_z{}", bs58::encode([9u8; 32]).into_string());
+        let key_id = "key_zTESTKEY".to_string();
+        let session_id = "co_test_session_zAAAAAAAAAAAA".to_string();
+
+        for i in 0..n {
+            let changes = format!(r#"["v{}"]"#, i);
+            map.make_new_private_transaction(
+                session_id.clone(),
+                signer_secret.0.clone(),
+                &changes,
+                key_id.clone(),
+                key_secret.clone(),
+                None,
+                1234567890 + i as u64,
+            )
+            .unwrap();
+        }
+
+        (map, session_id, key_secret)
+    }
+
+    #[test]
+    fn test_decrypt_transactions_batch() {
+        let (map, session_id, key_secret) = map_with_private_txs(3);
+
+        let out = map
+            .decrypt_transactions(&session_id, &[0, 1, 2], &key_secret)
+            .unwrap();
+        assert_eq!(out, r#"[["v0"],["v1"],["v2"]]"#);
+    }
+
+    #[test]
+    fn test_decrypt_transactions_bad_index_returns_null_in_position() {
+        let (map, session_id, key_secret) = map_with_private_txs(2);
+
+        // Index 99 doesn't exist -> null in that position, batch still succeeds.
+        let out = map
+            .decrypt_transactions(&session_id, &[0, 99, 1], &key_secret)
+            .unwrap();
+        assert_eq!(out, r#"[["v0"],null,["v1"]]"#);
+    }
+
+    #[test]
+    fn test_decrypt_transactions_nonexistent_session_returns_none() {
+        let (map, _session_id, key_secret) = map_with_private_txs(1);
+        assert!(map
+            .decrypt_transactions("no_such_session", &[0], &key_secret)
+            .is_none());
+    }
+
+    #[test]
+    fn test_pending_cleared_on_malformed_batch() {
+        // A batch where the second tx has a non-integer madeAt must be rejected
+        // WHOLESALE, leaving no session/pending state behind (up-front parse).
+        let mut map = create_test_session_map("co_test", TEST_HEADER);
+        let session_id = "co_test_session_zBBBBBBBBBBBB";
+        let bad_batch = r#"[
+            {"encryptedChanges":"encrypted_Uaaa","keyUsed":"key_z1","madeAt":1,"privacy":"private"},
+            {"encryptedChanges":"encrypted_Ubbb","keyUsed":"key_z1","madeAt":1.5,"privacy":"private"}
+        ]"#;
+
+        let result = map.add_transactions(session_id, None, bad_batch, "signature_zX", false);
+        assert!(result.is_err());
+
+        // No session should have been created, and certainly nothing committed.
+        assert!(map.get_transaction_count(session_id).is_none());
+    }
+
+    #[test]
+    fn test_add_transactions_missing_required_field_rejects_batch() {
+        let mut map = create_test_session_map("co_test", TEST_HEADER);
+        let session_id = "co_test_session_zCCCCCCCCCCCC";
+        // Private tx missing keyUsed.
+        let bad_batch =
+            r#"[{"encryptedChanges":"encrypted_Uaaa","madeAt":1,"privacy":"private"}]"#;
+
+        let result = map.add_transactions(session_id, None, bad_batch, "signature_zX", false);
+        assert!(result.is_err());
+        assert!(map.get_transaction_count(session_id).is_none());
     }
 }
