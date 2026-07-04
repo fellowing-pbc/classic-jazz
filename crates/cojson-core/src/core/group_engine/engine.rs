@@ -60,12 +60,28 @@ use crate::core::session_map::{CoValueHeader, JsonValue, RulesetDef, SessionMapE
 /// The `"everyone"` pseudo-member key (`EVERYONE`, group.ts:49).
 const EVERYONE: &str = "everyone";
 
+/// The three-way validation result a transaction can land in. Stage 3
+/// (`validateTransactions`) adds `ValidBranchPointerOnly` for the
+/// ownedByGroup reader branch-pointer special case (permissions.ts:124-137,
+/// not yet ported here — see `build_owned_by_group`'s note); every verdict
+/// produced by this module today is `Valid` or `Invalid`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerdictOutcome {
+    Valid,
+    Invalid,
+    ValidBranchPointerOnly,
+}
+
 /// A per-transaction validation verdict, in validation order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub session_id: String,
     pub tx_index: u32,
+    /// `outcome != VerdictOutcome::Invalid` — kept in sync with `outcome` at
+    /// every construction site so pre-stage-3 callers (and the stage-2
+    /// fixture tests, which assert on `valid`/`reason` only) are unaffected.
     pub valid: bool,
+    pub outcome: VerdictOutcome,
     /// Verbatim TS reason string when invalid; `None` when valid.
     pub reason: Option<String>,
 }
@@ -319,6 +335,7 @@ pub fn build_group_engine(
                     session_id: tx.session_id.clone(),
                     tx_index: tx.tx_index,
                     valid: true,
+                    outcome: VerdictOutcome::Valid,
                     reason: None,
                 });
             }
@@ -367,6 +384,7 @@ fn build_group_ruleset(
                     session_id: tx.session_id.clone(),
                     tx_index: tx.tx_index,
                     valid: true,
+                    outcome: VerdictOutcome::Valid,
                     reason: None,
                 });
             }};
@@ -375,6 +393,7 @@ fn build_group_ruleset(
                     session_id: tx.session_id.clone(),
                     tx_index: tx.tx_index,
                     valid: false,
+                    outcome: VerdictOutcome::Invalid,
                     reason: Some($reason.to_string()),
                 });
             }};
@@ -775,6 +794,7 @@ fn build_owned_by_group(
                 session_id: tx.session_id.clone(),
                 tx_index: tx.tx_index,
                 valid: true,
+                outcome: VerdictOutcome::Valid,
                 reason: None,
             });
         } else {
@@ -782,6 +802,7 @@ fn build_owned_by_group(
                 session_id: tx.session_id.clone(),
                 tx_index: tx.tx_index,
                 valid: false,
+                outcome: VerdictOutcome::Invalid,
                 reason: Some("Transactor has no write permissions".to_string()),
             });
         }

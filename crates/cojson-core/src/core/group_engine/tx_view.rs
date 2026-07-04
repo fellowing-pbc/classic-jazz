@@ -6,10 +6,14 @@
 //! comparator ported from `coValueCore.ts:1842-1855` (`compareTransactions`).
 //!
 //! The comparator orders by `effective_made_at` ascending; ties are broken by
-//! `tx_index` only WITHIN a session, and across sessions the original
-//! (session-insertion) order is preserved: Rust's `Vec::sort_by` is stable, so
-//! returning [`Equal`](core::cmp::Ordering::Equal) for cross-session ties keeps
-//! the iteration order established by [`collect_group_txs`]. The
+//! EFFECTIVE txIndex only within the same EFFECTIVE session (`txID =
+//! sourceTxID ?? currentTxID`, `coValueCore.ts:157-159`: a merged transaction's
+//! identity for tie-breaking is its SOURCE `(sessionID, txIndex)` when known,
+//! falling back to its stored `(session_id, tx_index)` otherwise), and across
+//! (effective) sessions the original (session-insertion) order is preserved:
+//! Rust's `Vec::sort_by` is stable, so returning
+//! [`Equal`](core::cmp::Ordering::Equal) for cross-session ties keeps the
+//! iteration order established by [`collect_group_txs`]. The
 //! `cross_session_ties` fixture exists precisely to pin this outcome.
 
 use crate::core::group_engine::classify::author_from_session_id;
@@ -17,14 +21,51 @@ use crate::core::session_log::Transaction;
 use crate::core::SessionMapImpl;
 use std::collections::HashMap;
 
+/// Wire shape of a merged transaction's source identity: `{"sessionID": ...,
+/// "txIndex": ...}` — same field casing as `TransactionID`
+/// (`session_log.rs`), NOT plain camelCase (`sessionID`, capital ID).
+#[derive(Debug, Clone, serde::Deserialize)]
+struct SourceTxIdWire {
+    #[serde(rename = "sessionID")]
+    session_id: String,
+    #[serde(rename = "txIndex")]
+    tx_index: u32,
+}
+
+/// Deserializes the optional `sourceTxId: {"sessionID", "txIndex"}` wire
+/// object into `Option<(String, u32)>`.
+fn deserialize_source_tx_id<'de, D>(
+    deserializer: D,
+) -> Result<Option<(String, u32)>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let wire: Option<SourceTxIdWire> = serde::Deserialize::deserialize(deserializer)?;
+    Ok(wire.map(|w| (w.session_id, w.tx_index)))
+}
+
 /// Extra per-transaction info the sync/merge layer supplies (merge-meta
-/// derived source times). Looked up by `(session_id, tx_index)` inside
+/// derived source times, decrypted meta, and merged-transaction source
+/// identity). Looked up by `(session_id, tx_index)` inside
 /// [`collect_group_txs`].
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingTxIn {
     pub session_id: String,
     pub tx_index: u32,
+    #[serde(default)]
     pub source_made_at: Option<u64>,
+    /// Decrypted meta JSON for this pending tx (plaintext string; the sync/
+    /// merge layer decrypts private-tx meta before this point). Takes
+    /// precedence over the TRUSTING tx's own wire `meta` field when building
+    /// [`GroupTxView::meta`].
+    #[serde(default)]
+    pub meta_json: Option<String>,
+    /// Merged-transaction source identity: `(sourceTxId.sessionID,
+    /// sourceTxId.txIndex)`. Wire shape: `{"sourceTxId": {"sessionID": ...,
+    /// "txIndex": ...}}`.
+    #[serde(default, deserialize_with = "deserialize_source_tx_id")]
+    pub source_tx_id: Option<(String, u32)>,
 }
 
 /// Privacy class of a transaction, derived from the wire [`Transaction`] variant.
@@ -55,22 +96,33 @@ pub struct GroupTxView {
     /// valid JSON array — valid cojson producers always stringify a real array,
     /// so the latter does not occur for stored state.
     pub changes: Option<Vec<serde_json::Value>>,
+    /// Parsed meta, when available: the pending tx's decrypted
+    /// [`PendingTxIn::meta_json`] takes precedence; otherwise, for a TRUSTING
+    /// tx, its own plaintext wire `meta` field; otherwise `None` (private tx
+    /// with no supplied pending meta — the meta is encrypted/opaque here).
+    pub meta: Option<serde_json::Value>,
+    /// Source session id of a merged transaction (`sourceTxId.sessionID`),
+    /// when supplied by `pending_info`. `None` for a transaction that is not a
+    /// merge result — its identity IS its stored `(session_id, tx_index)`.
+    pub source_session_id: Option<String>,
+    /// Source tx index of a merged transaction (`sourceTxId.txIndex`); always
+    /// present together with [`GroupTxView::source_session_id`].
+    pub source_tx_index: Option<u32>,
 }
 
 /// Collect every transaction of `sm` into views, in session-insertion order,
 /// `tx_index` ascending within each session. Each transaction JSON is parsed
-/// exactly once. `pending_info` supplies optional source times keyed by
-/// `(session_id, tx_index)`; see [`GroupTxView::effective_made_at`].
+/// exactly once. `pending_info` supplies optional source times, decrypted
+/// meta, and merge source identity, keyed by `(session_id, tx_index)`; see
+/// [`GroupTxView::effective_made_at`], [`GroupTxView::meta`],
+/// [`GroupTxView::source_session_id`].
 pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> Vec<GroupTxView> {
-    // Keyed source-time lookup. Only entries that carry a source time
-    // participate; their absence falls back to the tx's own madeAt — matching
-    // `source_made_at.unwrap_or(current_made_at)`.
-    let source_times: HashMap<(&str, u32), u64> = pending_info
+    // Keyed pending lookup — one entry per `(session_id, tx_index)` that the
+    // sync/merge layer supplied extra info for. Absence falls back to the
+    // tx's own stored fields everywhere below.
+    let pending_by_key: HashMap<(&str, u32), &PendingTxIn> = pending_info
         .iter()
-        .filter_map(|p| {
-            p.source_made_at
-                .map(|t| ((p.session_id.as_str(), p.tx_index), t))
-        })
+        .map(|p| ((p.session_id.as_str(), p.tx_index), p))
         .collect();
 
     let mut views = Vec::new();
@@ -83,25 +135,39 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
             let tx: Transaction = serde_json::from_str(tx_json)
                 .expect("stored transaction JSON must re-parse as Transaction");
 
-            let (privacy, current_made_at, changes) = match tx {
+            let (privacy, current_made_at, changes, trusting_meta) = match tx {
                 Transaction::Trusting(t) => {
                     // Cojson producers always stringify a valid JSON array; a
                     // parse failure is defensive only (treated as no usable
                     // changes, which downstream validation will reject).
                     let changes = serde_json::from_str(&t.changes).ok();
                     let made_at = t.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Trusting, made_at, changes)
+                    (Privacy::Trusting, made_at, changes, t.meta)
                 }
                 Transaction::Private(p) => {
                     let made_at = p.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Private, made_at, None)
+                    (Privacy::Private, made_at, None, None)
                 }
             };
 
-            let effective_made_at = source_times
-                .get(&(session_id, tx_index as u32))
-                .copied()
+            let pending = pending_by_key.get(&(session_id, tx_index as u32)).copied();
+
+            let effective_made_at = pending
+                .and_then(|p| p.source_made_at)
                 .unwrap_or(current_made_at);
+
+            // Pending (decrypted) meta takes precedence over the trusting tx's
+            // own wire meta; either way, an unparseable meta string is treated
+            // as no meta (defensive — real producers always emit valid JSON).
+            let meta = pending
+                .and_then(|p| p.meta_json.as_deref())
+                .or(trusting_meta.as_deref())
+                .and_then(|s| serde_json::from_str(s).ok());
+
+            let (source_session_id, source_tx_index) = match pending.and_then(|p| p.source_tx_id.clone()) {
+                Some((sid, idx)) => (Some(sid), Some(idx)),
+                None => (None, None),
+            };
 
             views.push(GroupTxView {
                 session_id: session_id.to_string(),
@@ -111,6 +177,9 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
                 effective_made_at,
                 privacy,
                 changes,
+                meta,
+                source_session_id,
+                source_tx_index,
             });
         }
     }
@@ -119,17 +188,30 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
 
 /// `compareTransactions` port (`coValueCore.ts:1842-1855`) + STABLE sort.
 ///
-/// `effective_made_at` ascending; on ties, same-session pairs order by
-/// `tx_index`, cross-session pairs compare [`Equal`](core::cmp::Ordering::Equal)
-/// so the stable sort preserves the session-insertion order built by
-/// [`collect_group_txs`].
+/// `effective_made_at` ascending. On ties, the comparison uses each side's
+/// EFFECTIVE identity — `txID = sourceTxID ?? currentTxID`
+/// (`coValueCore.ts:157-159`): effective session id is
+/// `source_session_id.unwrap_or(session_id)`, effective tx index is
+/// `source_tx_index.unwrap_or(tx_index)`. Same-effective-session pairs order
+/// by effective tx index; different-effective-session pairs compare
+/// [`Equal`](core::cmp::Ordering::Equal) so the stable sort preserves the
+/// session-insertion order built by [`collect_group_txs`]. For a transaction
+/// with no source identity this collapses to the original current-session-only
+/// rule.
 pub fn sort_for_validation(txs: &mut [GroupTxView]) {
     txs.sort_by(|a, b| {
         match a.effective_made_at.cmp(&b.effective_made_at) {
-            core::cmp::Ordering::Equal if a.session_id == b.session_id => {
-                a.tx_index.cmp(&b.tx_index)
+            core::cmp::Ordering::Equal => {
+                let a_session = a.source_session_id.as_deref().unwrap_or(&a.session_id);
+                let b_session = b.source_session_id.as_deref().unwrap_or(&b.session_id);
+                if a_session == b_session {
+                    let a_index = a.source_tx_index.unwrap_or(a.tx_index);
+                    let b_index = b.source_tx_index.unwrap_or(b.tx_index);
+                    a_index.cmp(&b_index)
+                } else {
+                    core::cmp::Ordering::Equal
+                }
             }
-            core::cmp::Ordering::Equal => core::cmp::Ordering::Equal,
             other => other,
         }
     });
@@ -170,11 +252,26 @@ pub(crate) mod fixtures {
         pub sessions: Vec<FixtureSession>,
     }
 
+    /// Wire shape of a merged verdict's source identity in fixtures — same
+    /// casing as the pending-tx wire shape (`sessionID`, capital ID).
+    #[allow(dead_code)]
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct FixtureSourceTxId {
+        #[serde(rename = "sessionID")]
+        pub session_id: String,
+        #[serde(rename = "txIndex")]
+        pub tx_index: u32,
+    }
+
     /// A per-transaction validation verdict, keyed by coId in
     /// [`FixtureFile::verdicts`]. The ORDER of a coId's verdict list is the
     /// expected validation order — `collect_group_txs` + `sort_for_validation`
     /// must reproduce it.
     /// Read by Task 4 (validation); kept here so the fixture parses fully.
+    /// The `outcome`/`sourceMadeAt`/`sourceTxId`/`metaJson` fields are the
+    /// stage-3 "rich verdict" extensions (see `merged_tx_ties` fixture); kept
+    /// optional so pre-stage-3 fixtures (with only `valid`/`reason`) still
+    /// parse.
     #[allow(dead_code)]
     #[derive(Debug, Clone, Deserialize)]
     pub struct FixtureVerdict {
@@ -184,6 +281,14 @@ pub(crate) mod fixtures {
         pub tx_index: u32,
         pub valid: bool,
         pub reason: Option<String>,
+        #[serde(default)]
+        pub outcome: Option<String>,
+        #[serde(rename = "sourceMadeAt", default)]
+        pub source_made_at: Option<u64>,
+        #[serde(rename = "sourceTxId", default)]
+        pub source_tx_id: Option<FixtureSourceTxId>,
+        #[serde(rename = "metaJson", default)]
+        pub meta_json: Option<String>,
     }
 
     /// Read by Task 4 (role resolution); kept here so the fixture parses fully.
@@ -368,6 +473,9 @@ mod tests {
                 effective_made_at,
                 privacy: Privacy::Trusting,
                 changes: Some(vec![]),
+                meta: None,
+                source_session_id: None,
+                source_tx_index: None,
             }
         }
 
@@ -414,6 +522,8 @@ mod tests {
             session_id: b_session.to_string(),
             tx_index: 0,
             source_made_at: Some(1_800_000_000_000),
+            meta_json: None,
+            source_tx_id: None,
         }];
         let mut views = collect_group_txs(&sm, &pending);
         sort_for_validation(&mut views);
@@ -427,6 +537,124 @@ mod tests {
         assert_eq!(
             views.last().unwrap().session_id, b_session,
             "later effective time sorts last"
+        );
+    }
+
+    /// Source-identity tie-break (porter note 9 / `coValueCore.ts:157-159`,
+    /// `txID = sourceTxID ?? currentTxID`): two transactions stored in
+    /// DIFFERENT current sessions, both merged from the SAME source session,
+    /// at equal `effective_made_at` — the tie must be broken by SOURCE
+    /// txIndex, not left `Equal` (which the old current-session-only rule
+    /// would do, since `a.session_id != b.session_id`).
+    #[test]
+    fn sort_for_validation_source_identity_tie_break() {
+        fn view(
+            session: &str,
+            tx_index: u32,
+            source_session: &str,
+            source_tx_index: u32,
+        ) -> GroupTxView {
+            GroupTxView {
+                session_id: session.to_string(),
+                tx_index,
+                author: author_from_session_id(session).to_string(),
+                current_made_at: 500,
+                effective_made_at: 500,
+                privacy: Privacy::Trusting,
+                changes: Some(vec![]),
+                meta: None,
+                source_session_id: Some(source_session.to_string()),
+                source_tx_index: Some(source_tx_index),
+            }
+        }
+
+        // Both stored in different CURRENT sessions, both merged from the same
+        // source session; source txIndex 3 must sort after source txIndex 1,
+        // even though inserted here in the opposite (reverse) order.
+        let mut txs = vec![
+            view("co_a_current_session", 5, "co_shared_source_session", 3),
+            view("co_b_current_session", 2, "co_shared_source_session", 1),
+        ];
+        sort_for_validation(&mut txs);
+
+        let order: Vec<u32> = txs.iter().map(|t| t.source_tx_index.unwrap()).collect();
+        assert_eq!(
+            order,
+            vec![1, 3],
+            "same-source-session tie orders by SOURCE txIndex, not current (session, txIndex)"
+        );
+    }
+
+    /// Meta precedence: pending's decrypted `meta_json` overrides a TRUSTING
+    /// tx's own wire `meta` field when both are present.
+    #[test]
+    fn pending_meta_overrides_trusting_wire_meta() {
+        let fix = fixtures::FixtureFile::load("merged_tx_ties");
+        let cov = &fix.covalues[0];
+        assert_eq!(cov.co_id, "co_zSKK5oFqS8LcD3Rj14nYJQf5S6B");
+        let sm = fixtures::build_session_map(cov);
+
+        // txIndex 2 is a trusting tx whose wire `meta` is
+        // `{"mi":1,"t":10000,"s":...,"b":...}` (see the fixture file).
+        let no_pending = collect_group_txs(&sm, &[]);
+        let wire_meta = no_pending[2]
+            .meta
+            .clone()
+            .expect("trusting wire meta parses");
+        assert_eq!(wire_meta["mi"], 1, "wire meta read when no pending meta");
+
+        let session_id = &no_pending[2].session_id;
+        let pending = vec![PendingTxIn {
+            session_id: session_id.clone(),
+            tx_index: 2,
+            source_made_at: None,
+            meta_json: Some(r#"{"mi":999,"overridden":true}"#.to_string()),
+            source_tx_id: None,
+        }];
+        let with_pending = collect_group_txs(&sm, &pending);
+        let overridden_meta = with_pending[2]
+            .meta
+            .clone()
+            .expect("pending meta parses");
+        assert_eq!(
+            overridden_meta["mi"], 999,
+            "pending meta_json overrides the trusting tx's own wire meta"
+        );
+        assert_eq!(overridden_meta["overridden"], true);
+    }
+
+    /// `merged_tx_ties` fixture parses fully, including the stage-3 "rich
+    /// verdict" fields (`outcome`, `sourceMadeAt`, `sourceTxId`, `metaJson`)
+    /// that Task 3 will consume.
+    #[test]
+    fn merged_tx_ties_fixture_parses_rich_verdict_fields() {
+        let fix = fixtures::FixtureFile::load("merged_tx_ties");
+        let verdicts = fix
+            .verdicts
+            .get("co_zSKK5oFqS8LcD3Rj14nYJQf5S6B")
+            .expect("merged_tx_ties verdicts present");
+        assert_eq!(verdicts.len(), 5);
+
+        assert_eq!(verdicts[0].outcome.as_deref(), Some("valid"));
+        assert!(verdicts[0].source_tx_id.is_none());
+        assert!(verdicts[0].meta_json.is_none());
+
+        assert_eq!(
+            verdicts[1].meta_json.as_deref(),
+            Some(r#"{"branch":"feature-branch","ownerId":"co_zQRoiJcPP4nRGqf8bnMWoxYJkZH"}"#)
+        );
+
+        let tx2 = &verdicts[2];
+        assert_eq!(tx2.source_made_at, Some(1_700_000_010_000));
+        let source_tx_id = tx2.source_tx_id.as_ref().expect("sourceTxId present");
+        assert_eq!(source_tx_id.tx_index, 1);
+        assert!(source_tx_id.session_id.contains("_session_zRRaQY3Uonxr"));
+        assert!(tx2.meta_json.as_deref().unwrap().contains("\"mi\":1"));
+
+        let tx3 = &verdicts[3];
+        assert_eq!(
+            tx3.source_tx_id.as_ref().expect("sourceTxId present").tx_index,
+            2
         );
     }
 }

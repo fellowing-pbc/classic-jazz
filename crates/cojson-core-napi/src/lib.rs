@@ -718,6 +718,10 @@ impl NodeCore {
         session_id: p.session_id,
         tx_index: p.tx_index,
         source_made_at: p.source_made_at.map(|v| v as u64),
+        // Not yet exposed on the `PendingTx` napi binding — stage 3 plumbs
+        // decrypted meta and merge source identity through from JS.
+        meta_json: None,
+        source_tx_id: None,
       })
       .collect();
     let verdicts = self
