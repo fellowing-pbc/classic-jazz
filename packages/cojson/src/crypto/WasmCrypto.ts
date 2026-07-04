@@ -720,4 +720,8 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
   resetValidation(coId: string): void {
     this.nodeCore.resetValidation(coId);
   }
+
+  provideKeySecret(keyId: string, keySecret: string): void {
+    this.nodeCore.provideKeySecret(keyId, keySecret);
+  }
 }

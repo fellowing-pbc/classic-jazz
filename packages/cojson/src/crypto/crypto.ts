@@ -561,4 +561,14 @@ export interface NodeCoreImpl {
    * is a no-op, not an error.
    */
   resetValidation(coId: string): void;
+
+  /**
+   * R1 (experimental): feed a resolved `KeyID -> KeySecret` to the native key
+   * store so Rust can decrypt that key's PRIVATE transactions during coMap
+   * materialization. TS keeps ownership of key MANAGEMENT (unsealing, rotation,
+   * revelation chains) and calls this once it has resolved a read key. Idempotent
+   * — re-providing the same secret is a no-op. The secret enters native memory
+   * and is never handed back across the boundary (see `NodeCore::provide_key_secret`).
+   */
+  provideKeySecret(keyId: string, keySecret: string): void;
 }
