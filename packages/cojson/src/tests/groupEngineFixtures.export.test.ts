@@ -337,12 +337,12 @@ describe("group engine fixtures", () => {
     const group = expectGroup(groupCore.getCurrentContent());
 
     // first transaction of the group is the initial-admin self-promotion
-    group.set(adminID as any, "admin", "trusting");
+    (group.set as any)(adminID, "admin", "trusting");
 
     // a non-initialAdmin attempting the very same self-promotion → invalid
     const other = freshAgent();
     await actAs(node, groupCore.id, other.controlled, (g) => {
-      g.set(other.id as any, "admin", "trusting");
+      (g.set as any)(other.id, "admin", "trusting");
     });
 
     const fixture = exportScenario("initial_admin_self_promotion", node, {
@@ -374,7 +374,7 @@ describe("group engine fixtures", () => {
 
     // reader revokes themselves — valid even without admin role
     await actAs(node, group.id, reader, (g) => {
-      g.set(reader.id as any, "revoked", "trusting");
+      (g.set as any)(reader.id, "revoked", "trusting");
     });
 
     const fixture = exportScenario("self_revoke", node, {
@@ -437,14 +437,14 @@ describe("group engine fixtures", () => {
 
     for (const c of cases) {
       const invite = freshAgent();
-      group.set(invite.id as any, c.kind, "trusting");
+      (group.set as any)(invite.id, c.kind, "trusting");
 
       const correctTarget = freshAgent();
       const wrongTarget = freshAgent();
 
       await actAs(node, group.id, invite.controlled, (g) => {
-        g.set(correctTarget.id as any, c.correct, "trusting"); // valid
-        g.set(wrongTarget.id as any, c.wrong, "trusting"); // invalid
+        (g.set as any)(correctTarget.id, c.correct, "trusting"); // valid
+        (g.set as any)(wrongTarget.id, c.wrong, "trusting"); // invalid
       });
     }
 
@@ -472,11 +472,11 @@ describe("group engine fixtures", () => {
     group.addMember(writer, "writer" as any);
 
     // admin demotes another admin → invalid
-    group.set(otherAdmin.id as any, "writer", "trusting");
+    (group.set as any)(otherAdmin.id, "writer", "trusting");
     // admin demotes a writer → valid
-    group.set(writer.id as any, "reader", "trusting");
+    (group.set as any)(writer.id, "reader", "trusting");
     // admin demotes self → valid (must be last, self loses admin afterwards)
-    group.set(admin.id as any, "writer", "trusting");
+    (group.set as any)(admin.id, "writer", "trusting");
 
     const fixture = exportScenario("admin_demotion_rules", node, {
       description:
@@ -509,11 +509,11 @@ describe("group engine fixtures", () => {
     const writerTarget = freshAgent();
 
     await actAs(node, group.id, manager, (g) => {
-      g.set(otherAdmin.id as any, "writer", "trusting"); // demote admin → invalid
-      g.set(promoteTarget.id as any, "admin", "trusting"); // promote to admin → invalid
-      g.set(adminInviteTarget.id as any, "adminInvite", "trusting"); // invite admin → invalid
-      g.set(managerInviteTarget.id as any, "managerInvite", "trusting"); // invite manager → invalid
-      g.set(writerTarget.id as any, "writer", "trusting"); // add writer → valid
+      (g.set as any)(otherAdmin.id, "writer", "trusting"); // demote admin → invalid
+      (g.set as any)(promoteTarget.id, "admin", "trusting"); // promote to admin → invalid
+      (g.set as any)(adminInviteTarget.id, "adminInvite", "trusting"); // invite admin → invalid
+      (g.set as any)(managerInviteTarget.id, "managerInvite", "trusting"); // invite manager → invalid
+      (g.set as any)(writerTarget.id, "writer", "trusting"); // add writer → valid
     });
 
     const fixture = exportScenario("manager_rules", node, {
@@ -549,31 +549,31 @@ describe("group engine fixtures", () => {
 
       // give the members roles
       vi.setSystemTime(1_700_000_001_000);
-      group.set(writeOnly.id as any, "writeOnly", "trusting");
+      (group.set as any)(writeOnly.id, "writeOnly", "trusting");
       vi.setSystemTime(1_700_000_002_000);
-      group.set(invite.id as any, "writeOnlyInvite", "trusting");
+      (group.set as any)(invite.id, "writeOnlyInvite", "trusting");
 
       // (a) writeOnly member sets their OWN write key first → valid
       vi.setSystemTime(1_700_000_003_000);
       await actAs(node, group.id, writeOnly.controlled, (g) => {
-        g.set(`writeKeyFor_${writeOnly.id}` as any, k1, "trusting");
+        (g.set as any)(`writeKeyFor_${writeOnly.id}`, k1, "trusting");
       });
 
       // (b) a writeOnlyInvite tries to override the existing write key → invalid
       vi.setSystemTime(1_700_000_004_000);
       await actAs(node, group.id, invite.controlled, (g) => {
-        g.set(`writeKeyFor_${writeOnly.id}` as any, k2, "trusting");
+        (g.set as any)(`writeKeyFor_${writeOnly.id}`, k2, "trusting");
       });
 
       // (c) an admin overrides the existing write key → valid
       vi.setSystemTime(1_700_000_005_000);
-      group.set(`writeKeyFor_${writeOnly.id}` as any, k3, "trusting");
+      (group.set as any)(`writeKeyFor_${writeOnly.id}`, k3, "trusting");
 
       // (d) writeOnly member reveals their own write key secret → valid
       vi.setSystemTime(1_700_000_006_000);
       await actAs(node, group.id, writeOnly.controlled, (g) => {
-        g.set(
-          `${k3}_for_${writeOnly.id}` as any,
+        (g.set as any)(
+          `${k3}_for_${writeOnly.id}`,
           "revelation_dummy",
           "trusting",
         );
@@ -612,12 +612,12 @@ describe("group engine fixtures", () => {
 
     // admin can set the group-level key fields
     group.set("readKey", rk, "trusting");
-    group.set("groupSealer", "sealer_zDUMMYGROUPSEALER", "trusting");
-    group.set("profile", "co_zDUMMYPROFILE", "trusting");
-    group.set("root", "co_zDUMMYROOT", "trusting");
+    group.set("groupSealer", "sealer_zDUMMYGROUPSEALER" as any, "trusting");
+    group.set("profile", "co_zDUMMYPROFILE" as any, "trusting");
+    group.set("root", "co_zDUMMYROOT" as any, "trusting");
     // admin can reveal a key_for field
-    group.set(
-      `${rk}_for_${targetAcct.id}` as any,
+    (group.set as any)(
+      `${rk}_for_${targetAcct.id}`,
       "revelation_admin",
       "trusting",
     );
@@ -625,9 +625,9 @@ describe("group engine fixtures", () => {
     // writer cannot set any of the admin-only key fields
     await actAs(node, group.id, writer, (g) => {
       g.set("readKey", keyId(), "trusting");
-      g.set("groupSealer", "sealer_zDUMMY2", "trusting");
-      g.set("profile", "co_zDUMMY2", "trusting");
-      g.set("root", "co_zDUMMY2", "trusting");
+      g.set("groupSealer", "sealer_zDUMMY2" as any, "trusting");
+      g.set("profile", "co_zDUMMY2" as any, "trusting");
+      g.set("root", "co_zDUMMY2" as any, "trusting");
     });
 
     // each invite kind can reveal key_for fields
@@ -639,11 +639,11 @@ describe("group engine fixtures", () => {
       "writeOnlyInvite",
     ]) {
       const invite = freshAgent();
-      group.set(invite.id as any, kind, "trusting");
+      (group.set as any)(invite.id, kind, "trusting");
       const revealTarget = freshAgent();
       await actAs(node, group.id, invite.controlled, (g) => {
-        g.set(
-          `${rk}_for_${revealTarget.id}` as any,
+        (g.set as any)(
+          `${rk}_for_${revealTarget.id}`,
           `revelation_${kind}`,
           "trusting",
         );
@@ -876,7 +876,7 @@ describe("group engine fixtures", () => {
     const { node, group } = newGroupHighLevel();
 
     // raw self-extension (the high-level extend() short-circuits self-extension)
-    group.set(`parent_${group.id}` as any, "extend", "trusting");
+    (group.set as any)(`parent_${group.id}`, "extend", "trusting");
 
     const fixture = exportScenario("self_extension_cycle", node, {
       description: "a group cannot extend itself (circular dependency)",
@@ -989,10 +989,10 @@ describe("group engine fixtures", () => {
 
       // two different admins assign conflicting roles at the SAME madeAt
       await actAs(node, group.id, adminA, (g) => {
-        g.set(target.id as any, "writer", "trusting");
+        (g.set as any)(target.id, "writer", "trusting");
       });
       await actAs(node, group.id, adminB, (g) => {
-        g.set(target.id as any, "reader", "trusting");
+        (g.set as any)(target.id, "reader", "trusting");
       });
 
       const fixture = exportScenario("cross_session_ties", node, {
