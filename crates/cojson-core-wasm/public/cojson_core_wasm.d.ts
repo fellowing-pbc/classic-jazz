@@ -2,69 +2,6 @@
 /* eslint-disable */
 export function init(): void;
 /**
- * WASM-exposed function for unsealing a message using X25519 + XSalsa20-Poly1305.
- * Provides authenticated decryption with perfect forward secrecy.
- * - `sealed_message`: The sealed bytes to decrypt
- * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
- * - `sender_id`: Base58-encoded sender's public key with "sealer_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
- * Returns unsealed bytes or throws JsError if unsealing fails.
- */
-export function unseal(sealed_message: Uint8Array, recipient_secret: string, sender_id: string, nonce_material: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function for sealing a message for a group (anonymous box pattern).
- * Uses an ephemeral key pair, so no sender authentication is provided.
- * - `message`: Raw bytes to seal
- * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix (the group's sealer)
- * - `nonce_material`: Raw bytes used to generate the nonce
- * Returns ephemeral_public_key (32 bytes) || ciphertext, or throws JsError if sealing fails.
- */
-export function sealForGroup(message: Uint8Array, recipient_id: string, nonce_material: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.
- * Provides authenticated encryption with perfect forward secrecy.
- * - `message`: Raw bytes to seal
- * - `sender_secret`: Base58-encoded sender's private key with "sealerSecret_z" prefix
- * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce
- * Returns sealed bytes or throws JsError if sealing fails.
- */
-export function seal(message: Uint8Array, sender_secret: string, recipient_id: string, nonce_material: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function for unsealing a message sealed for a group (anonymous box pattern).
- * Extracts the ephemeral public key and decrypts the message.
- * - `sealed_message`: ephemeral_public_key (32 bytes) || ciphertext
- * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
- * Returns unsealed bytes or throws JsError if unsealing fails.
- */
-export function unsealForGroup(sealed_message: Uint8Array, recipient_secret: string, nonce_material: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function to derive a sealer ID from a sealer secret.
- * - `secret`: Raw bytes of the sealer secret
- * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
- */
-export function getSealerId(secret: Uint8Array): string;
-/**
- * Generate a new X25519 private key using secure random number generation.
- * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
- * This key can be reused for multiple Diffie-Hellman exchanges.
- */
-export function newX25519PrivateKey(): Uint8Array;
-/**
- * WASM-exposed function to derive an X25519 public key from a private key.
- * - `private_key`: 32 bytes of private key material
- * Returns 32 bytes of public key material or throws JsError if key is invalid.
- */
-export function x25519PublicKey(private_key: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
- * - `private_key`: 32 bytes of private key material
- * - `public_key`: 32 bytes of public key material
- * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
- */
-export function x25519DiffieHellman(private_key: Uint8Array, public_key: Uint8Array): Uint8Array;
-/**
  * WASM-exposed function to encrypt bytes with a key secret and nonce material.
  * - `value`: The raw bytes to encrypt
  * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
@@ -80,45 +17,6 @@ export function encrypt(value: Uint8Array, key_secret: string, nonce_material: U
  * Returns the decrypted bytes or throws a JsError if decryption fails.
  */
 export function decrypt(ciphertext: Uint8Array, key_secret: string, nonce_material: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function for XSalsa20 decryption without authentication.
- * - `key`: 32-byte key for decryption (must match encryption key)
- * - `nonce_material`: Raw bytes used to generate a 24-byte nonce (must match encryption)
- * - `ciphertext`: Encrypted bytes to decrypt
- * Returns the decrypted bytes or throws a JsError if decryption fails.
- * Note: This function does not provide authentication. Use decrypt_xsalsa20_poly1305 for authenticated decryption.
- */
-export function decryptXsalsa20(key: Uint8Array, nonce_material: Uint8Array, ciphertext: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function for XSalsa20 encryption without authentication.
- * - `key`: 32-byte key for encryption
- * - `nonce_material`: Raw bytes used to generate a 24-byte nonce via BLAKE3
- * - `plaintext`: Raw bytes to encrypt
- * Returns the encrypted bytes or throws a JsError if encryption fails.
- * Note: This function does not provide authentication. Use encrypt_xsalsa20_poly1305 for authenticated encryption.
- */
-export function encryptXsalsa20(key: Uint8Array, nonce_material: Uint8Array, plaintext: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function to sign a message using Ed25519.
- * - `message`: Raw bytes to sign
- * - `secret`: Raw Ed25519 signing key bytes
- * Returns base58-encoded signature with "signature_z" prefix or throws JsError if signing fails.
- */
-export function sign(message: Uint8Array, secret: Uint8Array): string;
-/**
- * WASM-exposed function to derive a signer ID from a signing key.
- * - `secret`: Raw Ed25519 signing key bytes
- * Returns base58-encoded verifying key with "signer_z" prefix or throws JsError if derivation fails.
- */
-export function getSignerId(secret: Uint8Array): string;
-/**
- * WASM-exposed function to verify an Ed25519 signature.
- * - `signature`: Raw signature bytes
- * - `message`: Raw bytes that were signed
- * - `id`: Raw Ed25519 verifying key bytes
- * Returns true if signature is valid, false otherwise, or throws JsError if verification fails.
- */
-export function verify(signature: Uint8Array, message: Uint8Array, id: Uint8Array): boolean;
 /**
  * Hash data once using BLAKE3.
  * - `data`: Raw bytes to hash
@@ -204,12 +102,231 @@ export function ed25519SigningKeyToPublic(signing_key: Uint8Array): Uint8Array;
  * Returns 32 bytes of verifying key material or throws JsError if key is invalid.
  */
 export function ed25519VerifyingKey(signing_key: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function to derive a sealer ID from a sealer secret.
+ * - `secret`: Raw bytes of the sealer secret
+ * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
+ */
+export function getSealerId(secret: Uint8Array): string;
+/**
+ * Generate a new X25519 private key using secure random number generation.
+ * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
+ * This key can be reused for multiple Diffie-Hellman exchanges.
+ */
+export function newX25519PrivateKey(): Uint8Array;
+/**
+ * WASM-exposed function to derive an X25519 public key from a private key.
+ * - `private_key`: 32 bytes of private key material
+ * Returns 32 bytes of public key material or throws JsError if key is invalid.
+ */
+export function x25519PublicKey(private_key: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
+ * - `private_key`: 32 bytes of private key material
+ * - `public_key`: 32 bytes of public key material
+ * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
+ */
+export function x25519DiffieHellman(private_key: Uint8Array, public_key: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for XSalsa20 decryption without authentication.
+ * - `key`: 32-byte key for decryption (must match encryption key)
+ * - `nonce_material`: Raw bytes used to generate a 24-byte nonce (must match encryption)
+ * - `ciphertext`: Encrypted bytes to decrypt
+ * Returns the decrypted bytes or throws a JsError if decryption fails.
+ * Note: This function does not provide authentication. Use decrypt_xsalsa20_poly1305 for authenticated decryption.
+ */
+export function decryptXsalsa20(key: Uint8Array, nonce_material: Uint8Array, ciphertext: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for XSalsa20 encryption without authentication.
+ * - `key`: 32-byte key for encryption
+ * - `nonce_material`: Raw bytes used to generate a 24-byte nonce via BLAKE3
+ * - `plaintext`: Raw bytes to encrypt
+ * Returns the encrypted bytes or throws a JsError if encryption fails.
+ * Note: This function does not provide authentication. Use encrypt_xsalsa20_poly1305 for authenticated encryption.
+ */
+export function encryptXsalsa20(key: Uint8Array, nonce_material: Uint8Array, plaintext: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for unsealing a message using X25519 + XSalsa20-Poly1305.
+ * Provides authenticated decryption with perfect forward secrecy.
+ * - `sealed_message`: The sealed bytes to decrypt
+ * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
+ * - `sender_id`: Base58-encoded sender's public key with "sealer_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
+ * Returns unsealed bytes or throws JsError if unsealing fails.
+ */
+export function unseal(sealed_message: Uint8Array, recipient_secret: string, sender_id: string, nonce_material: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for sealing a message for a group (anonymous box pattern).
+ * Uses an ephemeral key pair, so no sender authentication is provided.
+ * - `message`: Raw bytes to seal
+ * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix (the group's sealer)
+ * - `nonce_material`: Raw bytes used to generate the nonce
+ * Returns ephemeral_public_key (32 bytes) || ciphertext, or throws JsError if sealing fails.
+ */
+export function sealForGroup(message: Uint8Array, recipient_id: string, nonce_material: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.
+ * Provides authenticated encryption with perfect forward secrecy.
+ * - `message`: Raw bytes to seal
+ * - `sender_secret`: Base58-encoded sender's private key with "sealerSecret_z" prefix
+ * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce
+ * Returns sealed bytes or throws JsError if sealing fails.
+ */
+export function seal(message: Uint8Array, sender_secret: string, recipient_id: string, nonce_material: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function for unsealing a message sealed for a group (anonymous box pattern).
+ * Extracts the ephemeral public key and decrypts the message.
+ * - `sealed_message`: ephemeral_public_key (32 bytes) || ciphertext
+ * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
+ * Returns unsealed bytes or throws JsError if unsealing fails.
+ */
+export function unsealForGroup(sealed_message: Uint8Array, recipient_secret: string, nonce_material: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function to sign a message using Ed25519.
+ * - `message`: Raw bytes to sign
+ * - `secret`: Raw Ed25519 signing key bytes
+ * Returns base58-encoded signature with "signature_z" prefix or throws JsError if signing fails.
+ */
+export function sign(message: Uint8Array, secret: Uint8Array): string;
+/**
+ * WASM-exposed function to derive a signer ID from a signing key.
+ * - `secret`: Raw Ed25519 signing key bytes
+ * Returns base58-encoded verifying key with "signer_z" prefix or throws JsError if derivation fails.
+ */
+export function getSignerId(secret: Uint8Array): string;
+/**
+ * WASM-exposed function to verify an Ed25519 signature.
+ * - `signature`: Raw signature bytes
+ * - `message`: Raw bytes that were signed
+ * - `id`: Raw Ed25519 verifying key bytes
+ * Returns true if signature is valid, false otherwise, or throws JsError if verification fails.
+ */
+export function verify(signature: Uint8Array, message: Uint8Array, id: Uint8Array): boolean;
 export class Blake3Hasher {
   free(): void;
   constructor();
   clone(): Blake3Hasher;
   update(data: Uint8Array): void;
   finalize(): Uint8Array;
+}
+export class NodeCore {
+  free(): void;
+  /**
+   * Get the header as JSON
+   */
+  getHeader(co_id: string): string;
+  /**
+   * Check if this CoValue is deleted
+   */
+  isDeleted(co_id: string): boolean;
+  hasCoValue(co_id: string): boolean;
+  /**
+   * Check whether the CoValue still has pending streaming content.
+   */
+  isStreaming(co_id: string): boolean;
+  coValueCount(): number;
+  /**
+   * Creates or replaces; replacing drops the previous session state.
+   * Mirrors TS semantics where constructing a new VerifiedState for an
+   * already-known id creates a fresh SessionMap.
+   */
+  createCoValue(co_id: string, header_json: string, max_tx_size?: number | null, skip_verify?: boolean | null): void;
+  /**
+   * Get the known state as a native JavaScript object
+   */
+  getKnownState(co_id: string): any;
+  /**
+   * Get all session IDs as native array
+   */
+  getSessionIds(co_id: string): string[];
+  /**
+   * Get single transaction by index as JSON string (returns undefined if not found)
+   */
+  getTransaction(co_id: string, session_id: string, tx_index: number): string | undefined;
+  /**
+   * Mark this CoValue as deleted
+   */
+  markAsDeleted(co_id: string): void;
+  removeCoValue(co_id: string): boolean;
+  /**
+   * Add transactions to a session
+   */
+  addTransactions(co_id: string, session_id: string, signer_id: string | null | undefined, transactions_json: string, signature: string, skip_verify: boolean): void;
+  /**
+   * Drop the cached validation engine for `co_id`, forcing a full recompute
+   * on the next `validateTransactions` / `roleOf`. An absent `co_id` is a
+   * no-op (not `UnknownCoValue`): callers invoke this on dependants that may
+   * never have been registered on this node, so erroring would be hostile.
+   */
+  resetValidation(co_id: string): void;
+  /**
+   * Get last signature for a session (returns undefined if session not found)
+   */
+  getLastSignature(co_id: string, session_id: string): string | undefined;
+  /**
+   * Decrypt transaction changes
+   */
+  decryptTransaction(co_id: string, session_id: string, tx_index: number, key_secret: string): string | undefined;
+  /**
+   * Get signature after specific transaction index
+   */
+  getSignatureAfter(co_id: string, session_id: string, tx_index: number): string | undefined;
+  /**
+   * Get transaction count for a session (returns -1 if session not found)
+   */
+  getTransactionCount(co_id: string, session_id: string): number;
+  /**
+   * Validate a group/account CoValue; verdicts for ALL its transactions in
+   * validation order. `pending` is a `JsValue` array of `PendingTxWire`
+   * objects (see that struct's doc comment for the exact wire shape).
+   * Throws "Unknown CoValue: <id>" if `co_id` itself is not registered, and
+   * "CoValue not loaded: <id>" if a dependency (parent group / owning
+   * account) is missing.
+   */
+  validateTransactions(co_id: string, pending: any): any;
+  /**
+   * Decrypt transaction meta
+   */
+  decryptTransactionMeta(co_id: string, session_id: string, tx_index: number, key_secret: string): string | undefined;
+  /**
+   * Get transactions for a session from index as JSON strings (returns undefined if session not found)
+   */
+  getSessionTransactions(co_id: string, session_id: string, from_index: number): string[] | undefined;
+  /**
+   * Set streaming known state
+   */
+  setStreamingKnownState(co_id: string, streaming_json: string): void;
+  /**
+   * Create new private transaction (for local writes)
+   * Returns JSON: { signature: string, transaction: Transaction }
+   */
+  makeNewPrivateTransaction(co_id: string, session_id: string, signer_secret: string, changes_json: string, key_id: string, key_secret: string, meta_json: string | null | undefined, made_at: number): string;
+  /**
+   * Get the last signature checkpoint index (-1 if no checkpoints, undefined if session not found)
+   */
+  getLastSignatureCheckpoint(co_id: string, session_id: string): number | undefined;
+  /**
+   * Create new trusting transaction (for local writes)
+   * Returns JSON: { signature: string, transaction: Transaction }
+   */
+  makeNewTrustingTransaction(co_id: string, session_id: string, signer_secret: string, changes_json: string, meta_json: string | null | undefined, made_at: number): string;
+  /**
+   * Get the known state with streaming as a native JavaScript object
+   */
+  getKnownStateWithStreaming(co_id: string): any;
+  /**
+   * Create a new empty NodeCore registry (one LocalNode owns one instance).
+   */
+  constructor();
+  /**
+   * Role of member in group at time (ms). Returns the role string or null.
+   * Throws "Unknown CoValue: <id>" if `group_id` itself is not registered,
+   * and "CoValue not loaded: <id>" if a parent group / owning account is
+   * missing.
+   */
+  roleOf(group_id: string, member: string, at_time?: number | null): string | undefined;
 }
 export class SessionMap {
   free(): void;
@@ -306,7 +423,35 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_nodecore_free: (a: number, b: number) => void;
   readonly __wbg_sessionmap_free: (a: number, b: number) => void;
+  readonly nodecore_addTransactions: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
+  readonly nodecore_coValueCount: (a: number) => number;
+  readonly nodecore_createCoValue: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
+  readonly nodecore_decryptTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+  readonly nodecore_decryptTransactionMeta: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+  readonly nodecore_getHeader: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_getKnownState: (a: number, b: number, c: number) => [number, number, number];
+  readonly nodecore_getKnownStateWithStreaming: (a: number, b: number, c: number) => [number, number, number];
+  readonly nodecore_getLastSignature: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+  readonly nodecore_getLastSignatureCheckpoint: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly nodecore_getSessionIds: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_getSessionTransactions: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly nodecore_getSignatureAfter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly nodecore_getTransaction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly nodecore_getTransactionCount: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly nodecore_hasCoValue: (a: number, b: number, c: number) => number;
+  readonly nodecore_isDeleted: (a: number, b: number, c: number) => [number, number, number];
+  readonly nodecore_isStreaming: (a: number, b: number, c: number) => [number, number, number];
+  readonly nodecore_makeNewPrivateTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number) => [number, number, number, number];
+  readonly nodecore_makeNewTrustingTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number, number];
+  readonly nodecore_markAsDeleted: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_new: () => number;
+  readonly nodecore_removeCoValue: (a: number, b: number, c: number) => number;
+  readonly nodecore_resetValidation: (a: number, b: number, c: number) => void;
+  readonly nodecore_roleOf: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+  readonly nodecore_setStreamingKnownState: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+  readonly nodecore_validateTransactions: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly sessionmap_addTransactions: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
   readonly sessionmap_decryptTransaction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly sessionmap_decryptTransactionMeta: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
@@ -329,20 +474,7 @@ export interface InitOutput {
   readonly sessionmap_setStreamingKnownState: (a: number, b: number, c: number) => [number, number];
   readonly init: () => void;
   readonly decrypt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly decryptXsalsa20: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly encrypt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly encryptXsalsa20: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly getSealerId: (a: number, b: number) => [number, number, number, number];
-  readonly newX25519PrivateKey: () => [number, number];
-  readonly seal: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
-  readonly sealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly unseal: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
-  readonly unsealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly x25519DiffieHellman: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-  readonly x25519PublicKey: (a: number, b: number) => [number, number, number, number];
-  readonly getSignerId: (a: number, b: number) => [number, number, number, number];
-  readonly sign: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-  readonly verify: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
   readonly __wbg_blake3hasher_free: (a: number, b: number) => void;
   readonly blake3HashOnce: (a: number, b: number) => [number, number];
   readonly blake3HashOnceWithContext: (a: number, b: number, c: number, d: number) => [number, number];
@@ -361,6 +493,19 @@ export interface InitOutput {
   readonly ed25519VerifyingKeyFromBytes: (a: number, b: number) => [number, number, number, number];
   readonly newEd25519SigningKey: () => [number, number];
   readonly ed25519SigningKeySign: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly getSealerId: (a: number, b: number) => [number, number, number, number];
+  readonly newX25519PrivateKey: () => [number, number];
+  readonly x25519DiffieHellman: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly x25519PublicKey: (a: number, b: number) => [number, number, number, number];
+  readonly decryptXsalsa20: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly encryptXsalsa20: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly getSignerId: (a: number, b: number) => [number, number, number, number];
+  readonly seal: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+  readonly sealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly sign: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly unseal: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+  readonly unsealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly verify: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
