@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::core::co_map::{ensure_co_map, CoMapView};
 use crate::core::group_engine::engine::{
     role_of as engine_role_of, validate_transactions as engine_validate_transactions,
     GroupEngineState,
@@ -18,6 +19,10 @@ use crate::core::session_map::{SessionMapError, SessionMapImpl};
 pub struct NodeCore {
     covalues: HashMap<String, SessionMapImpl>,
     engines: HashMap<String, GroupEngineState>,
+    /// R0 coMap materialization (experimental): per-covalue materialized view,
+    /// keyed like `engines` by per-session tx-counts. A separate field so a
+    /// build can borrow `covalues`/`engines` while mutating this store.
+    co_maps: HashMap<String, CoMapView>,
 }
 
 impl NodeCore {
@@ -25,6 +30,7 @@ impl NodeCore {
         NodeCore {
             covalues: HashMap::new(),
             engines: HashMap::new(),
+            co_maps: HashMap::new(),
         }
     }
 
@@ -41,8 +47,9 @@ impl NodeCore {
         let session_map =
             SessionMapImpl::new_with_skip_verify(co_id, header_json, max_tx_size, skip_verify)?;
         self.covalues.insert(co_id.to_string(), session_map);
-        // Any cached engine for this id is now stale (fresh/replaced session map).
+        // Any cached engine/view for this id is now stale (fresh session map).
         self.engines.remove(co_id);
+        self.co_maps.remove(co_id);
         Ok(())
     }
 
@@ -53,6 +60,7 @@ impl NodeCore {
     /// Returns true if an entry was removed. Absent id is a no-op (false).
     pub fn remove_co_value(&mut self, co_id: &str) -> bool {
         self.engines.remove(co_id);
+        self.co_maps.remove(co_id);
         self.covalues.remove(co_id).is_some()
     }
 
@@ -74,7 +82,7 @@ impl NodeCore {
         if !self.covalues.contains_key(co_id) {
             return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
         }
-        let Self { covalues, engines } = self;
+        let Self { covalues, engines, co_maps: _ } = self;
         engine_validate_transactions(covalues, engines, co_id, pending)
     }
 
@@ -96,6 +104,103 @@ impl NodeCore {
     /// erroring would be hostile — same rationale as `remove_co_value`.
     pub fn reset_validation(&mut self, co_id: &str) {
         self.engines.remove(co_id);
+        // The materialized content view is derived from the verdicts, so drop it
+        // too — TS `resetParsedTransactions` likewise rebuilds content when a
+        // reset flips validity (coValueCore.ts:1349-1358).
+        self.co_maps.remove(co_id);
+    }
+
+    // === R0 coMap materialization (experimental) ===
+    // Three read-boundary candidates over a Rust-resident coMap view.
+    // `map_materialize` is the only mutating path (validate + build/append);
+    // the read methods (`map_get`, `map_get_at`, `map_snapshot`, `map_delta`)
+    // are `&self` and operate on the cached view — a prior `map_materialize`
+    // (or ingest) must have run. An unregistered primary coId is
+    // `UnknownCoValue`, matching `validate_transactions`/`role_of`.
+
+    /// Materialize (or incrementally refresh) `co_id`'s coMap view, returning its
+    /// current monotonic version. Call after each ingest batch.
+    pub fn map_materialize(
+        &mut self,
+        co_id: &str,
+        pending: &[PendingTxIn],
+    ) -> Result<u64, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let Self {
+            covalues,
+            engines,
+            co_maps,
+        } = self;
+        ensure_co_map(covalues, engines, co_maps, co_id, pending)
+    }
+
+    /// Boundary (a): latest value of `key` as a JSON string (`None` = absent /
+    /// deleted / not-yet-materialized).
+    pub fn map_get(&self, co_id: &str, key: &str) -> Result<Option<String>, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_maps
+            .get(co_id)
+            .and_then(|v| v.get(key))
+            .map(|val| val.to_string()))
+    }
+
+    /// Boundary (a): value of `key` at `at_time` (`None` = latest) as a JSON
+    /// string.
+    pub fn map_get_at(
+        &self,
+        co_id: &str,
+        key: &str,
+        at_time: Option<u64>,
+    ) -> Result<Option<String>, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_maps
+            .get(co_id)
+            .and_then(|v| v.get_at(key, at_time))
+            .map(|val| val.to_string()))
+    }
+
+    /// Boundary (b): whole materialized map `{key: latestValue}` as a JSON
+    /// string (empty object if not yet materialized).
+    pub fn map_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let snapshot = self
+            .co_maps
+            .get(co_id)
+            .map(|v| v.snapshot())
+            .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+        Ok(snapshot.to_string())
+    }
+
+    /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`
+    /// as a JSON string.
+    pub fn map_delta(
+        &self,
+        co_id: &str,
+        since_version: u64,
+    ) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let delta = self
+            .co_maps
+            .get(co_id)
+            .map(|v| v.delta(since_version))
+            .unwrap_or_else(|| serde_json::json!({
+                "version": 0,
+                "changedKeys": {},
+                "deletedKeys": [],
+            }));
+        Ok(delta.to_string())
     }
 
     /// Read-side role of `member` in group `group_id` at `at_time` (`None` =
@@ -114,7 +219,7 @@ impl NodeCore {
         if !self.covalues.contains_key(group_id) {
             return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
         }
-        let Self { covalues, engines } = self;
+        let Self { covalues, engines, co_maps: _ } = self;
         engine_role_of(covalues, engines, group_id, member, at_time)
     }
 
