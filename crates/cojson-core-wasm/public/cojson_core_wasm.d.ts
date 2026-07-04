@@ -236,6 +236,10 @@ export class NodeCore {
   mapSnapshot(co_id: string): string;
   coValueCount(): number;
   /**
+   * Whether a secret for `key_id` has been provided.
+   */
+  hasKeySecret(key_id: string): boolean;
+  /**
    * Creates or replaces; replacing drops the previous session state.
    * Mirrors TS semantics where constructing a new VerifiedState for an
    * already-known id creates a fresh SessionMap.
@@ -263,6 +267,10 @@ export class NodeCore {
    * Mark this CoValue as deleted
    */
   markAsDeleted(co_id: string): void;
+  /**
+   * The `KeyID`s `co_id`'s materialized view still needs a secret for.
+   */
+  missingKeyIds(co_id: string): string[];
   removeCoValue(co_id: string): boolean;
   /**
    * Add transactions to a session
@@ -279,6 +287,10 @@ export class NodeCore {
    * Get last signature for a session (returns undefined if session not found)
    */
   getLastSignature(co_id: string, session_id: string): string | undefined;
+  /**
+   * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+   */
+  provideKeySecret(key_id: string, key_secret: string): void;
   /**
    * Decrypt transaction changes
    */
@@ -463,6 +475,7 @@ export interface InitOutput {
   readonly nodecore_getTransaction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly nodecore_getTransactionCount: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
   readonly nodecore_hasCoValue: (a: number, b: number, c: number) => number;
+  readonly nodecore_hasKeySecret: (a: number, b: number, c: number) => number;
   readonly nodecore_isDeleted: (a: number, b: number, c: number) => [number, number, number];
   readonly nodecore_isStreaming: (a: number, b: number, c: number) => [number, number, number];
   readonly nodecore_makeNewPrivateTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number) => [number, number, number, number];
@@ -473,7 +486,9 @@ export interface InitOutput {
   readonly nodecore_mapMaterialize: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly nodecore_mapSnapshot: (a: number, b: number, c: number) => [number, number, number, number];
   readonly nodecore_markAsDeleted: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_missingKeyIds: (a: number, b: number, c: number) => [number, number];
   readonly nodecore_new: () => number;
+  readonly nodecore_provideKeySecret: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly nodecore_removeCoValue: (a: number, b: number, c: number) => number;
   readonly nodecore_resetValidation: (a: number, b: number, c: number) => void;
   readonly nodecore_roleOf: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];

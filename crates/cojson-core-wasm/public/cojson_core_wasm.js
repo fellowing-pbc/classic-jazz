@@ -1047,6 +1047,17 @@ export class NodeCore {
         return ret >>> 0;
     }
     /**
+     * Whether a secret for `key_id` has been provided.
+     * @param {string} key_id
+     * @returns {boolean}
+     */
+    hasKeySecret(key_id) {
+        const ptr0 = passStringToWasm0(key_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_hasKeySecret(this.__wbg_ptr, ptr0, len0);
+        return ret !== 0;
+    }
+    /**
      * Creates or replaces; replacing drops the previous session state.
      * Mirrors TS semantics where constructing a new VerifiedState for an
      * already-known id creates a fresh SessionMap.
@@ -1148,6 +1159,19 @@ export class NodeCore {
         }
     }
     /**
+     * The `KeyID`s `co_id`'s materialized view still needs a secret for.
+     * @param {string} co_id
+     * @returns {string[]}
+     */
+    missingKeyIds(co_id) {
+        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_missingKeyIds(this.__wbg_ptr, ptr0, len0);
+        var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v2;
+    }
+    /**
      * @param {string} co_id
      * @returns {boolean}
      */
@@ -1215,6 +1239,18 @@ export class NodeCore {
             wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         }
         return v3;
+    }
+    /**
+     * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+     * @param {string} key_id
+     * @param {string} key_secret
+     */
+    provideKeySecret(key_id, key_secret) {
+        const ptr0 = passStringToWasm0(key_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.nodecore_provideKeySecret(this.__wbg_ptr, ptr0, len0, ptr1, len1);
     }
     /**
      * Decrypt transaction changes

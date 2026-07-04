@@ -95,6 +95,16 @@ export declare class NodeCore {
   mapSnapshot(coId: string): string
   /** Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`. */
   mapDelta(coId: string, sinceVersion: number): string
+  /**
+   * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+   * TS calls this once it has unsealed a private tx's read key; native
+   * materialization then decrypts that tx internally.
+   */
+  provideKeySecret(keyId: string, keySecret: string): void
+  /** Whether a secret for `key_id` has been provided. */
+  hasKeySecret(keyId: string): boolean
+  /** The `KeyID`s `co_id`'s materialized view still needs a secret for. */
+  missingKeyIds(coId: string): Array<string>
 }
 
 export declare class SessionMap {

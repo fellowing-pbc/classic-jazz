@@ -936,4 +936,24 @@ impl NodeCore {
             .map_delta(&co_id, since_version as u64)
             .map_err(to_wasm_err)
     }
+
+    // === R1 key store (experimental) ===
+
+    /// Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+    #[wasm_bindgen(js_name = provideKeySecret)]
+    pub fn provide_key_secret(&mut self, key_id: String, key_secret: String) {
+        self.internal.provide_key_secret(&key_id, &key_secret);
+    }
+
+    /// Whether a secret for `key_id` has been provided.
+    #[wasm_bindgen(js_name = hasKeySecret)]
+    pub fn has_key_secret(&self, key_id: String) -> bool {
+        self.internal.has_key_secret(&key_id)
+    }
+
+    /// The `KeyID`s `co_id`'s materialized view still needs a secret for.
+    #[wasm_bindgen(js_name = missingKeyIds)]
+    pub fn missing_key_ids(&self, co_id: String) -> Vec<String> {
+        self.internal.missing_key_ids(&co_id)
+    }
 }

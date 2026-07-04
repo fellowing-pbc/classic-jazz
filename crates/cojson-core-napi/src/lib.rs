@@ -844,11 +844,7 @@ impl NodeCore {
   /// Materialize (or incrementally refresh) `co_id`'s coMap view; returns the
   /// current monotonic version. Call after each ingest batch.
   #[napi]
-  pub fn map_materialize(
-    &mut self,
-    co_id: String,
-    pending: Vec<PendingTx>,
-  ) -> napi::Result<f64> {
+  pub fn map_materialize(&mut self, co_id: String, pending: Vec<PendingTx>) -> napi::Result<f64> {
     let pending: Vec<RustPendingTxIn> = pending
       .into_iter()
       .map(|p| RustPendingTxIn {
@@ -900,6 +896,28 @@ impl NodeCore {
       .internal
       .map_delta(&co_id, since_version as u64)
       .map_err(to_napi_err)
+  }
+
+  // === R1 key store (experimental) ===
+
+  /// Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+  /// TS calls this once it has unsealed a private tx's read key; native
+  /// materialization then decrypts that tx internally.
+  #[napi]
+  pub fn provide_key_secret(&mut self, key_id: String, key_secret: String) {
+    self.internal.provide_key_secret(&key_id, &key_secret);
+  }
+
+  /// Whether a secret for `key_id` has been provided.
+  #[napi]
+  pub fn has_key_secret(&self, key_id: String) -> bool {
+    self.internal.has_key_secret(&key_id)
+  }
+
+  /// The `KeyID`s `co_id`'s materialized view still needs a secret for.
+  #[napi]
+  pub fn missing_key_ids(&self, co_id: String) -> Vec<String> {
+    self.internal.missing_key_ids(&co_id)
   }
 }
 

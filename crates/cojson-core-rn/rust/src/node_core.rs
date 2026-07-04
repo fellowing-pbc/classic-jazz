@@ -552,6 +552,42 @@ impl NodeCore {
         Ok(())
     }
 
+    // === R1 key store (experimental) ===
+
+    /// Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+    /// Native private-tx materialization is the only consumer; secrets never
+    /// leave Rust once provided.
+    pub fn provide_key_secret(
+        &self,
+        key_id: String,
+        key_secret: String,
+    ) -> Result<(), SessionMapError> {
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal.provide_key_secret(&key_id, &key_secret);
+        Ok(())
+    }
+
+    /// Whether a secret for `key_id` has been provided.
+    pub fn has_key_secret(&self, key_id: String) -> Result<bool, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        Ok(internal.has_key_secret(&key_id))
+    }
+
+    /// The `KeyID`s `co_id`'s materialized view still needs a secret for.
+    pub fn missing_key_ids(&self, co_id: String) -> Result<Vec<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        Ok(internal.missing_key_ids(&co_id))
+    }
+
     /// Role of member in group at time (ms). Returns the role string or None.
     /// Throws "Unknown CoValue: <id>" if `group_id` itself is not registered,
     /// and "CoValue not loaded: <id>" if a parent group / owning account is
