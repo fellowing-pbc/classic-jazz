@@ -1056,6 +1056,30 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
+  /// PROFILING: byte length of the delta STRING (Rust serialize cost only; only
+  /// an `f64` crosses FFI, no string marshaling). Bench-only.
+  #[napi]
+  pub fn stream_delta_byte_len(&self, co_id: String, since_version: f64) -> f64 {
+    self
+      .internal
+      .stream_delta_byte_len(&co_id, since_version as u64) as f64
+  }
+
+  /// BINARY delta channel (R4a Step 2 proof-of-concept): packed little-endian
+  /// `Buffer` alternative to `streamDelta`. Decode on the TS side with a
+  /// `DataView` (no `JSON.parse`).
+  #[napi]
+  pub fn stream_delta_binary(
+    &self,
+    co_id: String,
+    since_version: f64,
+  ) -> napi::bindgen_prelude::Buffer {
+    self
+      .internal
+      .stream_delta_binary(&co_id, since_version as u64)
+      .into()
+  }
+
   /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
   /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
   #[napi]

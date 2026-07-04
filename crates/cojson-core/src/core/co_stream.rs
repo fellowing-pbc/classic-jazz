@@ -273,6 +273,129 @@ impl CoStreamView {
         out.push_str("}}");
         out
     }
+
+    /// PROFILING helper: produce the same delta STRING as [`Self::delta`] but
+    /// return only its byte length. Lets a bench isolate the Rust-side
+    /// serialization cost from the napi string-marshaling cost (the full
+    /// `delta` pays both; this pays only serialization — a single `f64` crosses
+    /// FFI). Not used by any product path.
+    pub fn delta_byte_len(&self, since_version: u64) -> usize {
+        self.delta(since_version).len()
+    }
+
+    /// BINARY delta channel (proof-of-concept, R4a Step 2): the SAME logical
+    /// payload as [`Self::delta`] packed into a length-prefixed little-endian
+    /// byte buffer instead of a JSON string, so the TS side can decode it with
+    /// `DataView` reads and skip `JSON.parse` of a multi-kilobyte string.
+    ///
+    /// Two structural wins over the JSON channel exploited here:
+    ///  - the per-entry `tx.sessionID` is ALWAYS the bucket session id, so it is
+    ///    stored ONCE per session (the bucket key) not once per entry.
+    ///  - scalar values (number / short string / null / bool — the bulk of a
+    ///    real feed) are type-tagged and copied raw, so the common case needs no
+    ///    JSON decode at all; only composite values (arrays/objects) fall back to
+    ///    a length-prefixed JSON blob the TS side `JSON.parse`s individually.
+    ///
+    /// Layout (all integers little-endian):
+    /// ```text
+    ///   u64  version
+    ///   u8   reset (0|1)
+    ///   u32  session_count
+    ///   repeat session_count times:
+    ///     u32  sid_len ; [sid_len] sid utf8
+    ///     u32  entry_count
+    ///     repeat entry_count times:
+    ///       f64  made_at
+    ///       u32  tx_index
+    ///       u8   tag
+    ///       tag payload:
+    ///         1 => f64 number (8 bytes)
+    ///         2 => u32 str_len ; [str_len] utf8
+    ///         3 => null   (no payload)
+    ///         4 => true   (no payload)
+    ///         5 => false  (no payload)
+    ///         0 => u32 json_len ; [json_len] utf8 (JSON.parse fallback)
+    /// ```
+    pub fn delta_binary(&self, since_version: u64) -> Vec<u8> {
+        let reset = since_version < self.last_full_version;
+        let mut out: Vec<u8> = Vec::with_capacity(4096);
+
+        out.extend_from_slice(&self.version.to_le_bytes());
+        out.push(if reset { 1 } else { 0 });
+
+        // Reserve the session-count slot; backfill once we know how many we wrote.
+        let sc_pos = out.len();
+        out.extend_from_slice(&0u32.to_le_bytes());
+        let mut session_count: u32 = 0;
+
+        for sid in self.sessions.keys() {
+            let ver = match self.session_versions.get(sid) {
+                Some(v) => *v,
+                None => continue,
+            };
+            if !(reset || ver > since_version) {
+                continue;
+            }
+            let entries = match self.sessions.get(sid) {
+                Some(e) => e,
+                None => continue,
+            };
+            session_count += 1;
+
+            let sid_bytes = sid.as_bytes();
+            out.extend_from_slice(&(sid_bytes.len() as u32).to_le_bytes());
+            out.extend_from_slice(sid_bytes);
+
+            let ec_pos = out.len();
+            out.extend_from_slice(&0u32.to_le_bytes());
+            let mut entry_count: u32 = 0;
+            for entry in entries.iter_values() {
+                entry_count += 1;
+                out.extend_from_slice(&(entry.made_at as f64).to_le_bytes());
+                out.extend_from_slice(&entry.tx_index.to_le_bytes());
+                write_value_binary(&entry.value, &mut out);
+            }
+            out[ec_pos..ec_pos + 4].copy_from_slice(&entry_count.to_le_bytes());
+        }
+        out[sc_pos..sc_pos + 4].copy_from_slice(&session_count.to_le_bytes());
+        out
+    }
+}
+
+/// Encode one entry value into the binary delta buffer (see
+/// [`CoStreamView::delta_binary`] for the tag table). Scalars are copied raw;
+/// composites fall back to a length-prefixed JSON blob.
+fn write_value_binary(value: &JsonValue, out: &mut Vec<u8>) {
+    match value {
+        JsonValue::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                out.push(1);
+                out.extend_from_slice(&f.to_le_bytes());
+            } else {
+                write_json_blob(value, out);
+            }
+        }
+        JsonValue::String(s) => {
+            out.push(2);
+            let b = s.as_bytes();
+            out.extend_from_slice(&(b.len() as u32).to_le_bytes());
+            out.extend_from_slice(b);
+        }
+        JsonValue::Null => out.push(3),
+        JsonValue::Bool(true) => out.push(4),
+        JsonValue::Bool(false) => out.push(5),
+        JsonValue::Array(_) | JsonValue::Object(_) => write_json_blob(value, out),
+    }
+}
+
+/// Tag-0 fallback: the value serialized as a JSON blob (length-prefixed), for
+/// composite values the scalar fast-path does not cover.
+fn write_json_blob(value: &JsonValue, out: &mut Vec<u8>) {
+    out.push(0);
+    let json = value.to_string();
+    let b = json.as_bytes();
+    out.extend_from_slice(&(b.len() as u32).to_le_bytes());
+    out.extend_from_slice(b);
 }
 
 /// `(session_id, tx_count)` in session-insertion order — the freshness key.

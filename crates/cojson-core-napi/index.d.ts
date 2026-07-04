@@ -141,6 +141,17 @@ export declare class NodeCore {
    */
   streamDelta(coId: string, sinceVersion: number): string
   /**
+   * PROFILING: byte length of the delta STRING (Rust serialize cost only; only
+   * an `f64` crosses FFI, no string marshaling). Bench-only.
+   */
+  streamDeltaByteLen(coId: string, sinceVersion: number): number
+  /**
+   * BINARY delta channel (R4a Step 2 proof-of-concept): packed little-endian
+   * `Buffer` alternative to `streamDelta`. Decode on the TS side with a
+   * `DataView` (no `JSON.parse`).
+   */
+  streamDeltaBinary(coId: string, sinceVersion: number): Buffer
+  /**
    * Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
    * `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
    */

@@ -346,6 +346,25 @@ impl NodeCore {
             .unwrap_or_else(|| r#"{"version":0,"reset":true,"sessions":{}}"#.to_string()))
     }
 
+    /// PROFILING: byte length of the delta STRING (serialize cost only, no FFI
+    /// string marshaling). See [`crate::core::co_stream::CoStreamView::delta_byte_len`].
+    pub fn stream_delta_byte_len(&self, co_id: &str, since_version: u64) -> u64 {
+        self.co_streams
+            .get(co_id)
+            .map(|v| v.delta_byte_len(since_version) as u64)
+            .unwrap_or(0)
+    }
+
+    /// BINARY delta channel (R4a Step 2 proof-of-concept): packed little-endian
+    /// buffer alternative to [`Self::stream_delta`]. See
+    /// [`crate::core::co_stream::CoStreamView::delta_binary`].
+    pub fn stream_delta_binary(&self, co_id: &str, since_version: u64) -> Vec<u8> {
+        self.co_streams
+            .get(co_id)
+            .map(|v| v.delta_binary(since_version))
+            .unwrap_or_default()
+    }
+
     /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
     /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
     pub fn stream_snapshot_at_frontier(
