@@ -1,5 +1,5 @@
 import { CoID } from "./coValue.js";
-import { CoValueCore } from "./coValueCore/coValueCore.js";
+import { CoValueCore, VerifiedTransaction } from "./coValueCore/coValueCore.js";
 import { RawAccount, RawAccountID, RawProfile } from "./coValues/account.js";
 import { MapOpPayload, RawCoMap } from "./coValues/coMap.js";
 import {
@@ -10,7 +10,13 @@ import {
   isInheritableRole,
   isSelfExtension,
 } from "./coValues/group.js";
-import { KeyID, SealerID } from "./crypto/crypto.js";
+import {
+  KeyID,
+  NodeCoreGroupVerdict,
+  NodeCoreImpl,
+  NodeCorePendingTx,
+  SealerID,
+} from "./crypto/crypto.js";
 import {
   AgentID,
   ParentGroupReference,
@@ -70,6 +76,14 @@ function canAdmin(role: Role | undefined): boolean {
   return role === "admin" || role === "manager";
 }
 
+/** Operational kill switch + differential-test escape hatch. */
+export function nativeValidationDisabled(): boolean {
+  return (
+    (globalThis as { process?: { env?: Record<string, string> } }).process?.env
+      ?.COJSON_DISABLE_NATIVE_VALIDATION === "1"
+  );
+}
+
 export function determineValidTransactions(coValue: CoValueCore): void {
   if (!coValue.isAvailable()) {
     throw new Error("determineValidTransactions CoValue is not available");
@@ -82,7 +96,12 @@ export function determineValidTransactions(coValue: CoValueCore): void {
       throw new Error("Group must have initialAdmin");
     }
 
-    determineValidTransactionsForGroup(coValue, initialAdmin);
+    const nodeCore = coValue.node.nodeCore;
+    if (nodeCore.validateGroup && !nativeValidationDisabled()) {
+      determineValidTransactionsForGroupNative(coValue, nodeCore);
+    } else {
+      determineValidTransactionsForGroup(coValue, initialAdmin);
+    }
     return;
   }
 
@@ -223,6 +242,57 @@ class MemberRoleResolver {
     }
 
     return role;
+  }
+}
+
+function determineValidTransactionsForGroupNative(
+  coValue: CoValueCore,
+  nodeCore: NodeCoreImpl,
+): void {
+  const pending: NodeCorePendingTx[] = [];
+  for (const tx of coValue.verifiedTransactions) {
+    if (tx.sourceTxMadeAt !== undefined) {
+      pending.push({
+        sessionId: tx.currentTxID.sessionID,
+        txIndex: tx.currentTxID.txIndex,
+        sourceMadeAt: tx.sourceTxMadeAt,
+      });
+    }
+  }
+
+  let verdicts: NodeCoreGroupVerdict[];
+  try {
+    verdicts = nodeCore.validateGroup!(coValue.id, pending);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (message.startsWith("CoValue not loaded: ")) {
+      // Dependency (parent group / owning account) missing from the native
+      // registry — route through the canonical TS error path so consumers see
+      // the same message the TS implementation produces.
+      const missingId = message.slice("CoValue not loaded: ".length) as RawCoID;
+      coValue.node.expectCoValueLoaded(
+        missingId,
+        "Expected parent group to be loaded",
+      );
+    }
+    throw e;
+  }
+
+  const byKey = new Map<string, VerifiedTransaction>();
+  for (const tx of coValue.verifiedTransactions) {
+    byKey.set(`${tx.currentTxID.sessionID}/${tx.currentTxID.txIndex}`, tx);
+  }
+  // Apply IN THE ORDER RUST RETURNS (spec: dispatch order feeds downstream stable sorts)
+  for (const v of verdicts) {
+    const tx = byKey.get(`${v.sessionId}/${v.txIndex}`);
+    if (!tx) continue; // verdict for a tx TS hasn't wrapped yet — next parseNewTransactions pass picks it up
+    if (v.valid) {
+      tx.markValid();
+    } else {
+      tx.markInvalid(v.reason ?? "Invalid group transaction", {
+        transactor: tx.author,
+      });
+    }
   }
 }
 
