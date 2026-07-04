@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::core::co_map::{ensure_co_map, CoMapView};
+use crate::core::co_stream::{ensure_co_stream, CoStreamView};
 use crate::core::group_engine::engine::{
     generation_of, role_of as engine_role_of,
     validate_transactions as engine_validate_transactions,
@@ -25,6 +26,11 @@ pub struct NodeCore {
     /// keyed like `engines` by per-session tx-counts. A separate field so a
     /// build can borrow `covalues`/`engines` while mutating this store.
     co_maps: HashMap<String, CoMapView>,
+    /// R4a coStream/coFeed materialization (experimental): per-covalue
+    /// materialized per-session entry view. A separate field so a build can
+    /// borrow `covalues`/`engines` while mutating this store, exactly like
+    /// `co_maps`.
+    co_streams: HashMap<String, CoStreamView>,
     /// R1 key store: `KeyID -> KeySecret`, GLOBAL (not per-covalue). TS unseals
     /// read-key secrets (via account sealer keys + revelation chains — that
     /// stays in TS) and feeds each one here as it learns it; native private-tx
@@ -79,6 +85,7 @@ impl NodeCore {
             covalues: HashMap::new(),
             engines: HashMap::new(),
             co_maps: HashMap::new(),
+            co_streams: HashMap::new(),
             keys: HashMap::new(),
             keys_version: 0,
         }
@@ -132,6 +139,7 @@ impl NodeCore {
         // Any cached engine/view for this id is now stale (fresh session map).
         self.engines.remove(co_id);
         self.co_maps.remove(co_id);
+        self.co_streams.remove(co_id);
         Ok(())
     }
 
@@ -143,6 +151,7 @@ impl NodeCore {
     pub fn remove_co_value(&mut self, co_id: &str) -> bool {
         self.engines.remove(co_id);
         self.co_maps.remove(co_id);
+        self.co_streams.remove(co_id);
         self.covalues.remove(co_id).is_some()
     }
 
@@ -168,6 +177,7 @@ impl NodeCore {
             covalues,
             engines,
             co_maps: _,
+            co_streams: _,
             keys,
             keys_version,
         } = self;
@@ -195,6 +205,7 @@ impl NodeCore {
             covalues,
             engines,
             co_maps: _,
+            co_streams: _,
             keys,
             keys_version,
         } = self;
@@ -232,6 +243,7 @@ impl NodeCore {
         // too — TS `resetParsedTransactions` likewise rebuilds content when a
         // reset flips validity (coValueCore.ts:1349-1358).
         self.co_maps.remove(co_id);
+        self.co_streams.remove(co_id);
     }
 
     // === R0 coMap materialization (experimental) ===
@@ -256,6 +268,7 @@ impl NodeCore {
             covalues,
             engines,
             co_maps,
+            co_streams: _,
             keys,
             keys_version,
         } = self;
@@ -268,6 +281,98 @@ impl NodeCore {
             co_id,
             pending,
         )
+    }
+
+    // === R4a coStream/coFeed materialization (experimental) ===
+    // Mirrors the coMap surface: `stream_materialize` is the only mutating path
+    // (validate + build/append); the read methods are `&self` over the cached
+    // view. An unregistered primary coId is `UnknownCoValue`.
+
+    /// Materialize (or incrementally refresh) `co_id`'s coStream view, returning
+    /// its current monotonic version. Call after each ingest batch.
+    pub fn stream_materialize(
+        &mut self,
+        co_id: &str,
+        pending: &[PendingTxIn],
+    ) -> Result<u64, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let Self {
+            covalues,
+            engines,
+            co_maps: _,
+            co_streams,
+            keys,
+            keys_version,
+        } = self;
+        ensure_co_stream(
+            covalues,
+            engines,
+            co_streams,
+            keys,
+            *keys_version,
+            co_id,
+            pending,
+        )
+    }
+
+    /// Whole materialized stream `{sessionID: [value, ...]}` as a JSON string
+    /// (empty object if not yet materialized). Matches `RawCoStream.toJSON`.
+    pub fn stream_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let snapshot = self
+            .co_streams
+            .get(co_id)
+            .map(|v| v.snapshot())
+            .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+        Ok(snapshot.to_string())
+    }
+
+    /// RICH delta `{version, reset, sessions}` since `since_version`, each
+    /// `sessions[sid]` the full ordered `CoStreamItem[]` for a changed session —
+    /// the payload a TS `RawCoStream` rebuilds its `items` from. See
+    /// [`crate::core::co_stream::CoStreamView::delta`].
+    pub fn stream_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_streams
+            .get(co_id)
+            .map(|v| v.delta(since_version))
+            .unwrap_or_else(|| r#"{"version":0,"reset":true,"sessions":{}}"#.to_string()))
+    }
+
+    /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
+    /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
+    pub fn stream_snapshot_at_frontier(
+        &self,
+        co_id: &str,
+        frontier_json: &str,
+    ) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let frontier = Self::parse_frontier(frontier_json);
+        let snapshot = self
+            .co_streams
+            .get(co_id)
+            .map(|v| v.snapshot_at_frontier(&frontier))
+            .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+        Ok(snapshot.to_string())
+    }
+
+    /// The `KeyID`s `co_id`'s materialized coStream view still needs a secret for
+    /// (private txs skipped for want of a key). Empty if fully decrypted or not
+    /// yet materialized.
+    pub fn stream_missing_key_ids(&self, co_id: &str) -> Vec<String> {
+        self.co_streams
+            .get(co_id)
+            .map(|v| v.missing_key_ids())
+            .unwrap_or_default()
     }
 
     /// Boundary (a): latest value of `key` as a JSON string (`None` = absent /
@@ -501,6 +606,7 @@ impl NodeCore {
             covalues,
             engines,
             co_maps: _,
+            co_streams: _,
             keys,
             keys_version,
         } = self;

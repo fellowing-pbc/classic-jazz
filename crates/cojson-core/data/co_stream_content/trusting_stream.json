@@ -1,0 +1,912 @@
+{
+  "description": "single-session trusting stream",
+  "covalues": [
+    {
+      "coId": "co_zDL99iToddJEi9U7C71LGrVniiE",
+      "headerJson": "{\"createdAt\":\"2026-07-04T22:10:54.062Z\",\"meta\":null,\"ruleset\":{\"initialAdmin\":\"sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL\",\"type\":\"group\"},\"type\":\"comap\",\"uniqueness\":\"z3e9F5CmKFAVhc7KSQ\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "signerId": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL\\\",\\\"value\\\":\\\"admin\\\"}]\",\"madeAt\":1783203054066,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"key_zeQbPkaWrkepDhi6a_for_sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL\\\",\\\"value\\\":\\\"sealed_U9c3QX33GQERdDwS6JYki_TvZeMhhA8fzpnag6_wSnA8Wv_OumjyRk4r4afz2mBKKKp6M_PZGew_QB6S3P6TBMRH1WxYflHymbw==\\\"}]\",\"madeAt\":1783203054068,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"readKey\\\",\\\"value\\\":\\\"key_zeQbPkaWrkepDhi6a\\\"}]\",\"madeAt\":1783203054068,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"groupSealer\\\",\\\"value\\\":\\\"key_zeQbPkaWrkepDhi6a@sealer_z3jjjLvDstAKAf6rqLTdBFtpaYyJYnzHuwvRBDYeCoYAW\\\"}]\",\"madeAt\":1783203054069,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z2bA4Z15P9MteXjEZRtABhYbKZEoSXnEL6uaAtEcdQHSQVba2LizTYsKe5wF2WEU6joW2NB8ZHnUZRh4oeXc33FD7"
+        }
+      ]
+    },
+    {
+      "coId": "co_zcYqspoyfrzdTmCtKnbfdkwxZ6",
+      "headerJson": "{\"createdAt\":\"2026-07-04T22:10:54.069Z\",\"meta\":null,\"ruleset\":{\"group\":\"co_zDL99iToddJEi9U7C71LGrVniiE\",\"type\":\"ownedByGroup\"},\"type\":\"costream\",\"uniqueness\":\"z2CfXxRUyHcyL4VLhQ\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "signerId": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL",
+          "transactions": [
+            "{\"changes\":\"[764801]\",\"madeAt\":1783203054070,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-ds5k\\\"]\",\"madeAt\":1783203054070,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[693356]\",\"madeAt\":1783203054070,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-knb8\\\"]\",\"madeAt\":1783203054070,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[77665]\",\"madeAt\":1783203054070,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[794073]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[875298]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[109978]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[417716]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[195558]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-5tam\\\"]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[647212]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[590357]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[435739]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":14,\\\"tag\\\":\\\"t435\\\"}]\",\"madeAt\":1783203054071,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-jqa5\\\"]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-1gol\\\"]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[145677]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-qb\\\"]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-2mmd\\\"]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[40953]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":21,\\\"tag\\\":\\\"t432\\\"}]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[769822]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[752635]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[474649]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":25,\\\"tag\\\":\\\"t144\\\"}]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[604651]\",\"madeAt\":1783203054072,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":27,\\\"tag\\\":\\\"t436\\\"}]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[762244]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[832012]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-cb2k\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[876656]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[219635]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[336625]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-dsi7\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[109474]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-2o26\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-e3x2\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-5cbp\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-etp4\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-huur\\\"]\",\"madeAt\":1783203054073,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[885047]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":42,\\\"tag\\\":\\\"t630\\\"}]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-bxmc\\\"]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[349925]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-3lup\\\"]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-kkwe\\\"]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"seq\\\":47,\\\"tag\\\":\\\"t549\\\"}]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[170760]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-l9ds\\\"]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[384188]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-ae92\\\"]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[858280]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[897551]\",\"madeAt\":1783203054074,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-hie3\\\"]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[390972]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-6ei1\\\"]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[\\\"item-1sb5\\\"]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[714491]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[586854]\",\"madeAt\":1783203054075,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z348qokRHtpqDUJahiZ6XtoGchz4Dm5LVZkQZG5A7n2h19DKRxaXjYLbQrw1EepbNPtnR5gfXBZP84wVw5ztqExUB"
+        }
+      ]
+    }
+  ],
+  "streamId": "co_zcYqspoyfrzdTmCtKnbfdkwxZ6",
+  "provideKeys": [],
+  "snapshot": {
+    "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": [
+      764801,
+      "item-ds5k",
+      693356,
+      "item-knb8",
+      77665,
+      794073,
+      875298,
+      109978,
+      417716,
+      195558,
+      "item-5tam",
+      647212,
+      590357,
+      435739,
+      {
+        "seq": 14,
+        "tag": "t435"
+      },
+      "item-jqa5",
+      "item-1gol",
+      145677,
+      "item-qb",
+      "item-2mmd",
+      40953,
+      {
+        "seq": 21,
+        "tag": "t432"
+      },
+      769822,
+      752635,
+      474649,
+      {
+        "seq": 25,
+        "tag": "t144"
+      },
+      604651,
+      {
+        "seq": 27,
+        "tag": "t436"
+      },
+      762244,
+      832012,
+      "item-cb2k",
+      876656,
+      219635,
+      336625,
+      "item-dsi7",
+      109474,
+      "item-2o26",
+      "item-e3x2",
+      "item-5cbp",
+      "item-etp4",
+      "item-huur",
+      885047,
+      {
+        "seq": 42,
+        "tag": "t630"
+      },
+      "item-bxmc",
+      349925,
+      "item-3lup",
+      "item-kkwe",
+      {
+        "seq": 47,
+        "tag": "t549"
+      },
+      170760,
+      "item-l9ds",
+      384188,
+      "item-ae92",
+      858280,
+      897551,
+      "item-hie3",
+      390972,
+      "item-6ei1",
+      "item-1sb5",
+      714491,
+      586854
+    ]
+  },
+  "sessions": {
+    "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": [
+      {
+        "value": 764801,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 0
+        },
+        "madeAt": 1783203054070
+      },
+      {
+        "value": "item-ds5k",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 1
+        },
+        "madeAt": 1783203054070
+      },
+      {
+        "value": 693356,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 2
+        },
+        "madeAt": 1783203054070
+      },
+      {
+        "value": "item-knb8",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 3
+        },
+        "madeAt": 1783203054070
+      },
+      {
+        "value": 77665,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 4
+        },
+        "madeAt": 1783203054070
+      },
+      {
+        "value": 794073,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 5
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 875298,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 6
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 109978,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 7
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 417716,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 8
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 195558,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 9
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": "item-5tam",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 10
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 647212,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 11
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 590357,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 12
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": 435739,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 13
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": {
+          "seq": 14,
+          "tag": "t435"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 14
+        },
+        "madeAt": 1783203054071
+      },
+      {
+        "value": "item-jqa5",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 15
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": "item-1gol",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 16
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 145677,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 17
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": "item-qb",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 18
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": "item-2mmd",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 19
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 40953,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 20
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": {
+          "seq": 21,
+          "tag": "t432"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 21
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 769822,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 22
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 752635,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 23
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 474649,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 24
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": {
+          "seq": 25,
+          "tag": "t144"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 25
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": 604651,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 26
+        },
+        "madeAt": 1783203054072
+      },
+      {
+        "value": {
+          "seq": 27,
+          "tag": "t436"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 27
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 762244,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 28
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 832012,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 29
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-cb2k",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 30
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 876656,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 31
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 219635,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 32
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 336625,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 33
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-dsi7",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 34
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 109474,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 35
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-2o26",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 36
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-e3x2",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 37
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-5cbp",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 38
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-etp4",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 39
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": "item-huur",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 40
+        },
+        "madeAt": 1783203054073
+      },
+      {
+        "value": 885047,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 41
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": {
+          "seq": 42,
+          "tag": "t630"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 42
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-bxmc",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 43
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": 349925,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 44
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-3lup",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 45
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-kkwe",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 46
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": {
+          "seq": 47,
+          "tag": "t549"
+        },
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 47
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": 170760,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 48
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-l9ds",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 49
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": 384188,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 50
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-ae92",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 51
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": 858280,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 52
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": 897551,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 53
+        },
+        "madeAt": 1783203054074
+      },
+      {
+        "value": "item-hie3",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 54
+        },
+        "madeAt": 1783203054075
+      },
+      {
+        "value": 390972,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 55
+        },
+        "madeAt": 1783203054075
+      },
+      {
+        "value": "item-6ei1",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 56
+        },
+        "madeAt": 1783203054075
+      },
+      {
+        "value": "item-1sb5",
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 57
+        },
+        "madeAt": 1783203054075
+      },
+      {
+        "value": 714491,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 58
+        },
+        "madeAt": 1783203054075
+      },
+      {
+        "value": 586854,
+        "tx": {
+          "sessionID": "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L",
+          "txIndex": 59
+        },
+        "madeAt": 1783203054075
+      }
+    ]
+  },
+  "frontier": [
+    {
+      "frontier": {},
+      "snapshot": {}
+    },
+    {
+      "frontier": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": 60
+      },
+      "snapshot": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": [
+          764801,
+          "item-ds5k",
+          693356,
+          "item-knb8",
+          77665,
+          794073,
+          875298,
+          109978,
+          417716,
+          195558,
+          "item-5tam",
+          647212,
+          590357,
+          435739,
+          {
+            "seq": 14,
+            "tag": "t435"
+          },
+          "item-jqa5",
+          "item-1gol",
+          145677,
+          "item-qb",
+          "item-2mmd",
+          40953,
+          {
+            "seq": 21,
+            "tag": "t432"
+          },
+          769822,
+          752635,
+          474649,
+          {
+            "seq": 25,
+            "tag": "t144"
+          },
+          604651,
+          {
+            "seq": 27,
+            "tag": "t436"
+          },
+          762244,
+          832012,
+          "item-cb2k",
+          876656,
+          219635,
+          336625,
+          "item-dsi7",
+          109474,
+          "item-2o26",
+          "item-e3x2",
+          "item-5cbp",
+          "item-etp4",
+          "item-huur",
+          885047,
+          {
+            "seq": 42,
+            "tag": "t630"
+          },
+          "item-bxmc",
+          349925,
+          "item-3lup",
+          "item-kkwe",
+          {
+            "seq": 47,
+            "tag": "t549"
+          },
+          170760,
+          "item-l9ds",
+          384188,
+          "item-ae92",
+          858280,
+          897551,
+          "item-hie3",
+          390972,
+          "item-6ei1",
+          "item-1sb5",
+          714491,
+          586854
+        ]
+      }
+    },
+    {
+      "frontier": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": 30
+      },
+      "snapshot": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": [
+          764801,
+          "item-ds5k",
+          693356,
+          "item-knb8",
+          77665,
+          794073,
+          875298,
+          109978,
+          417716,
+          195558,
+          "item-5tam",
+          647212,
+          590357,
+          435739,
+          {
+            "seq": 14,
+            "tag": "t435"
+          },
+          "item-jqa5",
+          "item-1gol",
+          145677,
+          "item-qb",
+          "item-2mmd",
+          40953,
+          {
+            "seq": 21,
+            "tag": "t432"
+          },
+          769822,
+          752635,
+          474649,
+          {
+            "seq": 25,
+            "tag": "t144"
+          },
+          604651,
+          {
+            "seq": 27,
+            "tag": "t436"
+          },
+          762244,
+          832012
+        ]
+      }
+    },
+    {
+      "frontier": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": 60
+      },
+      "snapshot": {
+        "sealer_z2p6kpoS6ELRytKcFmzLf4mKXRUR8gdqyA9855LLJc3jU/signer_zFnJjnaxJQse8EBsHSQguAFGyoRUKo6NMUY2Pqhu6NPwL_session_zeVvWgtcwS6L": [
+          764801,
+          "item-ds5k",
+          693356,
+          "item-knb8",
+          77665,
+          794073,
+          875298,
+          109978,
+          417716,
+          195558,
+          "item-5tam",
+          647212,
+          590357,
+          435739,
+          {
+            "seq": 14,
+            "tag": "t435"
+          },
+          "item-jqa5",
+          "item-1gol",
+          145677,
+          "item-qb",
+          "item-2mmd",
+          40953,
+          {
+            "seq": 21,
+            "tag": "t432"
+          },
+          769822,
+          752635,
+          474649,
+          {
+            "seq": 25,
+            "tag": "t144"
+          },
+          604651,
+          {
+            "seq": 27,
+            "tag": "t436"
+          },
+          762244,
+          832012,
+          "item-cb2k",
+          876656,
+          219635,
+          336625,
+          "item-dsi7",
+          109474,
+          "item-2o26",
+          "item-e3x2",
+          "item-5cbp",
+          "item-etp4",
+          "item-huur",
+          885047,
+          {
+            "seq": 42,
+            "tag": "t630"
+          },
+          "item-bxmc",
+          349925,
+          "item-3lup",
+          "item-kkwe",
+          {
+            "seq": 47,
+            "tag": "t549"
+          },
+          170760,
+          "item-l9ds",
+          384188,
+          "item-ae92",
+          858280,
+          897551,
+          "item-hie3",
+          390972,
+          "item-6ei1",
+          "item-1sb5",
+          714491,
+          586854
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,855 @@
+{
+  "description": "mixed private/trusting entries, single session",
+  "covalues": [
+    {
+      "coId": "co_zDqYDLqxsscT5r6bGJV8MzptnH3",
+      "headerJson": "{\"createdAt\":\"2026-07-04T22:10:54.085Z\",\"meta\":null,\"ruleset\":{\"initialAdmin\":\"sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ\",\"type\":\"group\"},\"type\":\"comap\",\"uniqueness\":\"z5ANs5mSDe651xNREH\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "signerId": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ\\\",\\\"value\\\":\\\"admin\\\"}]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"key_z4rQ2ahELXpCkDNoT_for_sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ\\\",\\\"value\\\":\\\"sealed_URbgb38wav5iWAE1Slhkml1uMrLPmMkOoW4fIuhmfDrQr9ZdMb7F2wFX2qADfIvlaUTw0TNRwMcBZ0TOKcCKe4fNdjQM4dPxt0g==\\\"}]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"readKey\\\",\\\"value\\\":\\\"key_z4rQ2ahELXpCkDNoT\\\"}]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"groupSealer\\\",\\\"value\\\":\\\"key_z4rQ2ahELXpCkDNoT@sealer_z55xefSpHKRAARDafkhuir13W7AzTzWcD2NgWrrQnBaB1\\\"}]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z2Ae3TFTBrXS7y3ccGuA3s3yEJ1HxttdcQhdTFD1JauP2Z1FM6bDXWVnnccZzSxnBed3CndhNHwmafe5fsQbvkoeX"
+        }
+      ]
+    },
+    {
+      "coId": "co_zPS4USjadPLjTvN8UsT9WGxaVA9",
+      "headerJson": "{\"createdAt\":\"2026-07-04T22:10:54.086Z\",\"meta\":null,\"ruleset\":{\"group\":\"co_zDqYDLqxsscT5r6bGJV8MzptnH3\",\"type\":\"ownedByGroup\"},\"type\":\"costream\",\"uniqueness\":\"z539vt1EYR4AJoQ6Np\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "signerId": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ",
+          "transactions": [
+            "{\"encryptedChanges\":\"encrypted_UnBFETnH1xUrhqC1VBp_ItM78h66Y5NP9\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054086,\"privacy\":\"private\"}",
+            "{\"changes\":\"[511327]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UGiF_EYfnzrE=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054086,\"privacy\":\"private\"}",
+            "{\"changes\":\"[358507]\",\"madeAt\":1783203054086,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UVoDrjVYOKr0=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-alqj\\\"]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UXPhyc8Q82Nw1D50p0Q==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[933285]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UzPUPPxEaQaQ=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-9pwj\\\"]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UafM8fRjj3i0=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[954257]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_U5PuUlyhdwIg=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-alsx\\\"]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_Uy6TzmKEABw==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-f9n4\\\"]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UWlpRp4UFpdU6H6hTew==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-8n8u\\\"]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UXWhr9zjA-8Q=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":19,\\\"tag\\\":\\\"t892\\\"}]\",\"madeAt\":1783203054087,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_U_LqP1Aedwg==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054087,\"privacy\":\"private\"}",
+            "{\"changes\":\"[877316]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UbNUFRraZvgC-Gj21KHDfz5BKcHBRUoYiUA==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":23,\\\"tag\\\":\\\"t811\\\"}]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_US0OY2RUJN9dq3sYsNN57JFkQirv83l56\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-7zwo\\\"]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UC_clUsjMt-CtL6VJcg==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-dn4x\\\"]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UOr0BOJV3OiqX9Vk-fs0KCnpHrM4H61lVMQ==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":29,\\\"tag\\\":\\\"t988\\\"}]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UH82sBbSMl9M=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":31,\\\"tag\\\":\\\"t551\\\"}]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UGdN_Wipv2S4=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[758343]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_U_8-6dCdw4SggAI4ZEA==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[960972]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UHa2nd9V3rjDcY-Srbw==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[184721]\",\"madeAt\":1783203054088,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UupzXP0d2KvcnTWCw\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054088,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-kbwp\\\"]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UIslT6ErCNAw=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054089,\"privacy\":\"private\"}",
+            "{\"changes\":\"[\\\"item-5pvy\\\"]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_US7k3-ZFcxZDb3G9VFA==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054089,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":43,\\\"tag\\\":\\\"t453\\\"}]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_UqWUAwRZ_TSU=\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054089,\"privacy\":\"private\"}",
+            "{\"changes\":\"[{\\\"seq\\\":45,\\\"tag\\\":\\\"t515\\\"}]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_Uy-r2ZLG2YfnYIYYV8dGGeXoOPCyzxaAXuw==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054089,\"privacy\":\"private\"}",
+            "{\"changes\":\"[691734]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}",
+            "{\"encryptedChanges\":\"encrypted_U7TjWI8y9Fg==\",\"keyUsed\":\"key_z4rQ2ahELXpCkDNoT\",\"madeAt\":1783203054089,\"privacy\":\"private\"}",
+            "{\"changes\":\"[253640]\",\"madeAt\":1783203054089,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z5M1Jtx6TbSFz5cb6ZC3rgjNf9GDa7Fx354KTX1nDjLv9nMtFAFaqZUSXmQBJtd2EcYNmctSKdC4s5psawQR4S5tJ"
+        }
+      ]
+    }
+  ],
+  "streamId": "co_zPS4USjadPLjTvN8UsT9WGxaVA9",
+  "provideKeys": [
+    {
+      "keyId": "key_z4rQ2ahELXpCkDNoT",
+      "keySecret": "keySecret_z2Wz9LWJFMSJpotcFfiwTQGgjM7cTfKhD99bNgHeAQzXC"
+    }
+  ],
+  "snapshot": {
+    "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": [
+      {
+        "seq": 0,
+        "tag": "t803"
+      },
+      511327,
+      655782,
+      358507,
+      464326,
+      "item-alqj",
+      "item-alj6",
+      933285,
+      545285,
+      "item-9pwj",
+      728140,
+      954257,
+      299149,
+      "item-alsx",
+      47324,
+      "item-f9n4",
+      "item-l9ia",
+      "item-8n8u",
+      487570,
+      {
+        "seq": 19,
+        "tag": "t892"
+      },
+      59810,
+      877316,
+      {
+        "seq": 22,
+        "tag": "t462"
+      },
+      {
+        "seq": 23,
+        "tag": "t811"
+      },
+      {
+        "seq": 24,
+        "tag": "t89"
+      },
+      "item-7zwo",
+      "item-fg9m",
+      "item-dn4x",
+      {
+        "seq": 28,
+        "tag": "t585"
+      },
+      {
+        "seq": 29,
+        "tag": "t988"
+      },
+      642135,
+      {
+        "seq": 31,
+        "tag": "t551"
+      },
+      792620,
+      758343,
+      "item-iygo",
+      960972,
+      "item-1yfk",
+      184721,
+      "item-5bw",
+      "item-kbwp",
+      400851,
+      "item-5pvy",
+      "item-isrn",
+      {
+        "seq": 43,
+        "tag": "t453"
+      },
+      233677,
+      {
+        "seq": 45,
+        "tag": "t515"
+      },
+      {
+        "seq": 46,
+        "tag": "t509"
+      },
+      691734,
+      79386,
+      253640
+    ]
+  },
+  "sessions": {
+    "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": [
+      {
+        "value": {
+          "seq": 0,
+          "tag": "t803"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 0
+        },
+        "madeAt": 1783203054086
+      },
+      {
+        "value": 511327,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 1
+        },
+        "madeAt": 1783203054086
+      },
+      {
+        "value": 655782,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 2
+        },
+        "madeAt": 1783203054086
+      },
+      {
+        "value": 358507,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 3
+        },
+        "madeAt": 1783203054086
+      },
+      {
+        "value": 464326,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 4
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-alqj",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 5
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-alj6",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 6
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 933285,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 7
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 545285,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 8
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-9pwj",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 9
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 728140,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 10
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 954257,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 11
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 299149,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 12
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-alsx",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 13
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 47324,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 14
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-f9n4",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 15
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-l9ia",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 16
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": "item-8n8u",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 17
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 487570,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 18
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": {
+          "seq": 19,
+          "tag": "t892"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 19
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 59810,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 20
+        },
+        "madeAt": 1783203054087
+      },
+      {
+        "value": 877316,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 21
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 22,
+          "tag": "t462"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 22
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 23,
+          "tag": "t811"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 23
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 24,
+          "tag": "t89"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 24
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-7zwo",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 25
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-fg9m",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 26
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-dn4x",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 27
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 28,
+          "tag": "t585"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 28
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 29,
+          "tag": "t988"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 29
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": 642135,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 30
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": {
+          "seq": 31,
+          "tag": "t551"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 31
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": 792620,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 32
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": 758343,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 33
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-iygo",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 34
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": 960972,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 35
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-1yfk",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 36
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": 184721,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 37
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-5bw",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 38
+        },
+        "madeAt": 1783203054088
+      },
+      {
+        "value": "item-kbwp",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 39
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": 400851,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 40
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": "item-5pvy",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 41
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": "item-isrn",
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 42
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": {
+          "seq": 43,
+          "tag": "t453"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 43
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": 233677,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 44
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": {
+          "seq": 45,
+          "tag": "t515"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 45
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": {
+          "seq": 46,
+          "tag": "t509"
+        },
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 46
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": 691734,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 47
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": 79386,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 48
+        },
+        "madeAt": 1783203054089
+      },
+      {
+        "value": 253640,
+        "tx": {
+          "sessionID": "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5",
+          "txIndex": 49
+        },
+        "madeAt": 1783203054089
+      }
+    ]
+  },
+  "frontier": [
+    {
+      "frontier": {},
+      "snapshot": {}
+    },
+    {
+      "frontier": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": 50
+      },
+      "snapshot": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": [
+          {
+            "seq": 0,
+            "tag": "t803"
+          },
+          511327,
+          655782,
+          358507,
+          464326,
+          "item-alqj",
+          "item-alj6",
+          933285,
+          545285,
+          "item-9pwj",
+          728140,
+          954257,
+          299149,
+          "item-alsx",
+          47324,
+          "item-f9n4",
+          "item-l9ia",
+          "item-8n8u",
+          487570,
+          {
+            "seq": 19,
+            "tag": "t892"
+          },
+          59810,
+          877316,
+          {
+            "seq": 22,
+            "tag": "t462"
+          },
+          {
+            "seq": 23,
+            "tag": "t811"
+          },
+          {
+            "seq": 24,
+            "tag": "t89"
+          },
+          "item-7zwo",
+          "item-fg9m",
+          "item-dn4x",
+          {
+            "seq": 28,
+            "tag": "t585"
+          },
+          {
+            "seq": 29,
+            "tag": "t988"
+          },
+          642135,
+          {
+            "seq": 31,
+            "tag": "t551"
+          },
+          792620,
+          758343,
+          "item-iygo",
+          960972,
+          "item-1yfk",
+          184721,
+          "item-5bw",
+          "item-kbwp",
+          400851,
+          "item-5pvy",
+          "item-isrn",
+          {
+            "seq": 43,
+            "tag": "t453"
+          },
+          233677,
+          {
+            "seq": 45,
+            "tag": "t515"
+          },
+          {
+            "seq": 46,
+            "tag": "t509"
+          },
+          691734,
+          79386,
+          253640
+        ]
+      }
+    },
+    {
+      "frontier": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": 25
+      },
+      "snapshot": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": [
+          {
+            "seq": 0,
+            "tag": "t803"
+          },
+          511327,
+          655782,
+          358507,
+          464326,
+          "item-alqj",
+          "item-alj6",
+          933285,
+          545285,
+          "item-9pwj",
+          728140,
+          954257,
+          299149,
+          "item-alsx",
+          47324,
+          "item-f9n4",
+          "item-l9ia",
+          "item-8n8u",
+          487570,
+          {
+            "seq": 19,
+            "tag": "t892"
+          },
+          59810,
+          877316,
+          {
+            "seq": 22,
+            "tag": "t462"
+          },
+          {
+            "seq": 23,
+            "tag": "t811"
+          },
+          {
+            "seq": 24,
+            "tag": "t89"
+          }
+        ]
+      }
+    },
+    {
+      "frontier": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": 50
+      },
+      "snapshot": {
+        "sealer_zDgEm59L1aU2uDPM6puE7DSqWPW48fkjP9ver8HeAHtZc/signer_z4kPz161dLscSwyC1Tx7BNPrkpXHmb2u75ZzZZDyGxsnZ_session_zA8BCmtWBAw5": [
+          {
+            "seq": 0,
+            "tag": "t803"
+          },
+          511327,
+          655782,
+          358507,
+          464326,
+          "item-alqj",
+          "item-alj6",
+          933285,
+          545285,
+          "item-9pwj",
+          728140,
+          954257,
+          299149,
+          "item-alsx",
+          47324,
+          "item-f9n4",
+          "item-l9ia",
+          "item-8n8u",
+          487570,
+          {
+            "seq": 19,
+            "tag": "t892"
+          },
+          59810,
+          877316,
+          {
+            "seq": 22,
+            "tag": "t462"
+          },
+          {
+            "seq": 23,
+            "tag": "t811"
+          },
+          {
+            "seq": 24,
+            "tag": "t89"
+          },
+          "item-7zwo",
+          "item-fg9m",
+          "item-dn4x",
+          {
+            "seq": 28,
+            "tag": "t585"
+          },
+          {
+            "seq": 29,
+            "tag": "t988"
+          },
+          642135,
+          {
+            "seq": 31,
+            "tag": "t551"
+          },
+          792620,
+          758343,
+          "item-iygo",
+          960972,
+          "item-1yfk",
+          184721,
+          "item-5bw",
+          "item-kbwp",
+          400851,
+          "item-5pvy",
+          "item-isrn",
+          {
+            "seq": 43,
+            "tag": "t453"
+          },
+          233677,
+          {
+            "seq": 45,
+            "tag": "t515"
+          },
+          {
+            "seq": 46,
+            "tag": "t509"
+          },
+          691734,
+          79386,
+          253640
+        ]
+      }
+    }
+  ]
+}

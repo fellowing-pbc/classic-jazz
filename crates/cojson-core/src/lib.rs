@@ -23,6 +23,8 @@ pub mod core {
     pub use group_engine::*;
     pub mod co_map;
     pub use co_map::*;
+    pub mod co_stream;
+    pub use co_stream::*;
 }
 
 pub mod hash {
