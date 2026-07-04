@@ -160,6 +160,11 @@ interface NativeModuleInterface {
     coId: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_has_key_secret(
+    ptr: bigint,
+    keyId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): number;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_is_deleted(
     ptr: bigint,
     coId: Uint8Array,
@@ -195,6 +200,17 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_mark_as_deleted(
     ptr: bigint,
     coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): void;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_missing_key_ids(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_provide_key_secret(
+    ptr: bigint,
+    keyId: Uint8Array,
+    keySecret: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): void;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_remove_co_value(
@@ -549,11 +565,14 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_get_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_get_transaction_count(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_has_co_value(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_has_key_secret(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_deleted(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_streaming(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_private_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_trusting_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_mark_as_deleted(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_missing_key_ids(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_provide_key_secret(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_remove_co_value(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_reset_validation(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_role_of(): number;

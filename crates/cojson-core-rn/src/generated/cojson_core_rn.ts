@@ -2229,6 +2229,10 @@ export interface NodeCoreInterface {
   ) /*throws*/ : /*i32*/ number;
   hasCoValue(coId: string) /*throws*/ : boolean;
   /**
+   * Whether a secret for `key_id` has been provided.
+   */
+  hasKeySecret(keyId: string) /*throws*/ : boolean;
+  /**
    * Check if this CoValue is deleted
    */
   isDeleted(coId: string) /*throws*/ : boolean;
@@ -2266,6 +2270,16 @@ export interface NodeCoreInterface {
    * Mark this CoValue as deleted
    */
   markAsDeleted(coId: string) /*throws*/ : void;
+  /**
+   * The `KeyID`s `co_id`'s materialized view still needs a secret for.
+   */
+  missingKeyIds(coId: string) /*throws*/ : Array<string>;
+  /**
+   * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+   * Native private-tx materialization is the only consumer; secrets never
+   * leave Rust once provided.
+   */
+  provideKeySecret(keyId: string, keySecret: string) /*throws*/ : void;
   removeCoValue(coId: string) /*throws*/ : boolean;
   /**
    * Drop the cached validation engine for `co_id`, forcing a full recompute
@@ -2723,6 +2737,27 @@ export class NodeCore
   }
 
   /**
+   * Whether a secret for `key_id` has been provided.
+   */
+  public hasKeySecret(keyId: string): boolean /*throws*/ {
+    return FfiConverterBool.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_has_key_secret(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(keyId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
    * Check if this CoValue is deleted
    */
   public isDeleted(coId: string): boolean /*throws*/ {
@@ -2848,6 +2883,49 @@ export class NodeCore
         nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_mark_as_deleted(
           uniffiTypeNodeCoreObjectFactory.clonePointer(this),
           FfiConverterString.lower(coId),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift
+    );
+  }
+
+  /**
+   * The `KeyID`s `co_id`'s materialized view still needs a secret for.
+   */
+  public missingKeyIds(coId: string): Array<string> /*throws*/ {
+    return FfiConverterArrayString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_missing_key_ids(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
+   * Native private-tx materialization is the only consumer; secrets never
+   * leave Rust once provided.
+   */
+  public provideKeySecret(keyId: string, keySecret: string): void /*throws*/ {
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+        FfiConverterTypeSessionMapError
+      ),
+      /*caller:*/ (callStatus) => {
+        nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_provide_key_secret(
+          uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+          FfiConverterString.lower(keyId),
+          FfiConverterString.lower(keySecret),
           callStatus
         );
       },
@@ -4221,6 +4299,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_has_key_secret() !==
+    8432
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_has_key_secret'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_deleted() !==
     44155
   ) {
@@ -4258,6 +4344,22 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_cojson_core_rn_checksum_method_nodecore_mark_as_deleted'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_missing_key_ids() !==
+    19598
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_missing_key_ids'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_provide_key_secret() !==
+    57965
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_provide_key_secret'
     );
   }
   if (
