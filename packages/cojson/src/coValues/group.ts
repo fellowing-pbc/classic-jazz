@@ -31,6 +31,7 @@ import {
   Role,
   isAccountRole,
   isKeyForKeyField,
+  nativeValidationDisabled,
 } from "../permissions.js";
 import { accountOrAgentIDfromSessionID } from "../typeUtils/accountOrAgentIDfromSessionID.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
@@ -451,6 +452,22 @@ export class RawGroup<
   roleOfInternal(
     accountID: RawAccountID | AgentID | typeof EVERYONE,
   ): Role | undefined {
+    // Delegate read-side role resolution to the native NodeCore when available.
+    // The native implementation covers the full read semantics (direct role,
+    // parent-group inheritance, everyone fallback, RawAccount self→admin) and
+    // only models an `atTime` view, so skip it for branch/frontier views that
+    // the native side has no equivalent of (stage 2 keeps those on the TS path).
+    const nodeCore = this.core.node.nodeCore;
+    if (
+      nodeCore.roleOf &&
+      !nativeValidationDisabled() &&
+      this.core.verified.branchSourceId === undefined &&
+      this.atFrontierFilter === undefined
+    ) {
+      const role = nodeCore.roleOf(this.core.id, accountID, this.atTimeFilter);
+      return role as Role | undefined;
+    }
+
     let roleHere = this.get(accountID);
 
     if (roleHere === "revoked") {
