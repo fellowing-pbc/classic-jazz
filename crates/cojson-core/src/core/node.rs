@@ -347,14 +347,13 @@ impl NodeCore {
         if !self.covalues.contains_key(co_id) {
             return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
         }
-        let delta = self
+        Ok(self
             .co_maps
             .get(co_id)
             .map(|v| v.delta_rich(since_version))
             .unwrap_or_else(|| {
-                serde_json::json!({ "version": 0, "reset": true, "changedKeys": {} })
-            });
-        Ok(delta.to_string())
+                r#"{"version":0,"reset":true,"changedKeys":{}}"#.to_string()
+            }))
     }
 
     /// Parse a `{ sessionID: txCount }` frontier JSON object into the map the

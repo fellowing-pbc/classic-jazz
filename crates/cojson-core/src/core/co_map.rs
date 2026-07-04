@@ -32,18 +32,30 @@
 //!
 //! ## fww overlay (`coValueCore.ts:1515-1537`, `parseMetaInformation`)
 //!
-//! A transaction carrying `meta.fww = <key>` competes with every other tx that
-//! carries the same fww key; only the FIRST writer (minimum under
-//! `compareTransactions`) stays valid, every later one is marked invalid and its
-//! ops are excluded from views. TS scans transactions in load (session-insertion,
-//! tx-index) order and keeps the min via `compareTransactions`; because
-//! [`sort_for_validation`] is the same comparator and stable, the FIRST tx in
-//! sorted order for a given fww key is exactly TS's winner (ties resolve to the
-//! first-loaded tx on both sides). So: fww losers = every fww-keyed tx that is
-//! not the first in sorted order for its key. The winner selection scans ALL
-//! collected txs (regardless of permission verdict), exactly as TS's
-//! `toParseMetaTransactions` does; a tx is INCLUDED in views iff it is
-//! permission-valid AND not an fww loser.
+//! A transaction carrying `meta.fww = <key>` competes with every other
+//! PERMISSION-VALID tx that carries the same fww key; only the FIRST writer
+//! (minimum under `compareTransactions`) stays valid, every later one is
+//! marked invalid and its ops are excluded from views. TS scans transactions in
+//! load (session-insertion, tx-index) order and keeps the min via
+//! `compareTransactions`; because [`sort_for_validation`] is the same
+//! comparator and stable, the FIRST tx in sorted order for a given fww key is
+//! exactly TS's winner (ties resolve to the first-loaded tx on both sides). So:
+//! fww losers = every fww-keyed, permission-valid tx that is not the first
+//! among permission-valid competitors in sorted order for its key. A
+//! permission-INVALID tx never competes for (or costs anyone else) the win —
+//! it is excluded from views regardless via the permission check alone, and
+//! letting an unauthorized writer's stale/offline tx "steal" the fww win from
+//! an authorized one purely by chronological accident would be wrong (this is
+//! the ONE place this port intentionally diverges from a literal reading of
+//! `parseMetaInformation`, which does not consult validity before comparing
+//! fww candidates). Regression coverage for this exact race —an offline
+//! member demoted before reconnecting, racing an authorized member for the
+//! same `getOrCreateUnique` key— lives in
+//! `jazz-tools/src/tools/tests/getOrCreateUnique.test.ts` ("unauthorized user
+//! offline creates unique value, transaction invalidated after reconnect");
+//! building an equivalent signed multi-author fixture at this layer was out of
+//! scope for this change. A tx is INCLUDED in views iff it is permission-valid
+//! AND not an fww loser.
 //!
 //! ## Freshness and the incremental append fast-path
 //!
@@ -92,8 +104,29 @@ use crate::core::session_map::{SessionMapError, SessionMapImpl};
 /// value`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapVal {
-    Set(JsonValue),
+    /// `Set(Some(v))` — an explicit value (including JSON `null`).
+    /// `Set(None)` — the wire `change` object had NO `"value"` field at all:
+    /// TS produces this when a `set` call's value is JS `undefined`
+    /// (`JSON.stringify` drops `undefined`-valued object properties, so the
+    /// transaction's `changes` array element is `{op:"set",key}` with no
+    /// `value` key). Distinct from `Del`: the key stays in `ops`/`keys()`
+    /// (TS `keys()` only excludes `op === "del"`), but every VALUE-reading
+    /// accessor (`get`/`asObject`/`map_get`/snapshot/…) must treat it as
+    /// absent — exactly what TS's own `change.value` (reading a missing
+    /// object property) naturally evaluates to.
+    Set(Option<JsonValue>),
     Del,
+}
+
+impl MapVal {
+    /// The value as read by `get`/`asObject`/etc: `Some(v)` only for an
+    /// explicit value: `Set(None)` and `Del` both read as absent.
+    fn as_present_value(&self) -> Option<&JsonValue> {
+        match self {
+            MapVal::Set(Some(v)) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 /// One materialized coMap operation, carrying the FULL per-op metadata the TS
@@ -136,9 +169,17 @@ impl MapOp {
     /// Serialize to the TS `MapOp` JSON shape. `key` is the map key this op
     /// lives under (the op is stored keyed by it, so it is not duplicated in the
     /// struct); it is re-embedded into the `change` payload here to match TS.
+    ///
+    /// Kept as the test-only ORACLE for [`Self::write_json`] (see
+    /// `write_json_matches_to_json` below) — production code (`delta_rich`)
+    /// uses the allocation-lean `write_json` instead.
+    #[cfg(test)]
     fn to_json(&self, key: &str) -> JsonValue {
         let change = match &self.val {
-            MapVal::Set(v) => serde_json::json!({ "op": "set", "key": key, "value": v }),
+            MapVal::Set(Some(v)) => serde_json::json!({ "op": "set", "key": key, "value": v }),
+            // No `"value"` field at all — matches what `JSON.stringify` produces
+            // for a TS `{op:"set", key, value: undefined}` (the key is dropped).
+            MapVal::Set(None) => serde_json::json!({ "op": "set", "key": key }),
             MapVal::Del => serde_json::json!({ "op": "del", "key": key }),
         };
         serde_json::json!({
@@ -150,6 +191,53 @@ impl MapOp {
         })
     }
 
+    /// Write the SAME shape as [`Self::to_json`] directly into `out`, as
+    /// compact JSON, with no intermediate `serde_json::Value` tree — a bulk
+    /// rich-delta pull (`delta_rich`) builds one of these per op across every
+    /// changed key, so avoiding the tree-then-stringify double pass matters at
+    /// scale. Parsing the result back into a `Value` is byte-for-byte
+    /// equivalent to `to_json` (covered by the `content_fixture_tests` and the
+    /// `delta_rich` unit tests, which compare parsed JSON, not raw bytes).
+    fn write_json(&self, key: &str, out: &mut String) {
+        use std::fmt::Write as _;
+        out.push_str("{\"txID\":{\"sessionID\":");
+        write_json_escaped_str(&self.session_id, out);
+        out.push_str(",\"txIndex\":");
+        let _ = write!(out, "{}", self.tx_index);
+        out.push_str("},\"madeAt\":");
+        let _ = write!(out, "{}", self.made_at);
+        out.push_str(",\"changeIdx\":");
+        let _ = write!(out, "{}", self.change_idx);
+        out.push_str(",\"change\":");
+        match &self.val {
+            MapVal::Set(Some(v)) => {
+                out.push_str("{\"op\":\"set\",\"key\":");
+                write_json_escaped_str(key, out);
+                out.push_str(",\"value\":");
+                // `Value`'s `Display` streams directly through the formatter
+                // (serde_json's own compact serializer), so this embeds the
+                // already-parsed value with no extra allocation.
+                let _ = write!(out, "{}", v);
+                out.push('}');
+            }
+            MapVal::Set(None) => {
+                // No `"value"` field — matches `JSON.stringify` dropping a
+                // `value: undefined` property (see `MapVal::Set` doc comment).
+                out.push_str("{\"op\":\"set\",\"key\":");
+                write_json_escaped_str(key, out);
+                out.push('}');
+            }
+            MapVal::Del => {
+                out.push_str("{\"op\":\"del\",\"key\":");
+                write_json_escaped_str(key, out);
+                out.push('}');
+            }
+        }
+        out.push_str(",\"trusting\":");
+        out.push_str(if self.trusting { "true" } else { "false" });
+        out.push('}');
+    }
+
     /// `op.txID.txIndex < (frontier[op.txID.sessionID] ?? -1)` — the
     /// `atFrontierFilter` predicate (`coMap.ts:238-240`). Default-exclude: a
     /// session absent from the frontier reads as `-1`, so every op of it is
@@ -157,6 +245,17 @@ impl MapOp {
     fn in_frontier(&self, frontier: &HashMap<String, i64>) -> bool {
         (self.tx_index as i64) < frontier.get(&self.session_id).copied().unwrap_or(-1)
     }
+}
+
+/// Write `s` as a JSON string literal (quotes + escaping) directly into `out`,
+/// via `Value::String`'s `Display` impl — which streams through serde_json's
+/// own compact serializer with no allocation beyond the temporary `Value`
+/// wrapper itself (cheap: a single-field enum variant, not a tree). Used by
+/// [`MapOp::write_json`] for `sessionID`/`key` so arbitrary (user-provided) map
+/// keys are escaped exactly as `serde_json::json!` would.
+fn write_json_escaped_str(s: &str, out: &mut String) {
+    use std::fmt::Write as _;
+    let _ = write!(out, "{}", JsonValue::String(s.to_string()));
 }
 
 /// A cached, materialized coMap view for one covalue.
@@ -223,20 +322,20 @@ impl CoMapView {
         ids
     }
 
-    /// Latest value for `key` (`None` = absent / deleted).
+    /// Latest value for `key` (`None` = absent / deleted / `set` to `undefined`).
     pub fn get(&self, key: &str) -> Option<&JsonValue> {
-        match self.ops.get(key).and_then(|e| e.get_latest()) {
-            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
-            _ => None,
-        }
+        self.ops
+            .get(key)
+            .and_then(|e| e.get_latest())
+            .and_then(|op| op.val.as_present_value())
     }
 
     /// Value for `key` at `at_time` (`None` = latest); `None` result = absent.
     pub fn get_at(&self, key: &str, at_time: Option<u64>) -> Option<&JsonValue> {
-        match self.ops.get(key).and_then(|e| e.get_at_time(at_time)) {
-            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
-            _ => None,
-        }
+        self.ops
+            .get(key)
+            .and_then(|e| e.get_at_time(at_time))
+            .and_then(|op| op.val.as_present_value())
     }
 
     /// Value for `key` under an `atFrontier` view (`None` result = absent). Ports
@@ -247,22 +346,18 @@ impl CoMapView {
         key: &str,
         frontier: &HashMap<String, i64>,
     ) -> Option<&JsonValue> {
-        match self
-            .ops
+        self.ops
             .get(key)
             .and_then(|e| e.find_last(|op| op.in_frontier(frontier)))
-        {
-            Some(MapOp { val: MapVal::Set(v), .. }) => Some(v),
-            _ => None,
-        }
+            .and_then(|op| op.val.as_present_value())
     }
 
     /// Whole materialized map as a `{key: latestValue}` JSON object (deleted /
-    /// absent keys omitted), matching `RawCoMap.asObject`.
+    /// absent / `set`-to-`undefined` keys omitted), matching `RawCoMap.asObject`.
     pub fn snapshot(&self) -> JsonValue {
         let mut obj = serde_json::Map::new();
         for (k, e) in &self.ops {
-            if let Some(MapOp { val: MapVal::Set(v), .. }) = e.get_latest() {
+            if let Some(v) = e.get_latest().and_then(|op| op.val.as_present_value()) {
                 obj.insert(k.clone(), v.clone());
             }
         }
@@ -270,12 +365,14 @@ impl CoMapView {
     }
 
     /// `asObject` under an `atFrontier` view: each key's latest frontier-visible
-    /// op, deleted/absent omitted. Mirrors `RawCoMap.atFrontier(f).asObject()`.
+    /// op, deleted/absent/`undefined` omitted. Mirrors
+    /// `RawCoMap.atFrontier(f).asObject()`.
     pub fn snapshot_at_frontier(&self, frontier: &HashMap<String, i64>) -> JsonValue {
         let mut obj = serde_json::Map::new();
         for (k, e) in &self.ops {
-            if let Some(MapOp { val: MapVal::Set(v), .. }) =
-                e.find_last(|op| op.in_frontier(frontier))
+            if let Some(v) = e
+                .find_last(|op| op.in_frontier(frontier))
+                .and_then(|op| op.val.as_present_value())
             {
                 obj.insert(k.clone(), v.clone());
             }
@@ -290,13 +387,32 @@ impl CoMapView {
     pub fn delta(&self, since_version: u64) -> JsonValue {
         let mut changed = serde_json::Map::new();
         let mut deleted: Vec<String> = Vec::new();
-        for (k, ver) in &self.key_versions {
-            if *ver > since_version {
-                match self.ops.get(k).and_then(|e| e.get_latest()) {
-                    Some(MapOp { val: MapVal::Set(v), .. }) => {
+        // Iterate in `self.ops`'s (an `IndexMap`) first-appearance order, NOT
+        // `self.key_versions`'s (a plain `HashMap`, whose iteration order is
+        // randomized per-process and NOT a stable contract) — a TS `Object.keys`
+        // consumer of `changedKeys` observes whatever order we insert here, so an
+        // unordered source would leak non-determinism into the wire contract.
+        for k in self.ops.keys() {
+            let ver = match self.key_versions.get(k) {
+                Some(v) => *v,
+                None => continue,
+            };
+            if ver > since_version {
+                match self
+                    .ops
+                    .get(k)
+                    .and_then(|e| e.get_latest())
+                    .and_then(|op| op.val.as_present_value())
+                {
+                    Some(v) => {
                         changed.insert(k.clone(), v.clone());
                     }
-                    _ => deleted.push(k.clone()),
+                    // Deleted, or `set` to `undefined` — this boundary has no
+                    // way to distinguish the two, so it conservatively treats
+                    // both as "no longer has a value" (matches its pre-existing
+                    // `deletedKeys` contract; only `delta_rich`, which carries
+                    // full per-op shape, needs the distinction).
+                    None => deleted.push(k.clone()),
                 }
             }
         }
@@ -325,24 +441,65 @@ impl CoMapView {
     /// caught-up caller applies an incremental patch. Because appends never drop
     /// a key, no `deletedKeys` are needed on this path — a rich delta never
     /// removes a key except via a `reset` full rebuild.
-    pub fn delta_rich(&self, since_version: u64) -> JsonValue {
+    ///
+    /// Returns the compact JSON STRING directly (not a `serde_json::Value`):
+    /// this is the hot path for a coMap's FIRST full construction (every key
+    /// changed, `since_version = 0`), so it writes each op straight into the
+    /// output buffer via [`MapOp::write_json`] rather than building a
+    /// `Value` tree and stringifying it afterward — avoiding, for an N-op
+    /// delta, both the O(N) tree of intermediate allocations AND the second
+    /// full traversal that `.to_string()`-ing that tree would need. Parsing the
+    /// result reproduces the exact same structure the old `Value`-tree version
+    /// produced (verified by the `content_fixture_tests` and this module's own
+    /// unit tests, which compare parsed JSON).
+    pub fn delta_rich(&self, since_version: u64) -> String {
         let reset = since_version < self.last_full_version;
-        let mut changed = serde_json::Map::new();
-        for (k, ver) in &self.key_versions {
-            if reset || *ver > since_version {
+        let mut out = String::with_capacity(64);
+        out.push_str("{\"version\":");
+        {
+            use std::fmt::Write as _;
+            let _ = write!(out, "{}", self.version);
+        }
+        out.push_str(",\"reset\":");
+        out.push_str(if reset { "true" } else { "false" });
+        out.push_str(",\"changedKeys\":{");
+        let mut first_key = true;
+        // Iterate in `self.ops`'s (an `IndexMap`) first-appearance order, NOT
+        // `self.key_versions`'s (a plain `HashMap` — randomized per-process
+        // iteration order, not a stable contract). A TS `RawCoMap` consumer
+        // builds `ops`/`latest` — and thus `Object.keys()` order — directly
+        // from this delta's key order, so it must be deterministic.
+        for k in self.ops.keys() {
+            let ver = match self.key_versions.get(k) {
+                Some(v) => *v,
+                None => continue,
+            };
+            if reset || ver > since_version {
                 if let Some(e) = self.ops.get(k) {
-                    let list: Vec<JsonValue> = e.iter_values().map(|op| op.to_json(k)).collect();
-                    if !list.is_empty() {
-                        changed.insert(k.clone(), JsonValue::Array(list));
+                    let mut values = e.iter_values().peekable();
+                    if values.peek().is_none() {
+                        continue;
                     }
+                    if !first_key {
+                        out.push(',');
+                    }
+                    first_key = false;
+                    write_json_escaped_str(k, &mut out);
+                    out.push_str(":[");
+                    let mut first_op = true;
+                    for op in values {
+                        if !first_op {
+                            out.push(',');
+                        }
+                        first_op = false;
+                        op.write_json(k, &mut out);
+                    }
+                    out.push(']');
                 }
             }
         }
-        serde_json::json!({
-            "version": self.version,
-            "reset": reset,
-            "changedKeys": changed,
-        })
+        out.push_str("}}");
+        out
     }
 }
 
@@ -390,7 +547,11 @@ fn apply_change(
     let key = change.get("key").and_then(|v| v.as_str())?;
     let val = match change.get("op").and_then(|v| v.as_str()) {
         Some("del") => MapVal::Del,
-        _ => MapVal::Set(change.get("value").cloned().unwrap_or(JsonValue::Null)),
+        // `change.get("value")` is `None` when the wire object has no
+        // `"value"` field at all — a `set` to JS `undefined` (see
+        // `MapVal::Set`'s doc comment). Preserve that as `Set(None)` rather
+        // than defaulting to JSON `null`, which is a DIFFERENT, explicit value.
+        _ => MapVal::Set(change.get("value").cloned()),
     };
     let (session_id, tx_index) = tx_id_of(tx);
     ops.entry(key.to_string()).or_default().add_change(
@@ -495,16 +656,32 @@ fn build_full_view(
 
     let valid = valid_set(verdicts);
 
-    // fww winner selection over ALL collected txs, in sorted (compareTransactions)
+    // fww winner selection over collected txs, in sorted (compareTransactions)
     // order: the first tx for a given fww key wins, every later one is a loser.
+    //
+    // A tx that is PERMISSION-invalid (author lacked write access at its
+    // effective time) does not compete for the win: it is excluded from views
+    // regardless via the `!valid.contains(&id)` check below, but if it were
+    // still allowed to claim `fww_seen` first, a permission-valid competitor
+    // for the SAME key would be incorrectly benched as "not first writer" —
+    // e.g. an offline/unauthorized writer's stale init transaction racing an
+    // authorized writer's later one for a `getOrCreateUnique` key. `has_fww`
+    // still counts every fww-keyed tx seen (valid or not): the append
+    // fast-path's "no new tx may carry an fww key" guard must stay conservative
+    // regardless of validity, since a later permission flip could validate a
+    // previously-invalid contender.
     let mut fww_seen: HashSet<String> = HashSet::new();
     let mut fww_losers: HashSet<(String, u32)> = HashSet::new();
     let mut has_fww = false;
     for tx in &txs {
         if let Some(fk) = fww_key(tx) {
             has_fww = true;
+            let id = (tx.session_id.clone(), tx.tx_index);
+            if !valid.contains(&id) {
+                continue;
+            }
             if !fww_seen.insert(fk.to_string()) {
-                fww_losers.insert((tx.session_id.clone(), tx.tx_index));
+                fww_losers.insert(id);
             }
         }
     }
@@ -693,6 +870,7 @@ pub fn ensure_co_map(
 
 #[cfg(test)]
 mod tests {
+    use super::{JsonValue, MapOp, MapVal};
     use crate::core::node::NodeCore;
 
     // A minimal unsafeAllowAll comap covalue: header + a single session of
@@ -1296,6 +1474,83 @@ mod tests {
         assert_eq!(a.len(), 2, "set + del both retained in the op-list");
         // A del op has NO value field in its change (TS `{op:"del", key}`).
         assert_eq!(a[1]["change"], serde_json::json!({"op":"del","key":"a"}));
+    }
+
+    #[test]
+    fn write_json_matches_to_json_oracle() {
+        // `write_json` (the allocation-lean serializer `delta_rich` uses) must
+        // reproduce EXACTLY what the tree-based `to_json` oracle produces, for
+        // both `set` and `del`, trusting and non-trusting, and keys/values that
+        // need JSON escaping (quotes, unicode, special chars) — the whole
+        // reason `to_json` is kept around (test-only) rather than deleted.
+        let cases: Vec<(MapOp, &str)> = vec![
+            (
+                MapOp {
+                    session_id: "co_zA_session_zS".to_string(),
+                    tx_index: 0,
+                    made_at: 1_700_000_000_000,
+                    change_idx: 0,
+                    val: MapVal::Set(Some(serde_json::json!(1))),
+                    trusting: true,
+                },
+                "a",
+            ),
+            (
+                MapOp {
+                    session_id: "sealer_z.../signer_z.../session_zXYZ".to_string(),
+                    tx_index: 7,
+                    made_at: 1_700_000_000_555,
+                    change_idx: 2,
+                    val: MapVal::Set(Some(serde_json::json!({"nested": ["v", 1, null]}))),
+                    trusting: false,
+                },
+                "key with \"quotes\", a newline\nand unicode \u{1F600}",
+            ),
+            (
+                MapOp {
+                    session_id: "co_zA_session_zS".to_string(),
+                    tx_index: 3,
+                    made_at: 1_700_000_000_100,
+                    change_idx: 0,
+                    val: MapVal::Del,
+                    trusting: true,
+                },
+                "b",
+            ),
+            (
+                MapOp {
+                    session_id: "co_zA_session_zS".to_string(),
+                    tx_index: 4,
+                    made_at: 1_700_000_000_200,
+                    change_idx: 0,
+                    val: MapVal::Set(Some(JsonValue::Null)),
+                    trusting: false,
+                },
+                "c",
+            ),
+            (
+                // `set` to JS `undefined` — no `"value"` field at all, distinct
+                // from an explicit JSON `null` (the `c` case above).
+                MapOp {
+                    session_id: "co_zA_session_zS".to_string(),
+                    tx_index: 5,
+                    made_at: 1_700_000_000_300,
+                    change_idx: 0,
+                    val: MapVal::Set(None),
+                    trusting: true,
+                },
+                "d",
+            ),
+        ];
+
+        for (op, key) in &cases {
+            let expected = op.to_json(key);
+            let mut buf = String::new();
+            op.write_json(key, &mut buf);
+            let actual: JsonValue = serde_json::from_str(&buf)
+                .unwrap_or_else(|e| panic!("write_json produced invalid JSON: {e}\n{buf}"));
+            assert_eq!(actual, expected, "write_json diverged from to_json oracle for key {key:?}");
+        }
     }
 
     #[test]
