@@ -1316,6 +1316,13 @@ export class CoValueCore {
 
   // Reset the parsed transactions and branches, to validate them again from scratch when the group is updated
   resetParsedTransactions() {
+    // Drop the native validation engine cache for this CoValue in lockstep with
+    // the TS re-parse: the engine cache is keyed only by per-session tx counts,
+    // so pending changes (e.g. late-decrypted private meta) require an explicit
+    // reset here — the one place TS re-derives validity. Optional-chained so
+    // providers without a native NodeCore are unaffected.
+    this.node.nodeCore.resetValidation?.(this.id);
+
     const verifiedTransactions = this.verifiedTransactions;
 
     if (verifiedTransactions.length === 0) {

@@ -89,6 +89,15 @@ export function determineValidTransactions(coValue: CoValueCore): void {
     throw new Error("determineValidTransactions CoValue is not available");
   }
 
+  const nodeCore = coValue.node.nodeCore;
+  if (nodeCore.validateTransactions && !nativeValidationDisabled()) {
+    // Native NodeCore validates ALL rulesets (group, ownedByGroup,
+    // unsafeAllowAll). The TS dispatch below remains a byte-identical fallback
+    // for providers without a native NodeCore, or when the kill switch is set.
+    determineValidTransactionsNative(coValue, nodeCore);
+    return;
+  }
+
   // The CoValue is a group
   if (coValue.verified.header.ruleset.type === "group") {
     const initialAdmin = coValue.verified.header.ruleset.initialAdmin;
@@ -96,12 +105,7 @@ export function determineValidTransactions(coValue: CoValueCore): void {
       throw new Error("Group must have initialAdmin");
     }
 
-    const nodeCore = coValue.node.nodeCore;
-    if (nodeCore.validateTransactions && !nativeValidationDisabled()) {
-      determineValidTransactionsForGroupNative(coValue, nodeCore);
-    } else {
-      determineValidTransactionsForGroup(coValue, initialAdmin);
-    }
+    determineValidTransactionsForGroup(coValue, initialAdmin);
     return;
   }
 
@@ -246,28 +250,66 @@ class MemberRoleResolver {
 }
 
 /**
- * Native counterpart of {@link determineValidTransactionsForGroup}: the
- * NodeCore registry already holds every transaction (ingested via
- * addTransactions), so `pending` deliberately carries ONLY the merge/branch
- * transactions whose `sourceTxMadeAt` is a TS-derived ordering override
- * (computed from merge meta in parseMetaInformation) that native cannot
- * recompute itself. Verdicts come back for ALL transactions in validation
- * order and MUST be applied in that order.
+ * Native counterpart of the whole {@link determineValidTransactions} dispatch:
+ * NodeCore validates EVERY ruleset (group, ownedByGroup, unsafeAllowAll). The
+ * registry already holds every transaction (ingested via addTransactions), so
+ * `pending` carries ONLY the per-transaction extras native cannot recompute
+ * itself:
+ *   - `sourceMadeAt`: the TS-derived ordering override for merged/branch
+ *     transactions (computed from merge meta in parseMetaInformation).
+ *   - `sourceTxId`: the merged transaction's source identity in its branch.
+ *   - `metaJson`: decrypted PRIVATE meta available NOW (private meta is not on
+ *     the wire, so native can't read it; trusting meta IS wire-visible and must
+ *     NOT be sent — native reads it itself).
+ * A transaction contributes a pending entry only when it has at least one such
+ * extra. Verdicts come back for ALL transactions in validation order and MUST
+ * be applied in that order.
  */
-function determineValidTransactionsForGroupNative(
+function determineValidTransactionsNative(
   coValue: CoValueCore,
   nodeCore: NodeCoreImpl,
 ): void {
   const pending: NodeCorePendingTx[] = [];
   for (const tx of coValue.verifiedTransactions) {
+    const entry: NodeCorePendingTx = {
+      sessionId: tx.currentTxID.sessionID,
+      txIndex: tx.currentTxID.txIndex,
+    };
+    let hasExtra = false;
+
     if (tx.sourceTxMadeAt !== undefined) {
-      pending.push({
-        sessionId: tx.currentTxID.sessionID,
-        txIndex: tx.currentTxID.txIndex,
-        sourceMadeAt: tx.sourceTxMadeAt,
-      });
+      entry.sourceMadeAt = tx.sourceTxMadeAt;
+      hasExtra = true;
+    }
+
+    if (tx.sourceTxID !== undefined) {
+      entry.sourceTxId = {
+        sessionID: tx.sourceTxID.sessionID,
+        txIndex: tx.sourceTxID.txIndex,
+      };
+      hasExtra = true;
+    }
+
+    // Only PRIVATE meta is passed: it is not on the wire so native cannot read
+    // it. `tx.meta` is populated for a private tx only once decrypted; trusting
+    // meta is wire-visible and native reads it itself, so it must not be sent.
+    if (tx.tx.privacy === "private" && tx.meta !== undefined) {
+      entry.metaJson = JSON.stringify(tx.meta);
+      hasExtra = true;
+    }
+
+    if (hasExtra) {
+      pending.push(entry);
     }
   }
+
+  // Missing-dependency error description differs per ruleset, matching the TS
+  // fallback: an owned object throws about its owning group, everything else
+  // (group parent extensions / owning account) about the parent group.
+  const missingDependencyDescription =
+    coValue.verified?.header.ruleset.type === "ownedByGroup"
+      ? "Determining valid transaction in owned object but its group wasn't loaded"
+      : "Expected parent group to be loaded";
 
   let verdicts: NodeCoreGroupVerdict[];
   try {
@@ -275,14 +317,11 @@ function determineValidTransactionsForGroupNative(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (message.startsWith("CoValue not loaded: ")) {
-      // Dependency (parent group / owning account) missing from the native
-      // registry — route through the canonical TS error path so consumers see
-      // the same message the TS implementation produces.
+      // Dependency (parent group / owning group / owning account) missing from
+      // the native registry — route through the canonical TS error path so
+      // consumers see the same message the TS implementation produces.
       const missingId = message.slice("CoValue not loaded: ".length) as RawCoID;
-      coValue.node.expectCoValueLoaded(
-        missingId,
-        "Expected parent group to be loaded",
-      );
+      coValue.node.expectCoValueLoaded(missingId, missingDependencyDescription);
     }
     throw e;
   }
@@ -295,12 +334,22 @@ function determineValidTransactionsForGroupNative(
   for (const v of verdicts) {
     const tx = byKey.get(`${v.sessionId}/${v.txIndex}`);
     if (!tx) continue; // verdict for a tx TS hasn't wrapped yet — next parseNewTransactions pass picks it up
-    if (v.valid) {
+
+    if (v.outcome === "validBranchPointerOnly") {
+      // Mirror the reader branch-pointer trim in the TS ownedByGroup path:
+      // force changes and meta to only contain the branch pointer information.
+      tx.meta = {
+        branch: tx.meta?.branch,
+        ownerId: tx.meta?.ownerId,
+      };
+      tx.changes = [];
       tx.markValid();
-    } else {
-      tx.markInvalid(v.reason ?? "Invalid group transaction", {
+    } else if (v.outcome === "invalid") {
+      tx.markInvalid(v.reason ?? "Invalid transaction", {
         transactor: tx.author,
       });
+    } else {
+      tx.markValid();
     }
   }
 }
