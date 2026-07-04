@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::core::co_map::{ensure_co_map, CoMapView};
 use crate::core::group_engine::engine::{
     role_of as engine_role_of, validate_transactions as engine_validate_transactions,
-    GroupEngineState,
+    validate_transactions_delta as engine_validate_transactions_delta, GroupEngineState,
+    VerdictDelta,
 };
 use crate::core::group_engine::tx_view::PendingTxIn;
 use crate::core::group_engine::types::Role;
@@ -145,6 +146,42 @@ impl NodeCore {
             keys_version,
         } = self;
         engine_validate_transactions(covalues, engines, keys, *keys_version, co_id, pending)
+    }
+
+    /// Delta counterpart of [`validate_transactions`]: returns only the verdicts
+    /// the caller has not seen, given its `(since_generation, since_count)`
+    /// cursor. On a generation match returns `verdicts[since_count..]`; on a
+    /// mismatch (a full recompute reordered/flipped verdicts, or a fresh cursor)
+    /// returns the whole list with `from_index = 0`. Same error contract and
+    /// engine-freshness semantics as [`validate_transactions`]; the delta shape
+    /// keeps per-ingest marshalling and TS re-apply O(new), not O(history).
+    pub fn validate_transactions_delta(
+        &mut self,
+        co_id: &str,
+        since_generation: u64,
+        since_count: u32,
+        pending: &[PendingTxIn],
+    ) -> Result<VerdictDelta, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let Self {
+            covalues,
+            engines,
+            co_maps: _,
+            keys,
+            keys_version,
+        } = self;
+        engine_validate_transactions_delta(
+            covalues,
+            engines,
+            keys,
+            *keys_version,
+            co_id,
+            since_generation,
+            since_count,
+            pending,
+        )
     }
 
     /// Drop the cached validation engine for `co_id`, forcing a full recompute

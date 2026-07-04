@@ -225,6 +225,37 @@ pub struct GroupEngineState {
     /// list was rebuilt-from-scratch since it last materialized. See
     /// [`generation_of`].
     generation: u64,
+    /// Accumulated per-transaction PENDING extras (source made-at / source
+    /// identity / decrypted private meta) supplied for this CoValue across ALL
+    /// ingests since the engine was (re)built — a SPARSE map: only merge/branch/
+    /// private-meta-override transactions ever have an entry, so for plain
+    /// group/owned/data histories this is empty. Kept resident so the delta
+    /// protocol lets TS send pending only for the NEW transactions each pass
+    /// (`toValidateTransactions`) while a later FULL recompute (non-suffix ingest
+    /// / keys-version change) still folds every historical merge tx with its
+    /// original extras — the raw transaction JSON stays the single resident copy
+    /// in `SessionMapImpl` (no parsed-view duplication), and only the sparse
+    /// pending is re-held here. Upserted by [`merge_pending`] keyed by
+    /// `(session_id, tx_index)` (last write wins, matching `collect`'s lookup).
+    resident_pending: Vec<PendingTxIn>,
+}
+
+/// Upsert `incoming` pending entries into `base`, keyed by `(session_id,
+/// tx_index)` — a later entry for the same key REPLACES the earlier one, exactly
+/// mirroring the last-write-wins semantics of `collect`'s `pending_by_key`
+/// HashMap. Both sides are sparse (only merge/branch/private-meta txs), so this
+/// stays cheap even at large histories.
+fn merge_pending(base: &mut Vec<PendingTxIn>, incoming: &[PendingTxIn]) {
+    for p in incoming {
+        if let Some(existing) = base
+            .iter_mut()
+            .find(|b| b.session_id == p.session_id && b.tx_index == p.tx_index)
+        {
+            *existing = p.clone();
+        } else {
+            base.push(p.clone());
+        }
+    }
 }
 
 /// The accumulating state of the group fold — mirrors `MemberRoleResolver`.
@@ -477,6 +508,19 @@ fn build_group_engine(
     let is_account = header_meta_is_account(header);
     let session_counts = session_counts_of(sm);
 
+    // Accumulate this build's pending onto whatever the prior engine held (still
+    // present in `engines` until we reinsert): a full recompute must fold EVERY
+    // historical merge/branch tx with its original extras, even when TS supplied
+    // pending only for the NEW transactions this pass (the delta protocol). The
+    // old engine's `resident_pending` carries the earlier extras forward; the
+    // incoming `pending` upserts the new ones. For plain histories both are
+    // empty, so this is a no-op clone of an empty Vec.
+    let mut resident_pending = engines
+        .get(co_id)
+        .map(|e| e.resident_pending.clone())
+        .unwrap_or_default();
+    merge_pending(&mut resident_pending, pending);
+
     let mut state = GroupEngineState {
         session_counts,
         verdicts: Vec::new(),
@@ -495,7 +539,12 @@ fn build_group_engine(
         // Set by `ensure_engine` after a full build (extends preserve the prior
         // generation via `engines.remove`/reinsert of the same state).
         generation: 0,
+        // Filled in from the local `resident_pending` after the fold below.
+        resident_pending: Vec::new(),
     };
+
+    // The fold consults the FULL accumulated pending, not just this pass's slice.
+    let pending = resident_pending.as_slice();
 
     match kind {
         RulesetKind::Group => {
@@ -533,6 +582,9 @@ fn build_group_engine(
         }
     }
 
+    // Re-home the accumulated pending onto the built engine so the next full
+    // recompute inherits it (the borrow of it as `pending` above has ended).
+    state.resident_pending = resident_pending;
     Ok(state)
 }
 
@@ -1345,6 +1397,10 @@ fn try_extend_engine(
     let mut state = engines
         .remove(co_id)
         .expect("engine present (checked above)");
+    // Fold this pass's pending into the resident accumulator so a LATER full
+    // recompute still sees every merge/branch tx's extras (the suffix extend
+    // itself only needed them for the new txs, already applied via `new_txs`).
+    merge_pending(&mut state.resident_pending, pending);
     visited.insert(co_id.to_string());
     let res = extend_engine_state(
         covalues, engines, keys, co_id, &mut state, new_txs, new_counts, visited,
@@ -1691,6 +1747,78 @@ pub fn validate_transactions(
         .get(co_id)
         .map(|e| e.verdicts.clone())
         .unwrap_or_default())
+}
+
+/// A DELTA of validation verdicts: the tail of the verdict list a caller has not
+/// yet seen, tagged with the engine's [`generation`](GroupEngineState::generation)
+/// so the caller can pair it with its own cursor.
+#[derive(Debug, Clone)]
+pub struct VerdictDelta {
+    /// The engine's current full-recompute generation (see [`generation_of`]).
+    pub generation: u64,
+    /// The index into the FULL verdict list at which `verdicts` begins. `0` when
+    /// the whole list is returned (a recompute happened, or the caller's cursor
+    /// did not match); `since_count` when only the appended tail is returned.
+    pub from_index: u32,
+    /// The verdicts from `from_index` onward, in validation order.
+    pub verdicts: Vec<Verdict>,
+}
+
+/// Delta-returning counterpart of [`validate_transactions`]. Ensures the engine
+/// is fresh, then returns ONLY the verdicts the caller has not seen:
+///
+/// - **Generation MATCH** (`generation == since_generation`, and the caller's
+///   `since_count` is within the current list): no full recompute has happened
+///   since the caller's cursor, so — by the engine's generation contract — the
+///   verdicts at `[0..since_count]` are byte-for-byte unchanged (an extend only
+///   ever APPENDS; it never reorders or flips an already-emitted verdict). Return
+///   `verdicts[since_count..]` with `from_index = since_count`. Marshalling and
+///   TS re-apply then cost O(new), not O(history).
+/// - **Generation MISMATCH** (a recompute reordered/flipped verdicts, or the
+///   caller has no cursor): return the FULL list with `from_index = 0`, so the
+///   caller resets its cursor and re-applies every verdict (flips reach old txs).
+///
+/// The pairing is sound because generation is MONOTONIC within an engine's
+/// lifetime (bumped on every full recompute, preserved across every extend) and
+/// the caller invalidates its cursor in lockstep with the ONE place the engine is
+/// dropped (TS `resetParsedTransactions` → `reset_validation`), so a match can
+/// never coincide with a stale-but-changed verdict prefix.
+#[allow(clippy::too_many_arguments)]
+pub fn validate_transactions_delta(
+    covalues: &HashMap<String, SessionMapImpl>,
+    engines: &mut HashMap<String, GroupEngineState>,
+    keys: &HashMap<String, String>,
+    keys_version: u64,
+    co_id: &str,
+    since_generation: u64,
+    since_count: u32,
+    pending: &[PendingTxIn],
+) -> Result<VerdictDelta, SessionMapError> {
+    let mut visited = HashSet::new();
+    let keys = KeyCtx {
+        map: keys,
+        version: keys_version,
+    };
+    ensure_engine(covalues, engines, keys, co_id, pending, &mut visited)?;
+    let (generation, verdicts) = engines
+        .get(co_id)
+        .map(|e| (e.generation, e.verdicts.as_slice()))
+        .unwrap_or((0, &[]));
+
+    let since = since_count as usize;
+    if generation == since_generation && since <= verdicts.len() {
+        Ok(VerdictDelta {
+            generation,
+            from_index: since_count,
+            verdicts: verdicts[since..].to_vec(),
+        })
+    } else {
+        Ok(VerdictDelta {
+            generation,
+            from_index: 0,
+            verdicts: verdicts.to_vec(),
+        })
+    }
 }
 
 /// Ensure `co_id`'s engine is fresh (extending or recomputing as needed)
@@ -2424,6 +2552,70 @@ mod tests {
             EXTEND_COUNT.load(Ordering::Relaxed) >= 20,
             "monotonic incremental load must extend on nearly every step, got {}",
             EXTEND_COUNT.load(Ordering::Relaxed)
+        );
+    }
+
+    /// The delta API contract, driven by a simulated TS cursor over a mixed
+    /// (in-order + out-of-order) incremental load:
+    ///   • an EXTEND returns only the appended tail (`from_index == cursor`), and
+    ///     the untouched prefix is never re-sent;
+    ///   • a RECOMPUTE (generation bump from an out-of-order flip) returns the
+    ///     FULL list (`from_index == 0`) so the cursor resets and flips reach old
+    ///     txs;
+    ///   • reconstructing the verdict list delta-by-delta EXACTLY as TS does
+    ///     equals the authoritative full `validate_transactions` at every step.
+    /// Both branches must actually fire.
+    #[test]
+    fn delta_cursor_reconstructs_full_validate_over_mixed_history() {
+        let (_, header_json) = prop_group_header();
+        let txs = gen_group_history(7, 40, 25); // 25% out-of-order → forces flips
+
+        let mut node = NodeCore::new();
+        node.create_co_value(GROUP_ADMIN, &header_json, None, true)
+            .unwrap();
+
+        let mut cur_gen: u64 = 0;
+        let mut cur_count: u32 = 0;
+        let mut reconstructed: Vec<Verdict> = Vec::new();
+        let mut extends = 0u32;
+        let mut recomputes = 0u32;
+
+        for tx in &txs {
+            let one = format!("[{tx}]");
+            node.get_mut(GROUP_ADMIN)
+                .unwrap()
+                .add_transactions(GROUP_SESSION, None, &one, "sig_zFake", true)
+                .unwrap();
+
+            let delta = node
+                .validate_transactions_delta(GROUP_ADMIN, cur_gen, cur_count, &[])
+                .unwrap();
+            if delta.from_index == 0 {
+                recomputes += 1;
+                reconstructed = delta.verdicts.clone();
+            } else {
+                extends += 1;
+                assert_eq!(
+                    delta.from_index as usize,
+                    reconstructed.len(),
+                    "an extend delta must begin exactly at the cursor position"
+                );
+                reconstructed.extend(delta.verdicts.iter().cloned());
+            }
+            cur_gen = delta.generation;
+            cur_count = reconstructed.len() as u32;
+
+            let full = node.validate_transactions(GROUP_ADMIN, &[]).unwrap();
+            assert_eq!(
+                reconstructed, full,
+                "delta-reconstructed verdicts diverged from full validate"
+            );
+        }
+
+        assert!(extends > 0, "no extend delta ever fired");
+        assert!(
+            recomputes > 1,
+            "expected out-of-order flips to force >1 full-recompute delta, got {recomputes}"
         );
     }
 

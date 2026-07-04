@@ -343,12 +343,17 @@ pub fn collect_group_txs_after(
 
     let mut views = Vec::new();
     for (session_id, tx_jsons) in sm.iter_session_transactions() {
-        let start = old_counts.get(session_id).copied().unwrap_or(0);
-        for (tx_index, tx_json) in tx_jsons.iter().enumerate() {
-            let tx_index = tx_index as u32;
-            if tx_index < start {
-                continue;
-            }
+        // Seek straight to the first NEW index instead of scanning every stored
+        // transaction and `continue`-ing over the old ones: that scan was O(total
+        // history) per ingest — quadratic across a session's lifetime — even
+        // though only the suffix is ever built. Indexing the tail slice makes the
+        // per-ingest cost O(new transactions).
+        let start = old_counts.get(session_id).copied().unwrap_or(0) as usize;
+        if start >= tx_jsons.len() {
+            continue;
+        }
+        for (offset, tx_json) in tx_jsons[start..].iter().enumerate() {
+            let tx_index = (start + offset) as u32;
             let pending = pending_by_key.get(&(session_id, tx_index)).copied();
             views.push(build_tx_view(
                 sm, session_id, tx_index, tx_json, pending, keys,
