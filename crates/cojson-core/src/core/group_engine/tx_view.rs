@@ -149,18 +149,32 @@ fn build_tx_view(
     let tx: Transaction = serde_json::from_str(tx_json)
         .expect("stored transaction JSON must re-parse as Transaction");
 
-    let (privacy, current_made_at, changes, trusting_meta, key_used) = match tx {
+    let (privacy, current_made_at, changes, trusting_meta, key_used, private_has_meta) = match tx {
         Transaction::Trusting(t) => {
             // Cojson producers always stringify a valid JSON array; a parse
             // failure is defensive only (treated as no usable changes, which
             // downstream validation will reject).
             let changes = serde_json::from_str(&t.changes).ok();
             let made_at = t.made_at.as_u64().unwrap_or(0);
-            (Privacy::Trusting, made_at, changes, t.meta, None)
+            (Privacy::Trusting, made_at, changes, t.meta, None, false)
         }
         Transaction::Private(p) => {
             let made_at = p.made_at.as_u64().unwrap_or(0);
-            (Privacy::Private, made_at, None, None, Some(p.key_used.0))
+            // Whether this private tx carries an ENCRYPTED meta field at all —
+            // known from this single parse. The vast majority of private txs
+            // (every `push`/`set` without merge/fww/branch metadata) have none,
+            // so this lets us SKIP the meta decrypt entirely below rather than
+            // re-parsing the whole envelope just to discover there is nothing to
+            // decrypt.
+            let has_meta = p.meta.is_some();
+            (
+                Privacy::Private,
+                made_at,
+                None,
+                None,
+                Some(p.key_used.0),
+                has_meta,
+            )
         }
     };
 
@@ -169,8 +183,14 @@ fn build_tx_view(
     // TS `decryptTransactionChangesAndMeta` step feeding `parseMetaInformation`);
     // else a TRUSTING tx's own plaintext wire meta. An unparseable meta string
     // is treated as no meta (defensive — real producers always emit valid JSON).
+    //
+    // Only attempt the native decrypt when the tx ACTUALLY carries encrypted
+    // meta (`private_has_meta`): decrypting a tx with no meta field always yields
+    // `None` (the primitive returns `Ok(None)`), so skipping it is behaviour-
+    // preserving and avoids a redundant full re-parse of the transaction JSON
+    // per meta-less private tx — the common case at bulk-materialize scale.
     let native_private_meta = match (&privacy, &key_used) {
-        (Privacy::Private, Some(kid)) => keys
+        (Privacy::Private, Some(kid)) if private_has_meta => keys
             .get(kid)
             .and_then(|secret| decrypt_private_meta(sm, session_id, tx_index, secret)),
         _ => None,

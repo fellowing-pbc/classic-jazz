@@ -52,11 +52,89 @@ pub struct TrustingTransaction {
     pub privacy: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum Transaction {
     Private(PrivateTransaction),
     Trusting(TrustingTransaction),
+}
+
+/// Flat wire view of a transaction, deserialized in a SINGLE pass. Replaces a
+/// derived `#[serde(untagged)]` `Deserialize` for [`Transaction`], which buffered
+/// the entire JSON object into an intermediate `serde_json`-style `Content` tree
+/// and re-deserialized each candidate variant from it — an O(2×) parse serde
+/// pays for EVERY `Transaction::deserialize`. Because a stored transaction always
+/// carries an explicit `privacy` tag ("private"/"trusting") that unambiguously
+/// selects the variant, we dispatch on it directly and deserialize once, with no
+/// buffering. Both variants' `meta` (and a private tx's `encryptedChanges`) are
+/// plain JSON strings on the wire, so this flat struct captures them losslessly.
+#[derive(Deserialize)]
+struct TransactionWire {
+    privacy: String,
+    #[serde(rename = "madeAt")]
+    made_at: Number,
+    #[serde(rename = "encryptedChanges", default)]
+    encrypted_changes: Option<Encrypted<JsonValue>>,
+    #[serde(rename = "keyUsed", default)]
+    key_used: Option<KeyID>,
+    #[serde(default)]
+    changes: Option<String>,
+    #[serde(default)]
+    meta: Option<String>,
+}
+
+/// Minimal borrowed view capturing ONLY a transaction's changes payload, for the
+/// decrypt hot path. A private tx exposes its ciphertext through `encrypted_changes`
+/// (borrowed zero-copy — base64url has no JSON escapes); a trusting tx exposes its
+/// plaintext `changes` (owned, may contain escapes). Avoids allocating the
+/// `keyUsed`/`meta` strings a full [`Transaction`] parse would.
+#[derive(Deserialize)]
+struct TxChangesWire<'a> {
+    #[serde(rename = "encryptedChanges", borrow, default)]
+    encrypted_changes: Option<&'a str>,
+    #[serde(default)]
+    changes: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for Transaction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        let raw = TransactionWire::deserialize(deserializer)?;
+        if raw.privacy == "private" {
+            let encrypted_changes = raw
+                .encrypted_changes
+                .ok_or_else(|| D::Error::missing_field("encryptedChanges"))?;
+            let key_used = raw
+                .key_used
+                .ok_or_else(|| D::Error::missing_field("keyUsed"))?;
+            Ok(Transaction::Private(PrivateTransaction {
+                encrypted_changes,
+                key_used,
+                made_at: raw.made_at,
+                // A private tx's `meta` is an ENCRYPTED string on the wire, so
+                // wrap the captured JSON string back into the transparent
+                // `Encrypted` newtype (identical to the derived path).
+                meta: raw.meta.map(|value| Encrypted {
+                    value,
+                    _phantom: std::marker::PhantomData,
+                }),
+                privacy: raw.privacy,
+            }))
+        } else {
+            let changes = raw
+                .changes
+                .ok_or_else(|| D::Error::missing_field("changes"))?;
+            Ok(Transaction::Trusting(TrustingTransaction {
+                changes,
+                made_at: raw.made_at,
+                meta: raw.meta,
+                privacy: raw.privacy,
+            }))
+        }
+    }
 }
 
 pub enum TransactionMode {
@@ -397,14 +475,20 @@ impl SessionLogInternal {
             .transactions_json
             .get(tx_index as usize)
             .ok_or(CoJsonCoreError::TransactionNotFound(tx_index))?;
-        let tx: Transaction = serde_json::from_str(tx_json)?;
+        // Parse ONLY the two changes-bearing fields, borrowing the ciphertext
+        // slice directly out of the source JSON rather than deserializing the
+        // whole `Transaction` (which allocates owned `String`s for the
+        // ciphertext, `keyUsed`, and `meta` we do not need here). A private tx's
+        // `encryptedChanges` is a `encrypted_U<base64url>` string with no JSON
+        // escapes, so serde borrows it zero-copy; a trusting tx's `changes` is a
+        // stringified JSON array (may contain escapes) so it is captured owned.
+        let wire: TxChangesWire = serde_json::from_str(tx_json)?;
 
-        match tx {
-            Transaction::Private(private_tx) => {
+        match (wire.encrypted_changes, wire.changes) {
+            (Some(encrypted_val), _) => {
                 // For private transactions, decrypt the encrypted_changes field.
                 let nonce = self.nonce_generator.get_nonce(tx_index);
 
-                let encrypted_val = private_tx.encrypted_changes.value;
                 let prefix = "encrypted_U";
                 if !encrypted_val.starts_with(prefix) {
                     return Err(CoJsonCoreError::InvalidEncryptedPrefix);
@@ -423,7 +507,9 @@ impl SessionLogInternal {
                 Ok(String::from_utf8(ciphertext)?)
             }
             // For trusting transactions, just return the plain changes.
-            Transaction::Trusting(trusting_tx) => Ok(trusting_tx.changes),
+            (None, Some(changes)) => Ok(changes),
+            // Neither field present: not a decryptable transaction shape.
+            (None, None) => Err(CoJsonCoreError::TransactionNotFound(tx_index)),
         }
     }
 
