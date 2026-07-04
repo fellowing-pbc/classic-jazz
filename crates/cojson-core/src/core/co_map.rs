@@ -77,10 +77,11 @@ use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 
 use crate::core::group_engine::engine::{
-    validate_transactions as engine_validate_transactions, GroupEngineState, Verdict,
+    ensure as engine_ensure, generation_of, verdicts_of, GroupEngineState, Verdict,
 };
 use crate::core::group_engine::tx_view::{
-    collect_group_txs, sort_for_validation, GroupTxView, PendingTxIn, Privacy,
+    collect_group_txs_after, collect_group_txs_keyed, sort_for_validation, GroupTxView,
+    PendingTxIn, Privacy,
 };
 use crate::core::group_engine::types::TimeBasedEntry;
 use crate::core::session_map::{SessionMapError, SessionMapImpl};
@@ -104,9 +105,17 @@ pub struct CoMapView {
     /// order (snapshots are compared order-independently, so this is only for
     /// stable/deterministic output).
     ops: IndexMap<String, TimeBasedEntry<MapVal>>,
-    /// The set of `(session_id, tx_index)` that were permission-valid at build
-    /// time — used by the append fast-path to detect an earlier verdict flip.
-    valid_txs: HashSet<(String, u32)>,
+    /// The number of verdicts the engine had produced when this view was last
+    /// materialized. The append fast-path treats `verdicts[verdict_count..]` as
+    /// exactly the newly-validated transactions — no full re-scan of the verdict
+    /// list per ingest.
+    verdict_count: usize,
+    /// The engine's full-recompute generation this view was built against. Only
+    /// when it is unchanged is `verdicts[verdict_count..]` guaranteed to be a
+    /// pure tail append (the engine only extended since); a changed generation
+    /// means the verdicts were rebuilt (possibly reordered/flipped) so the view
+    /// must fully rebuild rather than append.
+    engine_generation: u64,
     /// True if any collected tx carried an `meta.fww` key. Disables the append
     /// fast-path (fww needs a global recompute).
     has_fww: bool,
@@ -311,9 +320,10 @@ fn build_full_view(
     pending: &[PendingTxIn],
     keys: &HashMap<String, String>,
     keys_version: u64,
+    engine_generation: u64,
     version: u64,
 ) -> CoMapView {
-    let mut txs = collect_group_txs(sm, pending);
+    let mut txs = collect_group_txs_keyed(sm, pending, keys);
     sort_for_validation(&mut txs);
 
     let valid = valid_set(verdicts);
@@ -353,7 +363,8 @@ fn build_full_view(
     CoMapView {
         session_counts: counts,
         ops,
-        valid_txs: valid,
+        verdict_count: verdicts.len(),
+        engine_generation,
         has_fww,
         version,
         key_versions,
@@ -362,9 +373,18 @@ fn build_full_view(
     }
 }
 
-/// Attempt the incremental append fast-path, mutating `view` in place. Returns
-/// `true` if the append succeeded; `false` (leaving `view` untouched) if any
-/// guard failed and the caller must full-recompute.
+/// Append the newly-ingested transactions to `view` in place, returning `true`
+/// on success or `false` (leaving `view` untouched) if the fast-path does not
+/// apply and the caller must full-recompute.
+///
+/// PRECONDITION: the caller invokes this ONLY when the group engine reported it
+/// EXTENDED (old verdicts provably unchanged, new verdicts appended at the
+/// tail). That lets this be truly linear per ingest: `verdicts[view.verdict_count..]`
+/// is exactly the new transactions' verdicts, so there is no full re-scan of the
+/// verdict list and no rebuild of a whole valid-set — the two things that made
+/// the old content path quadratic. The only fast-path escapes are fww presence
+/// (which needs a global winner recompute) and the paranoia check that the
+/// verdict list actually grew.
 fn try_append(
     view: &mut CoMapView,
     sm: &SessionMapImpl,
@@ -373,56 +393,43 @@ fn try_append(
     pending: &[PendingTxIn],
     keys: &HashMap<String, String>,
 ) -> bool {
-    // Guard 2a: an existing fww key means an append could flip a winner.
+    // fww: an existing fww key (or a new fww-keyed tx below) can flip a winner
+    // retroactively — needs a full recompute.
     if view.has_fww {
         return false;
     }
+    // The engine extended, so the verdict list only grew. If that does not hold
+    // (defensive), fall back.
+    if verdicts.len() < view.verdict_count {
+        return false;
+    }
 
-    // Guard 1: pure superset (no session removed, no count decreased).
-    // Owned keys (not borrows of `view`) so we can mutably re-borrow `view`
-    // during the append loop below while still consulting these counts.
+    // The tail verdicts are exactly the newly-validated transactions.
+    let valid_new: HashSet<(String, u32)> = verdicts[view.verdict_count..]
+        .iter()
+        .filter(|v| v.valid)
+        .map(|v| (v.session_id.clone(), v.tx_index))
+        .collect();
+
+    // Collect ONLY the newly-appended transactions (not a full re-parse of the
+    // whole history), keyed off the cached per-session counts.
     let old_counts: HashMap<String, u32> = view
         .session_counts
         .iter()
         .map(|(s, c)| (s.clone(), *c))
         .collect();
-    for (sid, new_c) in counts {
-        if *new_c < old_counts.get(sid.as_str()).copied().unwrap_or(0) {
-            return false;
-        }
-    }
-    let new_sessions: HashSet<&str> = counts.iter().map(|(s, _)| s.as_str()).collect();
-    for (sid, _) in &view.session_counts {
-        if !new_sessions.contains(sid.as_str()) {
-            return false;
-        }
-    }
+    let mut new_txs = collect_group_txs_after(sm, pending, &old_counts, keys);
+    sort_for_validation(&mut new_txs);
 
-    let is_old = |sid: &str, idx: u32| old_counts.get(sid).map(|c| idx < *c).unwrap_or(false);
-
-    // Guard 3: the OLD-range verdicts must be unchanged (no earlier flip).
-    let new_valid = valid_set(verdicts);
-    let new_old_range: HashSet<(String, u32)> = new_valid
-        .iter()
-        .filter(|(s, i)| is_old(s, *i))
-        .cloned()
-        .collect();
-    if new_old_range != view.valid_txs {
-        return false;
-    }
-
-    let mut txs = collect_group_txs(sm, pending);
-    sort_for_validation(&mut txs);
-
-    // Guard 2b: no newly-appended tx may carry an fww key.
-    for tx in &txs {
-        if !is_old(&tx.session_id, tx.tx_index) && fww_key(tx).is_some() {
+    // No newly-appended tx may carry an fww key.
+    for tx in &new_txs {
+        if fww_key(tx).is_some() {
             return false;
         }
     }
 
-    // All guards passed — append the new valid txs' ops (decrypting private
-    // txs against the key store; a still-missing key is recorded and skipped).
+    // Append the new valid txs' ops (decrypting private txs against the key
+    // store; a still-missing key is recorded and skipped).
     view.version += 1;
     let ver = view.version;
     let CoMapView {
@@ -431,21 +438,25 @@ fn try_append(
         missing_key_ids,
         ..
     } = &mut *view;
-    for tx in &txs {
-        if is_old(&tx.session_id, tx.tx_index) {
-            continue;
-        }
+    for tx in &new_txs {
         let id = (tx.session_id.clone(), tx.tx_index);
-        if !new_valid.contains(&id) {
+        if !valid_new.contains(&id) {
             continue;
         }
         index_tx(ops, sm, keys, missing_key_ids, tx, &mut |k| {
             key_versions.insert(k, ver);
         });
     }
-    view.valid_txs = new_valid;
+    view.verdict_count = verdicts.len();
     view.session_counts = counts.to_vec();
     true
+}
+
+/// Whether `view` can safely take the append fast-path: the engine has not
+/// full-recomputed since the view was built (same generation), and the view is
+/// not gated on a key-version bump. When this is false, the caller rebuilds.
+fn can_append(view: &CoMapView, engine_generation: u64, keys_version: u64) -> bool {
+    view.engine_generation == engine_generation && view.keys_version == keys_version
 }
 
 /// Ensure `co_id`'s coMap view is fresh (materializing on demand), returning its
@@ -463,9 +474,12 @@ pub fn ensure_co_map(
     co_id: &str,
     pending: &[PendingTxIn],
 ) -> Result<u64, SessionMapError> {
-    // Verdicts also ensure the permission engine is fresh. `co_id` presence is
-    // checked by the caller (NodeCore) via UnknownCoValue.
-    let verdicts = engine_validate_transactions(covalues, engines, co_id, pending)?;
+    // Make the permission engine fresh (extend or recompute), then BORROW its
+    // verdicts rather than cloning them out — the clone would be O(n) per ingest.
+    // `co_id` presence is checked by the caller (NodeCore) via UnknownCoValue.
+    engine_ensure(covalues, engines, keys, co_id, pending)?;
+    let verdicts = verdicts_of(engines, co_id);
+    let engine_generation = generation_of(engines, co_id);
     let sm = covalues
         .get(co_id)
         .ok_or_else(|| SessionMapError::CoValueNotLoaded(co_id.to_string()))?;
@@ -476,14 +490,16 @@ pub fn ensure_co_map(
             if view.session_counts == counts && view.keys_version == keys_version {
                 return Ok(view.version);
             }
-            // A newly-provided secret (keys-version bump) can retroactively
-            // decrypt an OLD private tx, which the append fast-path (new txs
-            // only) cannot pick up — so any keys-version change forces a full
-            // recompute. Otherwise attempt the append fast-path.
-            if view.keys_version != keys_version {
+            // The append fast-path is sound only when the engine has NOT
+            // full-recomputed since this view was built (same generation — so the
+            // verdict tail really is the new txs and old verdicts are unchanged)
+            // AND no key-version bump happened (a newly-provided secret can
+            // retroactively decrypt an OLD private tx, which an append cannot pick
+            // up). Otherwise rebuild.
+            if !can_append(view, engine_generation, keys_version) {
                 true
             } else {
-                !try_append(view, sm, &verdicts, &counts, pending, keys)
+                !try_append(view, sm, verdicts, &counts, pending, keys)
             }
         }
         None => true,
@@ -491,7 +507,16 @@ pub fn ensure_co_map(
 
     if need_full {
         let version = co_maps.get(co_id).map(|v| v.version).unwrap_or(0) + 1;
-        let view = build_full_view(sm, &verdicts, counts, pending, keys, keys_version, version);
+        let view = build_full_view(
+            sm,
+            verdicts,
+            counts,
+            pending,
+            keys,
+            keys_version,
+            engine_generation,
+            version,
+        );
         co_maps.insert(co_id.to_string(), view);
     }
 
@@ -500,7 +525,6 @@ pub fn ensure_co_map(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::core::node::NodeCore;
 
     // A minimal unsafeAllowAll comap covalue: header + a single session of
@@ -856,6 +880,145 @@ mod tests {
         node.provide_key_secret(key_id, &secret);
         let v2 = node.map_materialize(&co_id, &[]).unwrap();
         assert_eq!(v1, v2, "identical re-provide must not force a rebuild");
+    }
+
+    /// (R2 native meta — closes R1's private-fww deferral) Two PRIVATE txs carry
+    /// the SAME fww key in their (encrypted) meta. Because the view now decrypts
+    /// private meta NATIVELY via the key store, fww resolves without any TS
+    /// `pending.metaJson`: the earlier writer wins, the later is excluded. Before
+    /// R2 both private txs would have appeared (private meta was opaque here).
+    #[test]
+    fn private_fww_resolves_natively_from_decrypted_meta() {
+        use crate::core::keys::SignerSecret;
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+        use ed25519_dalek::SigningKey;
+        use rand_core::OsRng;
+
+        let session = "co_zA_session_zPrivFww";
+        let key_id = "key_zPrivFww";
+        let secret = test_key_secret(23);
+
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("privfww".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+        let mut node = NodeCore::new();
+        node.create_co_value(&co_id, &header_json, None, true)
+            .unwrap();
+
+        let signer = SignerSecret::from(SigningKey::generate(&mut OsRng)).0;
+        // Two private writes, same fww lock "L"; winner sets "winner", loser "loser".
+        for (i, (mapkey,)) in [("winner",), ("loser",)].iter().enumerate() {
+            let made_at = 1_700_000_000_000u64 + i as u64;
+            let changes =
+                serde_json::to_string(&serde_json::json!([{"op":"set","key":mapkey,"value":i}]))
+                    .unwrap();
+            let meta = serde_json::json!({"fww": "L"}).to_string();
+            node.get_mut(&co_id)
+                .unwrap()
+                .make_new_private_transaction(
+                    session.to_string(),
+                    signer.clone(),
+                    &changes,
+                    key_id.to_string(),
+                    secret.clone(),
+                    Some(meta),
+                    made_at,
+                )
+                .unwrap();
+        }
+
+        node.provide_key_secret(key_id, &secret);
+        node.map_materialize(&co_id, &[]).unwrap();
+
+        assert_eq!(
+            node.map_get(&co_id, "winner").unwrap(),
+            Some("0".to_string()),
+            "first private fww writer wins"
+        );
+        assert_eq!(
+            node.map_get(&co_id, "loser").unwrap(),
+            None,
+            "later private fww writer is excluded (native meta drove fww)"
+        );
+    }
+
+    /// Regression: a full engine recompute happening BETWEEN two
+    /// `map_materialize` calls (e.g. a `validate_transactions` with an
+    /// out-of-order tx that flips an earlier verdict) must force the coMap view
+    /// to REBUILD, not append a stale tail. Driven on a GROUP coMap, where verdict
+    /// validity IS order-dependent. The interleaved-materialize result must equal
+    /// a from-scratch full build.
+    #[test]
+    fn generation_bump_forces_view_rebuild_after_interleaved_recompute() {
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+
+        const ADMIN: &str = "co_zGenAdmin";
+        const SESSION: &str = "co_zGenAdmin_session_zGen";
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::group(ADMIN),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("genmap".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let base = 1_700_000_000_000u64;
+        let tx = |key: &str, role: &str, made: u64| {
+            let changes =
+                serde_json::to_string(&serde_json::json!([{"op":"set","key":key,"value":role}]))
+                    .unwrap();
+            format!(
+                r#"{{"privacy":"trusting","madeAt":{made},"changes":{}}}"#,
+                serde_json::to_string(&changes).unwrap()
+            )
+        };
+        // Same flip scenario as the engine test: admin, M0->manager, M0 grants M1
+        // writer, then an EARLIER-timed revocation of M0 that invalidates the grant.
+        let txs = [
+            tx(ADMIN, "admin", base),
+            tx("co_zM0", "manager", base + 100),
+            tx("co_zM1", "writer", base + 200), // by admin here (single session)
+            tx("co_zM0", "revoked", base + 150), // arrives last, sorts earlier
+        ];
+
+        // Interleaved node: materialize after each append; the last append is
+        // out-of-order → engine full-recomputes (generation bump) → view rebuilds.
+        let mut interleaved = NodeCore::new();
+        interleaved
+            .create_co_value(ADMIN, &header_json, None, true)
+            .unwrap();
+        for t in &txs {
+            interleaved
+                .get_mut(ADMIN)
+                .unwrap()
+                .add_transactions(SESSION, None, &format!("[{t}]"), "sig", true)
+                .unwrap();
+            interleaved.map_materialize(ADMIN, &[]).unwrap();
+        }
+        let interleaved_snap = interleaved.map_snapshot(ADMIN).unwrap();
+
+        // From-scratch full build over the same total history.
+        let mut full = NodeCore::new();
+        full.create_co_value(ADMIN, &header_json, None, true).unwrap();
+        full.get_mut(ADMIN)
+            .unwrap()
+            .add_transactions(SESSION, None, &format!("[{}]", txs.join(",")), "sig", true)
+            .unwrap();
+        full.map_materialize(ADMIN, &[]).unwrap();
+        let full_snap = full.map_snapshot(ADMIN).unwrap();
+
+        let a: serde_json::Value = serde_json::from_str(&interleaved_snap).unwrap();
+        let b: serde_json::Value = serde_json::from_str(&full_snap).unwrap();
+        assert_eq!(
+            a, b,
+            "interleaved-recompute view must match a from-scratch build"
+        );
     }
 
     #[test]

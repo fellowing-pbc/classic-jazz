@@ -111,6 +111,176 @@ pub struct GroupTxView {
     /// changes are plaintext). Consumed by coMap materialization (R1) to resolve
     /// the secret from `NodeCore`'s key store; the permission engine ignores it.
     pub key_used: Option<String>,
+    /// True iff this transaction's merge-derived source made-at is STRICTLY
+    /// AFTER its own `current_made_at` — the anti-tamper condition of
+    /// `parseMetaInformation` (`coValueCore.ts:1554-1565`). Set from a merge
+    /// tx's `meta.t` (`sourceTxMadeAt = currentMadeAt - t`, so a NEGATIVE `t`
+    /// back-dates a write to after an access revocation) or from a
+    /// TS-supplied `pending.sourceMadeAt` that exceeds `currentMadeAt`. The
+    /// engine turns this into the verbatim invalid verdict "Transaction
+    /// sourceMadeAt is after the currentMadeAt".
+    pub source_after_current: bool,
+    /// True iff this transaction carries merge metadata (`meta.mi`) — a merged/
+    /// branched transaction. The safe incremental fast-path treats any such tx
+    /// among the newly-ingested set as a re-identification risk and falls back
+    /// to a full recompute (it may re-time/re-order into history).
+    pub is_merge: bool,
+}
+
+/// Parse one stored transaction JSON into a [`GroupTxView`], applying any
+/// pending override for `(session_id, tx_index)`. Shared by
+/// [`collect_group_txs`] and [`collect_group_txs_after`] so both paths build
+/// byte-identical views. `keys` (when non-empty) lets a PRIVATE transaction's
+/// meta be decrypted NATIVELY (R2, `parseMetaInformation`) via the key store,
+/// so the permission engine no longer depends on TS supplying decrypted meta in
+/// `pending`; pending meta still takes precedence when TS did supply it.
+fn build_tx_view(
+    sm: &SessionMapImpl,
+    session_id: &str,
+    tx_index: u32,
+    tx_json: &str,
+    pending: Option<&PendingTxIn>,
+    keys: &HashMap<String, String>,
+) -> GroupTxView {
+    // SessionMapImpl stores only transactions it serialized itself, so every
+    // entry re-parses as a Transaction; a failure here would indicate storage
+    // corruption (and would silently change the validation set, so we surface
+    // it loudly rather than skip).
+    let tx: Transaction = serde_json::from_str(tx_json)
+        .expect("stored transaction JSON must re-parse as Transaction");
+
+    let (privacy, current_made_at, changes, trusting_meta, key_used) = match tx {
+        Transaction::Trusting(t) => {
+            // Cojson producers always stringify a valid JSON array; a parse
+            // failure is defensive only (treated as no usable changes, which
+            // downstream validation will reject).
+            let changes = serde_json::from_str(&t.changes).ok();
+            let made_at = t.made_at.as_u64().unwrap_or(0);
+            (Privacy::Trusting, made_at, changes, t.meta, None)
+        }
+        Transaction::Private(p) => {
+            let made_at = p.made_at.as_u64().unwrap_or(0);
+            (Privacy::Private, made_at, None, None, Some(p.key_used.0))
+        }
+    };
+
+    // Meta precedence (R2): pending's TS-decrypted meta wins; else, for a
+    // PRIVATE tx, decrypt its meta NATIVELY when we hold the key (mirrors the
+    // TS `decryptTransactionChangesAndMeta` step feeding `parseMetaInformation`);
+    // else a TRUSTING tx's own plaintext wire meta. An unparseable meta string
+    // is treated as no meta (defensive — real producers always emit valid JSON).
+    let native_private_meta = match (&privacy, &key_used) {
+        (Privacy::Private, Some(kid)) => keys
+            .get(kid)
+            .and_then(|secret| decrypt_private_meta(sm, session_id, tx_index, secret)),
+        _ => None,
+    };
+    let meta: Option<serde_json::Value> = pending
+        .and_then(|p| p.meta_json.clone())
+        .or(native_private_meta)
+        .or_else(|| trusting_meta.clone())
+        .and_then(|s| serde_json::from_str(&s).ok());
+
+    // Native `parseMetaInformation` merge derivation (R2, coValueCore.ts:1539-1579).
+    // A merge tx carries `meta.mi`; derive its source made-at and source txID
+    // NATIVELY so the engine no longer depends on TS supplying them via pending.
+    // TS-supplied `pending` values still take PRECEDENCE (TS remains the
+    // orchestrator until R5); native values fill in only what TS omitted. The
+    // `previousTransaction`-fallback arms (`meta.t`/`meta.s` absent) are left to
+    // pending — see the R2 report's deferral note.
+    let (native_src_made_at, native_after_current, native_src_txid) =
+        derive_merge_source(meta.as_ref(), current_made_at);
+    let is_merge = meta.as_ref().is_some_and(|m| m.get("mi").is_some());
+
+    // Source made-at: pending wins; else native. `source_after_current` is the
+    // tamper flag, from whichever source is in effect.
+    let (source_made_at, source_after_current) = match pending.and_then(|p| p.source_made_at) {
+        Some(s) => (Some(s), s > current_made_at),
+        None => (native_src_made_at, native_after_current),
+    };
+    let effective_made_at = source_made_at.unwrap_or(current_made_at);
+
+    let (source_session_id, source_tx_index) = match pending.and_then(|p| p.source_tx_id.clone()) {
+        Some((sid, idx)) => (Some(sid), Some(idx)),
+        None => match native_src_txid {
+            Some((sid, idx)) => (Some(sid), Some(idx)),
+            None => (None, None),
+        },
+    };
+
+    GroupTxView {
+        session_id: session_id.to_string(),
+        tx_index,
+        author: author_from_session_id(session_id).to_string(),
+        current_made_at,
+        effective_made_at,
+        privacy,
+        changes,
+        meta,
+        source_session_id,
+        source_tx_index,
+        key_used,
+        source_after_current,
+        is_merge,
+    }
+}
+
+/// Port of the `"mi" in meta` arm of `parseMetaInformation`
+/// (`coValueCore.ts:1539-1579`), for the self-contained cases (`meta.t` /
+/// `meta.s` present). Returns `(sourceTxMadeAt, sourceMadeAt>currentMadeAt,
+/// sourceTxID)`:
+///
+/// - `sourceTxMadeAt = currentMadeAt - meta.t` when `meta.t` is present. `meta.t`
+///   is a signed delta; a NEGATIVE `t` yields a source time AFTER `currentMadeAt`
+///   (the tamper the check defends against). The returned made-at is clamped to
+///   `u64` (`0` if it would be negative — only reachable when `t > currentMadeAt`,
+///   which real producers never emit), while the boolean reports the true
+///   `> currentMadeAt` comparison in signed space.
+/// - `sourceTxID = { sessionID: meta.s, txIndex: meta.mi }` when `meta.s` is
+///   present. The `meta.s`-absent fallback (`previousTransaction.txID.sessionID`)
+///   needs cross-tx state and is left to TS `pending` for now.
+fn derive_merge_source(
+    meta: Option<&serde_json::Value>,
+    current_made_at: u64,
+) -> (Option<u64>, bool, Option<(String, u32)>) {
+    let m = match meta {
+        Some(m) if m.get("mi").is_some() => m,
+        _ => return (None, false, None),
+    };
+    let mi = m.get("mi").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+    let (src_made_at, after_current) = match m.get("t").and_then(|v| v.as_i64()) {
+        Some(t) => {
+            let source = current_made_at as i128 - t as i128;
+            let after = source > current_made_at as i128;
+            let clamped = if source < 0 { 0 } else { source as u64 };
+            (Some(clamped), after)
+        }
+        None => (None, false),
+    };
+
+    let src_txid = m
+        .get("s")
+        .and_then(|v| v.as_str())
+        .map(|s| (s.to_string(), mi));
+
+    (src_made_at, after_current, src_txid)
+}
+
+/// Natively decrypt a PRIVATE transaction's META (not its changes) into its
+/// plaintext JSON string, reusing the session map's decrypt primitive. Returns
+/// `None` when there is no meta, the key is wrong, or the session is missing —
+/// exactly the cases where TS would leave `transaction.meta` undefined.
+fn decrypt_private_meta(
+    sm: &SessionMapImpl,
+    session_id: &str,
+    tx_index: u32,
+    key_secret: &str,
+) -> Option<String> {
+    // A wrong/garbage key (or a missing session) surfaces as Err/None — exactly
+    // the cases where TS would leave `transaction.meta` undefined.
+    sm.decrypt_transaction_meta(session_id, tx_index, key_secret)
+        .unwrap_or_default()
 }
 
 /// Collect every transaction of `sm` into views, in session-insertion order,
@@ -120,6 +290,18 @@ pub struct GroupTxView {
 /// [`GroupTxView::effective_made_at`], [`GroupTxView::meta`],
 /// [`GroupTxView::source_session_id`].
 pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> Vec<GroupTxView> {
+    collect_group_txs_keyed(sm, pending_info, &HashMap::new())
+}
+
+/// Like [`collect_group_txs`], but also given the `NodeCore` key store so PRIVATE
+/// transactions have their meta decrypted natively (R2). The engine passes its
+/// keys here so fww / branch-pointer / merge-source meta work for private txs
+/// without a TS-supplied `pending.metaJson`.
+pub fn collect_group_txs_keyed(
+    sm: &SessionMapImpl,
+    pending_info: &[PendingTxIn],
+    keys: &HashMap<String, String>,
+) -> Vec<GroupTxView> {
     // Keyed pending lookup — one entry per `(session_id, tx_index)` that the
     // sync/merge layer supplied extra info for. Absence falls back to the
     // tx's own stored fields everywhere below.
@@ -131,61 +313,46 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
     let mut views = Vec::new();
     for (session_id, tx_jsons) in sm.iter_session_transactions() {
         for (tx_index, tx_json) in tx_jsons.iter().enumerate() {
-            // SessionMapImpl stores only transactions it serialized itself, so
-            // every entry re-parses as a Transaction; a failure here would
-            // indicate storage corruption (and would silently change the
-            // validation set, so we surface it loudly rather than skip).
-            let tx: Transaction = serde_json::from_str(tx_json)
-                .expect("stored transaction JSON must re-parse as Transaction");
+            let tx_index = tx_index as u32;
+            let pending = pending_by_key.get(&(session_id, tx_index)).copied();
+            views.push(build_tx_view(
+                sm, session_id, tx_index, tx_json, pending, keys,
+            ));
+        }
+    }
+    views
+}
 
-            let (privacy, current_made_at, changes, trusting_meta, key_used) = match tx {
-                Transaction::Trusting(t) => {
-                    // Cojson producers always stringify a valid JSON array; a
-                    // parse failure is defensive only (treated as no usable
-                    // changes, which downstream validation will reject).
-                    let changes = serde_json::from_str(&t.changes).ok();
-                    let made_at = t.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Trusting, made_at, changes, t.meta, None)
-                }
-                Transaction::Private(p) => {
-                    let made_at = p.made_at.as_u64().unwrap_or(0);
-                    (Privacy::Private, made_at, None, None, Some(p.key_used.0))
-                }
-            };
+/// Collect ONLY the transactions whose index is at/after `old_counts[session]`
+/// (all transactions of sessions absent from `old_counts`) — the transactions
+/// appended since a prior [`collect_group_txs_keyed`] whose per-session counts
+/// were `old_counts`. Views are built identically to the full collect, in the
+/// same session-insertion / tx-index order, so the caller can sort the suffix in
+/// isolation and get the same tail a full sort would produce (used by the
+/// engine's safe incremental-validation fast-path).
+pub fn collect_group_txs_after(
+    sm: &SessionMapImpl,
+    pending_info: &[PendingTxIn],
+    old_counts: &HashMap<String, u32>,
+    keys: &HashMap<String, String>,
+) -> Vec<GroupTxView> {
+    let pending_by_key: HashMap<(&str, u32), &PendingTxIn> = pending_info
+        .iter()
+        .map(|p| ((p.session_id.as_str(), p.tx_index), p))
+        .collect();
 
-            let pending = pending_by_key.get(&(session_id, tx_index as u32)).copied();
-
-            let effective_made_at = pending
-                .and_then(|p| p.source_made_at)
-                .unwrap_or(current_made_at);
-
-            // Pending (decrypted) meta takes precedence over the trusting tx's
-            // own wire meta; either way, an unparseable meta string is treated
-            // as no meta (defensive — real producers always emit valid JSON).
-            let meta = pending
-                .and_then(|p| p.meta_json.as_deref())
-                .or(trusting_meta.as_deref())
-                .and_then(|s| serde_json::from_str(s).ok());
-
-            let (source_session_id, source_tx_index) =
-                match pending.and_then(|p| p.source_tx_id.clone()) {
-                    Some((sid, idx)) => (Some(sid), Some(idx)),
-                    None => (None, None),
-                };
-
-            views.push(GroupTxView {
-                session_id: session_id.to_string(),
-                tx_index: tx_index as u32,
-                author: author_from_session_id(session_id).to_string(),
-                current_made_at,
-                effective_made_at,
-                privacy,
-                changes,
-                meta,
-                source_session_id,
-                source_tx_index,
-                key_used,
-            });
+    let mut views = Vec::new();
+    for (session_id, tx_jsons) in sm.iter_session_transactions() {
+        let start = old_counts.get(session_id).copied().unwrap_or(0);
+        for (tx_index, tx_json) in tx_jsons.iter().enumerate() {
+            let tx_index = tx_index as u32;
+            if tx_index < start {
+                continue;
+            }
+            let pending = pending_by_key.get(&(session_id, tx_index)).copied();
+            views.push(build_tx_view(
+                sm, session_id, tx_index, tx_json, pending, keys,
+            ));
         }
     }
     views
@@ -479,6 +646,8 @@ mod tests {
                 source_session_id: None,
                 source_tx_index: None,
                 key_used: None,
+                source_after_current: false,
+                is_merge: false,
             }
         }
 
@@ -573,6 +742,8 @@ mod tests {
                 source_session_id: Some(source_session.to_string()),
                 source_tx_index: Some(source_tx_index),
                 key_used: None,
+                source_after_current: false,
+                is_merge: false,
             }
         }
 
@@ -664,5 +835,82 @@ mod tests {
                 .tx_index,
             2
         );
+    }
+
+    // === R2: native parseMetaInformation merge-source derivation ===
+
+    /// A merge tx `{mi, t, s}` derives `sourceTxMadeAt = currentMadeAt - t` and
+    /// `sourceTxID = {s, mi}` natively (no pending needed); a positive `t` is not
+    /// tamper.
+    #[test]
+    fn derive_merge_source_from_t_and_s() {
+        let meta = serde_json::json!({"mi": 3, "t": 10_000, "s": "co_zSrc_session_zX"});
+        let (made, after, txid) = super::derive_merge_source(Some(&meta), 1_700_000_100_000);
+        assert_eq!(made, Some(1_700_000_090_000), "currentMadeAt - t");
+        assert!(!after, "positive t is a back-in-time source, never tamper");
+        assert_eq!(txid, Some(("co_zSrc_session_zX".to_string(), 3)));
+    }
+
+    /// A NEGATIVE `t` back-dates the source to AFTER currentMadeAt — the tamper
+    /// the anti-tamper check defends against (writing after a revocation).
+    #[test]
+    fn derive_merge_source_negative_t_flags_tamper() {
+        let meta = serde_json::json!({"mi": 1, "t": -5_000});
+        let (made, after, txid) = super::derive_merge_source(Some(&meta), 1_000_000);
+        assert_eq!(made, Some(1_005_000), "current - (negative t) > current");
+        assert!(after, "source after currentMadeAt → tamper flag set");
+        assert_eq!(txid, None, "no meta.s → sourceTxID left to pending");
+    }
+
+    /// No `mi` → not a merge tx: nothing derived, no tamper.
+    #[test]
+    fn derive_merge_source_non_merge_is_inert() {
+        let meta = serde_json::json!({"fww": "lock"});
+        assert_eq!(
+            super::derive_merge_source(Some(&meta), 100),
+            (None, false, None)
+        );
+        assert_eq!(super::derive_merge_source(None, 100), (None, false, None));
+    }
+
+    /// The full builder wires the native derivation onto the view: a trusting tx
+    /// whose wire meta is a merge `{mi, t, s}` gets `effective_made_at`,
+    /// `source_session_id`, and `is_merge` populated with NO pending supplied.
+    #[test]
+    fn build_tx_view_populates_native_merge_fields_without_pending() {
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String("mergemeta".to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+        let mut sm =
+            SessionMapImpl::new_with_skip_verify(&co_id, &header_json, None, true).unwrap();
+
+        // A trusting tx carrying merge meta as its (stringified) wire meta.
+        let current = 1_700_000_100_000u64;
+        let changes =
+            serde_json::to_string(&serde_json::json!([{"op":"set","key":"k","value":1}])).unwrap();
+        let wire_meta =
+            serde_json::json!({"mi": 7, "t": 100_000, "s": "co_zSrc_session_zY"}).to_string();
+        let tx = format!(
+            r#"{{"privacy":"trusting","madeAt":{current},"changes":{},"meta":{}}}"#,
+            serde_json::to_string(&changes).unwrap(),
+            serde_json::to_string(&wire_meta).unwrap(),
+        );
+        sm.add_transactions("co_zA_session_zM", None, &format!("[{tx}]"), "sig", true)
+            .unwrap();
+
+        let views = collect_group_txs(&sm, &[]);
+        let v = &views[0];
+        assert!(v.is_merge, "meta.mi present → is_merge");
+        assert_eq!(v.effective_made_at, current - 100_000, "native source time");
+        assert_eq!(v.source_session_id.as_deref(), Some("co_zSrc_session_zY"));
+        assert_eq!(v.source_tx_index, Some(7));
+        assert!(!v.source_after_current);
     }
 }
