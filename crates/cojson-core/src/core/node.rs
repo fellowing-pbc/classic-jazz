@@ -1,18 +1,29 @@
 use std::collections::HashMap;
 
+use crate::core::group_engine::engine::{
+    role_of as engine_role_of, validate_group as engine_validate_group, GroupEngineState,
+};
+use crate::core::group_engine::tx_view::PendingTxIn;
+use crate::core::group_engine::types::Role;
 use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
 /// Node-level registry owning one SessionMapImpl per CoValue, keyed by CoID.
 /// One instance per LocalNode. Stage 2+ builds cross-CoValue features
 /// (group engine, permissions) on top of this registry.
+///
+/// The built group engines live in a SEPARATE map from the session maps so that
+/// a recursive engine build can borrow the session maps immutably while it
+/// mutates the engine store (see `group_engine::engine`'s borrow-strategy note).
 pub struct NodeCore {
     covalues: HashMap<String, SessionMapImpl>,
+    engines: HashMap<String, GroupEngineState>,
 }
 
 impl NodeCore {
     pub fn new() -> Self {
         NodeCore {
             covalues: HashMap::new(),
+            engines: HashMap::new(),
         }
     }
 
@@ -29,6 +40,8 @@ impl NodeCore {
         let session_map =
             SessionMapImpl::new_with_skip_verify(co_id, header_json, max_tx_size, skip_verify)?;
         self.covalues.insert(co_id.to_string(), session_map);
+        // Any cached engine for this id is now stale (fresh/replaced session map).
+        self.engines.remove(co_id);
         Ok(())
     }
 
@@ -38,7 +51,32 @@ impl NodeCore {
 
     /// Returns true if an entry was removed. Absent id is a no-op (false).
     pub fn remove_co_value(&mut self, co_id: &str) -> bool {
+        self.engines.remove(co_id);
         self.covalues.remove(co_id).is_some()
+    }
+
+    /// Validate every transaction of `co_id`, returning the verdicts in
+    /// validation order. Ensures the (cross-CoValue) group engine is fresh,
+    /// rebuilding it — and any parent/owner engines it depends on — as needed.
+    pub fn validate_group(
+        &mut self,
+        co_id: &str,
+        pending: &[PendingTxIn],
+    ) -> Result<Vec<crate::core::group_engine::engine::Verdict>, SessionMapError> {
+        let Self { covalues, engines } = self;
+        engine_validate_group(covalues, engines, co_id, pending)
+    }
+
+    /// Read-side role of `member` in group `group_id` at `at_time` (`None` =
+    /// latest). Builds engines on demand.
+    pub fn role_of(
+        &mut self,
+        group_id: &str,
+        member: &str,
+        at_time: Option<u64>,
+    ) -> Result<Option<Role>, SessionMapError> {
+        let Self { covalues, engines } = self;
+        engine_role_of(covalues, engines, group_id, member, at_time)
     }
 
     pub fn co_value_count(&self) -> usize {

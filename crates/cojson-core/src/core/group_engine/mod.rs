@@ -2,13 +2,15 @@
 //! classifiers ported from `packages/cojson/src/permissions.ts` and
 //! `packages/cojson/src/coValues/group.ts`.
 //!
-//! `engine` (validation/read-side algorithms) is added in a later task; this
-//! module currently only exposes the foundation types and key classifiers.
+//! `engine` fuses group validation and read-side role resolution over the
+//! `NodeCore` registry; `classify`, `tx_view` and `types` are its foundation.
 
 pub mod classify;
+pub mod engine;
 pub mod tx_view;
 pub mod types;
 
 pub use classify::*;
+pub use engine::*;
 pub use tx_view::*;
 pub use types::*;

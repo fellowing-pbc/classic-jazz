@@ -266,6 +266,9 @@ pub enum SessionMapError {
     #[error("Unknown CoValue: {0}")]
     UnknownCoValue(String),
 
+    #[error("CoValue not loaded: {0}")]
+    CoValueNotLoaded(String),
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
@@ -395,6 +398,13 @@ impl SessionMapImpl {
     /// Get the header as JSON
     pub fn get_header(&self) -> String {
         serde_json::to_string(&self.header).expect("header serialization should not fail")
+    }
+
+    /// Borrow the parsed header. Used by the group engine to read ruleset facts
+    /// (kind, `initialAdmin`) and the `meta.type == "account"` marker without
+    /// re-serializing/parsing the header JSON on every access.
+    pub(crate) fn header(&self) -> &CoValueHeader {
+        &self.header
     }
 
     // === Transaction Operations ===
