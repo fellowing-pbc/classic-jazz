@@ -329,14 +329,28 @@ function determineValidTransactionsNative(
     throw e;
   }
 
+  // Apply verdicts ONLY to `toValidateTransactions` (the delta this pass is
+  // responsible for) — mirroring the TS fallback's contract exactly (every
+  // ruleset branch above iterates `coValue.toValidateTransactions`, never the
+  // full `coValue.verifiedTransactions`). `pending` above still walks the full
+  // history because Rust needs it for internal engine consistency, but
+  // APPLYING a verdict to an already-settled transaction here would silently
+  // overwrite TS-only, post-permission overlays that run after this function
+  // returns (e.g. `parseMetaInformation`'s `fww` winner tracking, which calls
+  // `markInvalid` on a previously-valid transaction the next time a
+  // competing transaction arrives). Since native has no notion of `fww`, a
+  // permission-only "valid" verdict for that transaction would erase the
+  // overlay's invalidation on every subsequent pass. Restricting to the delta
+  // makes native and TS agree: only freshly-arrived transactions get a
+  // verdict applied here.
   const byKey = new Map<string, VerifiedTransaction>();
-  for (const tx of coValue.verifiedTransactions) {
+  for (const tx of coValue.toValidateTransactions) {
     byKey.set(`${tx.currentTxID.sessionID}/${tx.currentTxID.txIndex}`, tx);
   }
   // Apply IN THE ORDER RUST RETURNS (spec: dispatch order feeds downstream stable sorts)
   for (const v of verdicts) {
     const tx = byKey.get(`${v.sessionId}/${v.txIndex}`);
-    if (!tx) continue; // verdict for a tx TS hasn't wrapped yet — next parseNewTransactions pass picks it up
+    if (!tx) continue; // verdict for a tx outside this pass's delta (already settled, or TS hasn't wrapped it yet)
 
     if (v.outcome === "validBranchPointerOnly") {
       // Mirror the reader branch-pointer trim in the TS ownedByGroup path:

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import { NapiCrypto } from "../crypto/NapiCrypto.js";
 import { ShimNodeCore } from "../crypto/ShimNodeCore.js";
+import { WasmCrypto } from "../crypto/WasmCrypto.js";
 import type {
   CryptoProvider,
   NodeCoreImpl,
@@ -8,10 +9,15 @@ import type {
 } from "../crypto/crypto.js";
 import type { RawCoID } from "../ids.js";
 
+// ShimNodeCore's remaining consumer is RNCrypto (no native NodeCore port yet
+// — see Part B of the cleanup-phase plan) — keep the shim arm/tests below
+// until that lands.
 let crypto: CryptoProvider;
+let wasmCrypto: CryptoProvider;
 
 beforeAll(async () => {
   crypto = await NapiCrypto.create();
+  wasmCrypto = await WasmCrypto.create();
 });
 
 function makeShim() {
@@ -22,7 +28,7 @@ function makeShim() {
 
 // Build a real header + coId the way VerifiedState does, so createCoValue
 // passes native header validation.
-function makeHeaderAndId() {
+function makeHeaderAndId(cryptoProvider: CryptoProvider = crypto) {
   const header = {
     type: "comap" as const,
     ruleset: { type: "unsafeAllowAll" as const },
@@ -30,15 +36,19 @@ function makeHeaderAndId() {
     createdAt: null,
     uniqueness: "test-uniqueness",
   };
-  const coId = `co_z${crypto.shortHash(header).slice("shortHash_z".length)}`;
+  const coId = `co_z${cryptoProvider.shortHash(header).slice("shortHash_z".length)}`;
   return { coId, headerJson: JSON.stringify(header) };
 }
 
-function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
+function nodeCoreSuite(
+  name: string,
+  makeNodeCore: () => NodeCoreImpl,
+  getCryptoProvider: () => CryptoProvider = () => crypto,
+) {
   describe(name, () => {
     test("createCoValue / hasCoValue / removeCoValue roundtrip", () => {
       const shim = makeNodeCore();
-      const { coId, headerJson } = makeHeaderAndId();
+      const { coId, headerJson } = makeHeaderAndId(getCryptoProvider());
 
       expect(shim.hasCoValue(coId)).toBe(false);
       expect(shim.coValueCount()).toBe(0);
@@ -67,7 +77,7 @@ function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
 
     test("delegates session queries to the underlying session map", () => {
       const shim = makeNodeCore();
-      const { coId, headerJson } = makeHeaderAndId();
+      const { coId, headerJson } = makeHeaderAndId(getCryptoProvider());
       shim.createCoValue(coId, headerJson);
       expect(shim.getSessionIds(coId)).toEqual([]);
       expect(shim.getTransactionCount(coId, "co_zAnybody_session_z123")).toBe(
@@ -106,9 +116,20 @@ function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
 
 nodeCoreSuite("ShimNodeCore", () => makeShim());
 nodeCoreSuite("NapiNodeCore (native)", () => crypto.createNodeCore());
+nodeCoreSuite(
+  "WasmNodeCore (native)",
+  () => wasmCrypto.createNodeCore(),
+  () => wasmCrypto,
+);
 
 test("NapiCrypto.createNodeCore returns the native adapter", () => {
   expect(crypto.createNodeCore().constructor.name).toBe("NapiNodeCoreAdapter");
+});
+
+test("WasmCrypto.createNodeCore returns the native adapter", () => {
+  expect(wasmCrypto.createNodeCore().constructor.name).toBe(
+    "WasmNodeCoreAdapter",
+  );
 });
 
 describe("ShimNodeCore", () => {

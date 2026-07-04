@@ -1,5 +1,6 @@
 import {
   SessionMap as WasmSessionMap,
+  NodeCore as WasmNodeCore,
   initialize,
   initializeSync,
   Blake3Hasher,
@@ -29,6 +30,9 @@ import {
   CryptoProvider,
   Encrypted,
   KeySecret,
+  NodeCoreGroupVerdict,
+  NodeCoreImpl,
+  NodeCorePendingTx,
   Sealed,
   SealedForGroup,
   SealerID,
@@ -275,6 +279,10 @@ export class WasmCrypto extends CryptoProvider<Blake3State> {
       new WasmSessionMap(coID, headerJson, maxTxSize, skipVerify),
     );
   }
+
+  override createNodeCore(): NodeCoreImpl {
+    return new WasmNodeCoreAdapter(new WasmNodeCore());
+  }
 }
 
 /**
@@ -446,5 +454,270 @@ class SessionMapAdapter implements SessionMapImpl {
       this.sessionMap.decryptTransactionMeta(sessionId, txIndex, keySecret) ??
       undefined
     );
+  }
+}
+
+/**
+ * Adapter wrapping the native (wasm) NodeCore registry to implement
+ * NodeCoreImpl.
+ *
+ * Unlike `NapiNodeCoreAdapter`, `validateTransactions`'s `pending` argument
+ * needs NO casing bridge: the Rust side's `PendingTxWire` (see
+ * `crates/cojson-core-wasm/src/lib.rs`) deserializes the `JsValue` through
+ * serde with `#[serde(rename)]`s that reproduce `NodeCorePendingTx`'s wire
+ * shape verbatim (`sessionId`/`txIndex`/`sourceMadeAt`/`metaJson` at the top
+ * level, `sourceTxId: {sessionID, txIndex}` nested) — so the TS objects are
+ * passed straight through. Verdicts come back the same way: `GroupVerdictWire`
+ * is serialized via `serialize_js_value` with fields matching
+ * `NodeCoreGroupVerdict` verbatim, so only a cast + `reason` normalization is
+ * needed here, not a field-by-field rebuild.
+ */
+class WasmNodeCoreAdapter implements NodeCoreImpl {
+  constructor(private readonly nodeCore: WasmNodeCore) {}
+
+  // === Registry ===
+  createCoValue(
+    coId: string,
+    headerJson: string,
+    maxTxSize?: number,
+    skipVerify?: boolean,
+  ): void {
+    this.nodeCore.createCoValue(coId, headerJson, maxTxSize, skipVerify);
+  }
+
+  hasCoValue(coId: string): boolean {
+    return this.nodeCore.hasCoValue(coId);
+  }
+
+  removeCoValue(coId: string): void {
+    this.nodeCore.removeCoValue(coId);
+  }
+
+  coValueCount(): number {
+    return this.nodeCore.coValueCount();
+  }
+
+  // === Header ===
+  getHeader(coId: string): string {
+    return this.nodeCore.getHeader(coId);
+  }
+
+  // === Transaction Operations ===
+  addTransactions(
+    coId: string,
+    sessionId: string,
+    signerId: string | undefined,
+    transactionsJson: string,
+    signature: string,
+    skipVerify: boolean,
+  ): void {
+    this.nodeCore.addTransactions(
+      coId,
+      sessionId,
+      signerId,
+      transactionsJson,
+      signature,
+      skipVerify,
+    );
+  }
+
+  makeNewPrivateTransaction(
+    coId: string,
+    sessionId: string,
+    signerSecret: string,
+    changesJson: string,
+    keyId: string,
+    keySecret: string,
+    metaJson: string | undefined,
+    madeAt: number,
+  ): string {
+    return this.nodeCore.makeNewPrivateTransaction(
+      coId,
+      sessionId,
+      signerSecret,
+      changesJson,
+      keyId,
+      keySecret,
+      metaJson,
+      madeAt,
+    );
+  }
+
+  makeNewTrustingTransaction(
+    coId: string,
+    sessionId: string,
+    signerSecret: string,
+    changesJson: string,
+    metaJson: string | undefined,
+    madeAt: number,
+  ): string {
+    return this.nodeCore.makeNewTrustingTransaction(
+      coId,
+      sessionId,
+      signerSecret,
+      changesJson,
+      metaJson,
+      madeAt,
+    );
+  }
+
+  // === Session Queries ===
+  getSessionIds(coId: string): string[] {
+    return this.nodeCore.getSessionIds(coId);
+  }
+
+  getTransactionCount(coId: string, sessionId: string): number {
+    return this.nodeCore.getTransactionCount(coId, sessionId);
+  }
+
+  getTransaction(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+  ): Transaction | undefined {
+    const result = this.nodeCore.getTransaction(coId, sessionId, txIndex);
+    if (!result) return undefined;
+    return JSON.parse(result) as Transaction;
+  }
+
+  getSessionTransactions(
+    coId: string,
+    sessionId: string,
+    fromIndex: number,
+  ): Transaction[] | undefined {
+    const result = this.nodeCore.getSessionTransactions(
+      coId,
+      sessionId,
+      fromIndex,
+    );
+    if (!result) return undefined;
+    return result.map((tx) => JSON.parse(tx) as Transaction);
+  }
+
+  getLastSignature(coId: string, sessionId: string): string | undefined {
+    return this.nodeCore.getLastSignature(coId, sessionId) ?? undefined;
+  }
+
+  getSignatureAfter(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+  ): string | undefined {
+    return (
+      this.nodeCore.getSignatureAfter(coId, sessionId, txIndex) ?? undefined
+    );
+  }
+
+  getLastSignatureCheckpoint(
+    coId: string,
+    sessionId: string,
+  ): number | undefined {
+    return (
+      this.nodeCore.getLastSignatureCheckpoint(coId, sessionId) ?? undefined
+    );
+  }
+
+  // === Known State ===
+  getKnownState(coId: string): {
+    id: string;
+    header: boolean;
+    sessions: Record<string, number>;
+  } {
+    // WASM returns a native JS object via serde_wasm_bindgen
+    return this.nodeCore.getKnownState(coId) as {
+      id: string;
+      header: boolean;
+      sessions: Record<string, number>;
+    };
+  }
+
+  getKnownStateWithStreaming(
+    coId: string,
+  ):
+    | { id: string; header: boolean; sessions: Record<string, number> }
+    | undefined {
+    // WASM returns a native JS object via serde_wasm_bindgen, or undefined
+    const result = this.nodeCore.getKnownStateWithStreaming(coId);
+    if (!result || result === undefined) return undefined;
+    return result as {
+      id: string;
+      header: boolean;
+      sessions: Record<string, number>;
+    };
+  }
+
+  isStreaming(coId: string): boolean {
+    return this.nodeCore.isStreaming(coId);
+  }
+
+  setStreamingKnownState(coId: string, streamingJson: string): void {
+    this.nodeCore.setStreamingKnownState(coId, streamingJson);
+  }
+
+  // === Deletion ===
+  markAsDeleted(coId: string): void {
+    this.nodeCore.markAsDeleted(coId);
+  }
+
+  isDeleted(coId: string): boolean {
+    return this.nodeCore.isDeleted(coId);
+  }
+
+  // === Decryption ===
+  decryptTransaction(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+    keySecret: string,
+  ): string | undefined {
+    return (
+      this.nodeCore.decryptTransaction(coId, sessionId, txIndex, keySecret) ??
+      undefined
+    );
+  }
+
+  decryptTransactionMeta(
+    coId: string,
+    sessionId: string,
+    txIndex: number,
+    keySecret: string,
+  ): string | undefined {
+    return (
+      this.nodeCore.decryptTransactionMeta(
+        coId,
+        sessionId,
+        txIndex,
+        keySecret,
+      ) ?? undefined
+    );
+  }
+
+  // === Transaction Validation (stage 3) ===
+  validateTransactions(
+    coId: string,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreGroupVerdict[] {
+    // Wire shape match verbatim (see PendingTxWire/GroupVerdictWire doc
+    // comments in crates/cojson-core-wasm/src/lib.rs) — pass pending straight
+    // through with no casing bridge, unlike NapiNodeCoreAdapter.
+    const verdicts = this.nodeCore.validateTransactions(
+      coId,
+      pending,
+    ) as NodeCoreGroupVerdict[];
+    return verdicts.map((v) => ({
+      sessionId: v.sessionId,
+      txIndex: v.txIndex,
+      valid: v.valid,
+      outcome: v.outcome,
+      reason: v.reason ?? undefined,
+    }));
+  }
+
+  roleOf(groupId: string, member: string, atTime?: number): string | undefined {
+    return this.nodeCore.roleOf(groupId, member, atTime) ?? undefined;
+  }
+
+  resetValidation(coId: string): void {
+    this.nodeCore.resetValidation(coId);
   }
 }
