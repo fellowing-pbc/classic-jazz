@@ -404,6 +404,18 @@ export interface SessionMapImpl {
   dispose?(): void;
 }
 
+export type NodeCorePendingTx = {
+  sessionId: string;
+  txIndex: number;
+  sourceMadeAt?: number;
+};
+export type NodeCoreGroupVerdict = {
+  sessionId: string;
+  txIndex: number;
+  valid: boolean;
+  reason?: string;
+};
+
 /**
  * NodeCoreImpl - node-level registry of per-CoValue session state.
  * One instance per LocalNode; every method addresses a CoValue by its id.
@@ -507,4 +519,12 @@ export interface NodeCoreImpl {
     txIndex: number,
     keySecret: string,
   ): string | undefined;
+
+  /** Native group validation (stage 2). Absent on providers without a native NodeCore. */
+  validateGroup?(
+    coId: string,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreGroupVerdict[];
+  /** Native role resolution (stage 2). Absent on providers without a native NodeCore. */
+  roleOf?(groupId: string, member: string, atTime?: number): string | undefined;
 }

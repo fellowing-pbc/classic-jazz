@@ -79,6 +79,24 @@ function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
         sessions: {},
       });
     });
+
+    test("validateGroup/roleOf capability signal", () => {
+      const nodeCore = makeNodeCore();
+
+      if (nodeCore.validateGroup) {
+        expect(typeof nodeCore.validateGroup).toBe("function");
+        expect(typeof nodeCore.roleOf).toBe("function");
+        expect(() => nodeCore.validateGroup!("co_zNope", [])).toThrow(
+          /Unknown CoValue/,
+        );
+        expect(() => nodeCore.roleOf!("co_zNope", "someone")).toThrow(
+          /Unknown CoValue/,
+        );
+      } else {
+        expect(nodeCore.validateGroup).toBeUndefined();
+        expect(nodeCore.roleOf).toBeUndefined();
+      }
+    });
   });
 }
 

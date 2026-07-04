@@ -27,7 +27,9 @@ import {
   CryptoProvider,
   Encrypted,
   KeySecret,
+  NodeCoreGroupVerdict,
   NodeCoreImpl,
+  NodeCorePendingTx,
   Sealed,
   SealedForGroup,
   SealerID,
@@ -627,5 +629,22 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
         keySecret,
       ) ?? undefined
     );
+  }
+
+  // === Group Validation (stage 2) ===
+  validateGroup(
+    coId: string,
+    pending: NodeCorePendingTx[],
+  ): NodeCoreGroupVerdict[] {
+    return this.nodeCore.validateGroup(coId, pending).map((v) => ({
+      sessionId: v.sessionId,
+      txIndex: v.txIndex,
+      valid: v.valid,
+      reason: v.reason ?? undefined,
+    }));
+  }
+
+  roleOf(groupId: string, member: string, atTime?: number): string | undefined {
+    return this.nodeCore.roleOf(groupId, member, atTime) ?? undefined;
   }
 }
