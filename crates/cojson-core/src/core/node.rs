@@ -172,7 +172,8 @@ mod tests {
         assert!(!node.has_co_value(&co_id));
         assert_eq!(node.co_value_count(), 0);
 
-        node.create_co_value(&co_id, &header_json, None, false).unwrap();
+        node.create_co_value(&co_id, &header_json, None, false)
+            .unwrap();
         assert!(node.has_co_value(&co_id));
         assert_eq!(node.co_value_count(), 1);
         assert!(node.get(&co_id).is_ok());
@@ -188,7 +189,8 @@ mod tests {
         assert!(!node.remove_co_value("co_zDoesNotExist"));
         // double-remove after create
         let (co_id, header_json) = valid_header();
-        node.create_co_value(&co_id, &header_json, None, false).unwrap();
+        node.create_co_value(&co_id, &header_json, None, false)
+            .unwrap();
         assert!(node.remove_co_value(&co_id));
         assert!(!node.remove_co_value(&co_id));
     }
@@ -208,15 +210,19 @@ mod tests {
         // SessionMap; createCoValue must replace, not error.
         let (co_id, header_json) = valid_header();
         let mut node = NodeCore::new();
-        node.create_co_value(&co_id, &header_json, None, false).unwrap();
-        node.create_co_value(&co_id, &header_json, None, false).unwrap();
+        node.create_co_value(&co_id, &header_json, None, false)
+            .unwrap();
+        node.create_co_value(&co_id, &header_json, None, false)
+            .unwrap();
         assert_eq!(node.co_value_count(), 1);
     }
 
     #[test]
     fn invalid_header_does_not_insert() {
         let mut node = NodeCore::new();
-        assert!(node.create_co_value("co_zBogus", "{not json", None, false).is_err());
+        assert!(node
+            .create_co_value("co_zBogus", "{not json", None, false)
+            .is_err());
         assert!(!node.has_co_value("co_zBogus"));
     }
 }

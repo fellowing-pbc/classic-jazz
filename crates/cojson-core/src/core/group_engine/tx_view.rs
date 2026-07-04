@@ -34,9 +34,7 @@ struct SourceTxIdWire {
 
 /// Deserializes the optional `sourceTxId: {"sessionID", "txIndex"}` wire
 /// object into `Option<(String, u32)>`.
-fn deserialize_source_tx_id<'de, D>(
-    deserializer: D,
-) -> Result<Option<(String, u32)>, D::Error>
+fn deserialize_source_tx_id<'de, D>(deserializer: D) -> Result<Option<(String, u32)>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -164,10 +162,11 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
                 .or(trusting_meta.as_deref())
                 .and_then(|s| serde_json::from_str(s).ok());
 
-            let (source_session_id, source_tx_index) = match pending.and_then(|p| p.source_tx_id.clone()) {
-                Some((sid, idx)) => (Some(sid), Some(idx)),
-                None => (None, None),
-            };
+            let (source_session_id, source_tx_index) =
+                match pending.and_then(|p| p.source_tx_id.clone()) {
+                    Some((sid, idx)) => (Some(sid), Some(idx)),
+                    None => (None, None),
+                };
 
             views.push(GroupTxView {
                 session_id: session_id.to_string(),
@@ -199,21 +198,19 @@ pub fn collect_group_txs(sm: &SessionMapImpl, pending_info: &[PendingTxIn]) -> V
 /// with no source identity this collapses to the original current-session-only
 /// rule.
 pub fn sort_for_validation(txs: &mut [GroupTxView]) {
-    txs.sort_by(|a, b| {
-        match a.effective_made_at.cmp(&b.effective_made_at) {
-            core::cmp::Ordering::Equal => {
-                let a_session = a.source_session_id.as_deref().unwrap_or(&a.session_id);
-                let b_session = b.source_session_id.as_deref().unwrap_or(&b.session_id);
-                if a_session == b_session {
-                    let a_index = a.source_tx_index.unwrap_or(a.tx_index);
-                    let b_index = b.source_tx_index.unwrap_or(b.tx_index);
-                    a_index.cmp(&b_index)
-                } else {
-                    core::cmp::Ordering::Equal
-                }
+    txs.sort_by(|a, b| match a.effective_made_at.cmp(&b.effective_made_at) {
+        core::cmp::Ordering::Equal => {
+            let a_session = a.source_session_id.as_deref().unwrap_or(&a.session_id);
+            let b_session = b.source_session_id.as_deref().unwrap_or(&b.session_id);
+            if a_session == b_session {
+                let a_index = a.source_tx_index.unwrap_or(a.tx_index);
+                let b_index = b.source_tx_index.unwrap_or(b.tx_index);
+                a_index.cmp(&b_index)
+            } else {
+                core::cmp::Ordering::Equal
             }
-            other => other,
         }
+        other => other,
     });
 }
 
@@ -325,8 +322,7 @@ pub(crate) mod fixtures {
             let path = format!("data/group_engine/{name}.json");
             let text =
                 std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
-            serde_json::from_str(&text)
-                .unwrap_or_else(|e| panic!("parse {path}: {e}"))
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"))
         }
     }
 
@@ -533,9 +529,13 @@ mod tests {
             .find(|v| v.session_id == b_session)
             .expect("session B present");
         assert_eq!(b.current_made_at, 1_700_000_000_000, "current unchanged");
-        assert_eq!(b.effective_made_at, 1_800_000_000_000, "effective overridden");
         assert_eq!(
-            views.last().unwrap().session_id, b_session,
+            b.effective_made_at, 1_800_000_000_000,
+            "effective overridden"
+        );
+        assert_eq!(
+            views.last().unwrap().session_id,
+            b_session,
             "later effective time sorts last"
         );
     }
@@ -612,10 +612,7 @@ mod tests {
             source_tx_id: None,
         }];
         let with_pending = collect_group_txs(&sm, &pending);
-        let overridden_meta = with_pending[2]
-            .meta
-            .clone()
-            .expect("pending meta parses");
+        let overridden_meta = with_pending[2].meta.clone().expect("pending meta parses");
         assert_eq!(
             overridden_meta["mi"], 999,
             "pending meta_json overrides the trusting tx's own wire meta"
@@ -653,7 +650,10 @@ mod tests {
 
         let tx3 = &verdicts[3];
         assert_eq!(
-            tx3.source_tx_id.as_ref().expect("sourceTxId present").tx_index,
+            tx3.source_tx_id
+                .as_ref()
+                .expect("sourceTxId present")
+                .tx_index,
             2
         );
     }

@@ -700,9 +700,7 @@ impl SessionMapImpl {
     /// Used by the group engine (`collect_group_txs`) to build transaction views
     /// straight from stored state without copying whole session logs. The session
     /// order matches TypeScript `Map` insertion order (this is an `IndexMap`).
-    pub(crate) fn iter_session_transactions(
-        &self,
-    ) -> impl Iterator<Item = (&str, &[String])> {
+    pub(crate) fn iter_session_transactions(&self) -> impl Iterator<Item = (&str, &[String])> {
         self.sessions
             .iter()
             .map(|(sid, log)| (sid.as_str(), log.transactions_json().as_slice()))

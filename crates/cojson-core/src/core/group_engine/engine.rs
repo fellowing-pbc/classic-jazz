@@ -51,11 +51,15 @@ use crate::core::group_engine::classify::{
     is_key_for_key_field, is_key_sealed_for_group_field, is_own_write_key_revelation,
     is_parent_extension, is_write_key_for_member, parent_group_id_from_key,
 };
-use crate::core::group_engine::tx_view::{collect_group_txs, sort_for_validation, PendingTxIn, Privacy};
+use crate::core::group_engine::tx_view::{
+    collect_group_txs, sort_for_validation, PendingTxIn, Privacy,
+};
 use crate::core::group_engine::types::{
     is_higher_role, is_more_permissive_and_should_inherit, ParentRoleMapping, Role, TimeBasedEntry,
 };
-use crate::core::session_map::{CoValueHeader, JsonValue, RulesetDef, SessionMapError, SessionMapImpl};
+use crate::core::session_map::{
+    CoValueHeader, JsonValue, RulesetDef, SessionMapError, SessionMapImpl,
+};
 
 /// The `"everyone"` pseudo-member key (`EVERYONE`, group.ts:49).
 const EVERYONE: &str = "everyone";
@@ -250,7 +254,9 @@ fn is_truthy(v: Option<&serde_json::Value>) -> bool {
     match v {
         None | Some(serde_json::Value::Null) => false,
         Some(serde_json::Value::Bool(b)) => *b,
-        Some(serde_json::Value::Number(n)) => n.as_f64().map(|f| f != 0.0 && !f.is_nan()).unwrap_or(false),
+        Some(serde_json::Value::Number(n)) => {
+            n.as_f64().map(|f| f != 0.0 && !f.is_nan()).unwrap_or(false)
+        }
         Some(serde_json::Value::String(s)) => !s.is_empty(),
         Some(serde_json::Value::Array(_)) | Some(serde_json::Value::Object(_)) => true,
     }
@@ -372,13 +378,7 @@ pub fn build_group_engine(
         }
         RulesetKind::OwnedByGroup(group_id) => {
             build_owned_by_group(
-                covalues,
-                engines,
-                &mut state,
-                sm,
-                &group_id,
-                pending,
-                visited,
+                covalues, engines, &mut state, sm, &group_id, pending, visited,
             )?;
         }
         RulesetKind::UnsafeAllowAll => {
@@ -577,7 +577,9 @@ fn build_group_ruleset(
                         .add_change(effective, ParentRoleMapping::Revoked);
                 }
                 Some(mapping) => {
-                    resolver.parent_groups.insert(parent_group_id.clone(), mapping);
+                    resolver
+                        .parent_groups
+                        .insert(parent_group_id.clone(), mapping);
                     state
                         .parent_history
                         .entry(parent_group_id.clone())
@@ -650,7 +652,9 @@ fn build_group_ruleset(
             && affected_member == transactor
             && assigned_role == Role::Admin
         {
-            resolver.member_roles.insert(affected_member.clone(), assigned_role);
+            resolver
+                .member_roles
+                .insert(affected_member.clone(), assigned_role);
             state
                 .role_history
                 .entry(affected_member.clone())
@@ -662,7 +666,9 @@ fn build_group_ruleset(
 
         // self revoke is always valid (permissions.ts:478-482)
         if transactor == affected_member && assigned_role == Role::Revoked {
-            resolver.member_roles.insert(affected_member.clone(), assigned_role);
+            resolver
+                .member_roles
+                .insert(affected_member.clone(), assigned_role);
             state
                 .role_history
                 .entry(affected_member.clone())
@@ -690,7 +696,9 @@ fn build_group_ruleset(
                 verdict!(invalid "Admins can't demote admins.");
                 continue;
             }
-            resolver.member_roles.insert(affected_member.clone(), assigned_role);
+            resolver
+                .member_roles
+                .insert(affected_member.clone(), assigned_role);
             state
                 .role_history
                 .entry(affected_member.clone())
@@ -718,7 +726,9 @@ fn build_group_ruleset(
                 verdict!(invalid "Managers can't invite managers.");
                 continue;
             }
-            resolver.member_roles.insert(affected_member.clone(), assigned_role);
+            resolver
+                .member_roles
+                .insert(affected_member.clone(), assigned_role);
             state
                 .role_history
                 .entry(affected_member.clone())
@@ -773,7 +783,9 @@ fn build_group_ruleset(
             continue;
         }
 
-        resolver.member_roles.insert(affected_member.clone(), assigned_role);
+        resolver
+            .member_roles
+            .insert(affected_member.clone(), assigned_role);
         state
             .role_history
             .entry(affected_member.clone())
@@ -816,7 +828,9 @@ fn build_owned_by_group(
         // used as-is (so the "Transactor not found in group" branch is
         // unreachable — this helper never returns undefined).
         let effective_transactor = if tx.author == group_id && group_is_account {
-            group_initial_admin.clone().unwrap_or_else(|| tx.author.clone())
+            group_initial_admin
+                .clone()
+                .unwrap_or_else(|| tx.author.clone())
         } else {
             tx.author.clone()
         };
@@ -1157,7 +1171,13 @@ mod tests {
                 let txs_json = format!("[{}]", session.transactions.join(","));
                 node.get_mut(&cov.co_id)
                     .unwrap()
-                    .add_transactions(&session.session_id, None, &txs_json, &session.last_signature, true)
+                    .add_transactions(
+                        &session.session_id,
+                        None,
+                        &txs_json,
+                        &session.last_signature,
+                        true,
+                    )
                     .unwrap_or_else(|e| panic!("[{name}] add txs {}: {e}", session.session_id));
             }
         }
@@ -1309,8 +1329,8 @@ mod tests {
     /// `ValidBranchPointerOnly` — the trim's `role == reader` guard.
     #[test]
     fn merged_tx_ties_admin_branch_pointer_is_not_trimmed() {
-        use crate::core::group_engine::tx_view::PendingTxIn;
         use super::VerdictOutcome;
+        use crate::core::group_engine::tx_view::PendingTxIn;
 
         let owned_id = "co_zSKK5oFqS8LcD3Rj14nYJQf5S6B";
         let fix = FixtureFile::load("merged_tx_ties");
@@ -1374,8 +1394,8 @@ mod tests {
     /// Also asserts the absent-id no-op contract.
     #[test]
     fn reset_validation_forces_rebuild_with_fresh_pending() {
-        use crate::core::group_engine::tx_view::PendingTxIn;
         use super::VerdictOutcome;
+        use crate::core::group_engine::tx_view::PendingTxIn;
 
         let owned_id = "co_zaNLWDF81o7S9DV94nkS9NPhLTE";
         // The reader's PRIVATE tx — meta is unavailable at validation, so it is
@@ -1396,7 +1416,10 @@ mod tests {
 
         // 1) Baseline: no pending meta -> reader's private write is rejected.
         let base = node.validate_transactions(owned_id, &[]).unwrap();
-        assert!(!private_verdict(&base).valid, "private write rejected without meta");
+        assert!(
+            !private_verdict(&base).valid,
+            "private write rejected without meta"
+        );
 
         // Branch-pointer meta the reader "intended" — visible only once decrypted.
         let pending = vec![PendingTxIn {
@@ -1505,7 +1528,13 @@ mod tests {
             let txs_json = format!("[{}]", session.transactions.join(","));
             node.get_mut(&child.co_id)
                 .unwrap()
-                .add_transactions(&session.session_id, None, &txs_json, &session.last_signature, true)
+                .add_transactions(
+                    &session.session_id,
+                    None,
+                    &txs_json,
+                    &session.last_signature,
+                    true,
+                )
                 .unwrap_or_else(|e| panic!("[parent_extend] add txs {}: {e}", session.session_id));
         }
 

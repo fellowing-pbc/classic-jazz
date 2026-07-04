@@ -100,7 +100,12 @@ impl NodeCore {
             .lock()
             .map_err(|_| SessionMapError::LockError)?;
         internal
-            .create_co_value(&co_id, &header_json, max_tx_size, skip_verify.unwrap_or(false))
+            .create_co_value(
+                &co_id,
+                &header_json,
+                max_tx_size,
+                skip_verify.unwrap_or(false),
+            )
             .map_err(|e| SessionMapError::Internal(e.to_string()))
     }
 
@@ -610,7 +615,9 @@ mod tests {
     #[test]
     fn remove_absent_is_noop() {
         let node = NodeCore::new();
-        assert!(!node.remove_co_value("co_zDoesNotExist".to_string()).unwrap());
+        assert!(!node
+            .remove_co_value("co_zDoesNotExist".to_string())
+            .unwrap());
     }
 
     #[test]
@@ -627,14 +634,20 @@ mod tests {
     #[test]
     fn reset_validation_on_absent_id_is_noop() {
         let node = NodeCore::new();
-        assert!(node.reset_validation("co_zDoesNotExist".to_string()).is_ok());
+        assert!(node
+            .reset_validation("co_zDoesNotExist".to_string())
+            .is_ok());
     }
 
     #[test]
     fn role_of_unknown_group_errors_with_prefix() {
         let node = NodeCore::new();
         let err = node
-            .role_of("co_zDoesNotExist".to_string(), "co_zMember".to_string(), None)
+            .role_of(
+                "co_zDoesNotExist".to_string(),
+                "co_zMember".to_string(),
+                None,
+            )
             .unwrap_err();
         assert_eq!(err.to_string(), "Unknown CoValue: co_zDoesNotExist");
     }
