@@ -10,7 +10,10 @@
  * is needed to force a revalidation), and asserts the two passes agree.
  *
  * Seed is logged on failure and overridable via DIFF_SEED so a divergence can
- * be reproduced deterministically.
+ * be reproduced deterministically. Reproduction is STRUCTURAL, not bitwise:
+ * the seed drives op structure and time ordering, but account/session IDs come
+ * from real crypto randomness — fine because the harness deliberately avoids
+ * ID-ordering-sensitive constructions (see tick()).
  */
 import { expect, test, vi } from "vitest";
 import {
@@ -337,6 +340,9 @@ function snapshotPass(
 // The harness
 // ---------------------------------------------------------------------------
 
+// ~270ms total at N=50 (well under the 60s timeout, ~200x headroom). NOTE if
+// you raise N substantially: scenario nodes are not gracefully shut down
+// (deliberate — short-lived process), so very large N grows memory.
 const N = 50;
 const SEED = process.env.DIFF_SEED ? Number(process.env.DIFF_SEED) : 424242;
 
