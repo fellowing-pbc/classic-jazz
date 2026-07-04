@@ -1165,4 +1165,88 @@ mod tests {
     fixture_test!(self_extension_cycle, "self_extension_cycle");
     fixture_test!(self_revoke, "self_revoke");
     fixture_test!(write_only_keys, "write_only_keys");
+
+    // =====================================================================
+    // Error taxonomy: UnknownCoValue (primary) vs CoValueNotLoaded (dependency)
+    // =====================================================================
+
+    /// An unregistered PRIMARY coId passed directly to a coId-first entry point
+    /// is API misuse — `UnknownCoValue` — matching every other `NodeCore`
+    /// method (e.g. `get`/`get_mut`). It must NOT surface as
+    /// `CoValueNotLoaded`, which is reserved for dependencies (parent groups /
+    /// owning accounts) discovered missing during a recursive build.
+    #[test]
+    fn validate_group_unknown_primary_errors() {
+        use crate::core::session_map::SessionMapError;
+
+        let mut node = NodeCore::new();
+
+        match node.validate_group("co_zNope", &[]) {
+            Err(SessionMapError::UnknownCoValue(id)) => assert_eq!(id, "co_zNope"),
+            other => panic!("expected UnknownCoValue, got {other:?}"),
+        }
+
+        match node.role_of("co_zNope", "co_zX", None) {
+            Err(SessionMapError::UnknownCoValue(id)) => assert_eq!(id, "co_zNope"),
+            other => panic!("expected UnknownCoValue, got {other:?}"),
+        }
+    }
+
+    /// A missing DEPENDENCY discovered while recursively building the primary
+    /// coId's engine (here: the parent group referenced by a
+    /// `parent_<id>` extension) must still surface as `CoValueNotLoaded`, not
+    /// `UnknownCoValue` — only the primary coId gets the API-misuse treatment.
+    #[test]
+    fn missing_parent_dependency_is_covalue_not_loaded() {
+        use crate::core::session_map::SessionMapError;
+
+        let fix = FixtureFile::load("parent_extend");
+
+        // The child references `parent_co_zcsomTZP9rEDbhYyqGzHvb1vC24` in its
+        // transactions; find it (and its parent id) generically off the
+        // fixture rather than hardcoding which covalue is "first".
+        let child = fix
+            .covalues
+            .iter()
+            .find(|cov| {
+                cov.sessions.iter().any(|s| {
+                    s.transactions
+                        .iter()
+                        .any(|raw| raw.contains("\\\"key\\\":\\\"parent_"))
+                })
+            })
+            .expect("[parent_extend] fixture should contain a child with a parent_ extension");
+
+        let parent_id = child
+            .sessions
+            .iter()
+            .find_map(|s| {
+                s.transactions.iter().find_map(|raw| {
+                    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+                    let changes_str = v.get("changes")?.as_str()?;
+                    let changes: serde_json::Value = serde_json::from_str(changes_str).ok()?;
+                    let key = changes.get(0)?.get("key")?.as_str()?;
+                    key.strip_prefix("parent_").map(|id| id.to_string())
+                })
+            })
+            .expect("[parent_extend] child should have a parent_<id> extension key");
+
+        // Load ONLY the child covalue — the parent is never registered.
+        let mut node = NodeCore::new();
+        let _ = build_session_map(child); // sanity: header + txs parse under skip_verify
+        node.create_co_value(&child.co_id, &child.header_json, None, true)
+            .unwrap_or_else(|e| panic!("[parent_extend] create {}: {e}", child.co_id));
+        for session in &child.sessions {
+            let txs_json = format!("[{}]", session.transactions.join(","));
+            node.get_mut(&child.co_id)
+                .unwrap()
+                .add_transactions(&session.session_id, None, &txs_json, &session.last_signature, true)
+                .unwrap_or_else(|e| panic!("[parent_extend] add txs {}: {e}", session.session_id));
+        }
+
+        match node.validate_group(&child.co_id, &[]) {
+            Err(SessionMapError::CoValueNotLoaded(id)) => assert_eq!(id, parent_id),
+            other => panic!("expected CoValueNotLoaded({parent_id}), got {other:?}"),
+        }
+    }
 }

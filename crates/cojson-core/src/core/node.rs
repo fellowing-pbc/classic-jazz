@@ -58,23 +58,39 @@ impl NodeCore {
     /// Validate every transaction of `co_id`, returning the verdicts in
     /// validation order. Ensures the (cross-CoValue) group engine is fresh,
     /// rebuilding it — and any parent/owner engines it depends on — as needed.
+    ///
+    /// `co_id` itself must already be registered: an unregistered primary
+    /// coId is API misuse (`UnknownCoValue`), consistent with `get`/`get_mut`.
+    /// A dependency (parent group / owning account) discovered missing during
+    /// the recursive build still surfaces as `CoValueNotLoaded`, unchanged.
     pub fn validate_group(
         &mut self,
         co_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<Vec<crate::core::group_engine::engine::Verdict>, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
         let Self { covalues, engines } = self;
         engine_validate_group(covalues, engines, co_id, pending)
     }
 
     /// Read-side role of `member` in group `group_id` at `at_time` (`None` =
     /// latest). Builds engines on demand.
+    ///
+    /// `group_id` itself must already be registered: an unregistered primary
+    /// coId is API misuse (`UnknownCoValue`), consistent with `get`/`get_mut`.
+    /// A dependency (parent group / owning account) discovered missing during
+    /// the recursive build still surfaces as `CoValueNotLoaded`, unchanged.
     pub fn role_of(
         &mut self,
         group_id: &str,
         member: &str,
         at_time: Option<u64>,
     ) -> Result<Option<Role>, SessionMapError> {
+        if !self.covalues.contains_key(group_id) {
+            return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
+        }
         let Self { covalues, engines } = self;
         engine_role_of(covalues, engines, group_id, member, at_time)
     }
