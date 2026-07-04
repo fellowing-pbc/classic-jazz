@@ -7,7 +7,7 @@
 //!
 //! The comparator orders by `effective_made_at` ascending; ties are broken by
 //! `tx_index` only WITHIN a session, and across sessions the original
-//! (session-insertion) order is preserved: Rust's [`Vec::sort_by`] is stable, so
+//! (session-insertion) order is preserved: Rust's `Vec::sort_by` is stable, so
 //! returning [`Equal`](core::cmp::Ordering::Equal) for cross-session ties keeps
 //! the iteration order established by [`collect_group_txs`]. The
 //! `cross_session_ties` fixture exists precisely to pin this outcome.
