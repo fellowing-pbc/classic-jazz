@@ -57,7 +57,7 @@ function pick<T>(rng: () => number, arr: readonly T[]): T {
 // ---------------------------------------------------------------------------
 // Node/account helpers (bound to a native-crypto instance, so both the
 // native and TS group-engine paths are actually reachable via the kill
-// switch - a WasmCrypto/ShimNodeCore node has no validateGroup/roleOf at all).
+// switch - a WasmCrypto/ShimNodeCore node has no validateTransactions/roleOf at all).
 // ---------------------------------------------------------------------------
 
 function freshAgent() {

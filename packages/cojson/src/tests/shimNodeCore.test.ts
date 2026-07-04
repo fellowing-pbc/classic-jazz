@@ -80,20 +80,24 @@ function nodeCoreSuite(name: string, makeNodeCore: () => NodeCoreImpl) {
       });
     });
 
-    test("validateGroup/roleOf capability signal", () => {
+    test("validateTransactions/resetValidation/roleOf capability signal", () => {
       const nodeCore = makeNodeCore();
 
-      if (nodeCore.validateGroup) {
-        expect(typeof nodeCore.validateGroup).toBe("function");
+      if (nodeCore.validateTransactions) {
+        expect(typeof nodeCore.validateTransactions).toBe("function");
+        expect(typeof nodeCore.resetValidation).toBe("function");
         expect(typeof nodeCore.roleOf).toBe("function");
-        expect(() => nodeCore.validateGroup!("co_zNope", [])).toThrow(
+        expect(() => nodeCore.validateTransactions!("co_zNope", [])).toThrow(
           /Unknown CoValue/,
         );
         expect(() => nodeCore.roleOf!("co_zNope", "someone")).toThrow(
           /Unknown CoValue/,
         );
+        // resetValidation on an unregistered coId is a no-op, not an error.
+        expect(() => nodeCore.resetValidation!("co_zNope")).not.toThrow();
       } else {
-        expect(nodeCore.validateGroup).toBeUndefined();
+        expect(nodeCore.validateTransactions).toBeUndefined();
+        expect(nodeCore.resetValidation).toBeUndefined();
         expect(nodeCore.roleOf).toBeUndefined();
       }
     });

@@ -97,7 +97,7 @@ export function determineValidTransactions(coValue: CoValueCore): void {
     }
 
     const nodeCore = coValue.node.nodeCore;
-    if (nodeCore.validateGroup && !nativeValidationDisabled()) {
+    if (nodeCore.validateTransactions && !nativeValidationDisabled()) {
       determineValidTransactionsForGroupNative(coValue, nodeCore);
     } else {
       determineValidTransactionsForGroup(coValue, initialAdmin);
@@ -271,7 +271,7 @@ function determineValidTransactionsForGroupNative(
 
   let verdicts: NodeCoreGroupVerdict[];
   try {
-    verdicts = nodeCore.validateGroup!(coValue.id, pending);
+    verdicts = nodeCore.validateTransactions!(coValue.id, pending);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (message.startsWith("CoValue not loaded: ")) {

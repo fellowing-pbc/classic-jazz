@@ -408,11 +408,26 @@ export type NodeCorePendingTx = {
   sessionId: string;
   txIndex: number;
   sourceMadeAt?: number;
+  /** Decrypted meta JSON for this pending tx; takes precedence over the
+   * TRUSTING tx's own wire `meta` field. See `PendingTxIn::meta_json`
+   * (cojson-core). */
+  metaJson?: string;
+  /**
+   * Merged-transaction source identity. NOTE the `sessionID` casing here
+   * matches {@link TransactionID} (this codebase's convention for
+   * transaction-identity wire objects), NOT the napi-generated `SourceTxId`
+   * object, whose fields are plain camelCase (`sessionId`/`txIndex`) because
+   * napi objects bypass serde's `#[serde(rename)]`. The NapiCrypto adapter is
+   * the seam that converts `{sessionID, txIndex}` -> `{sessionId, txIndex}`
+   * when calling into the native binding.
+   */
+  sourceTxId?: { sessionID: string; txIndex: number };
 };
 export type NodeCoreGroupVerdict = {
   sessionId: string;
   txIndex: number;
   valid: boolean;
+  outcome: "valid" | "invalid" | "validBranchPointerOnly";
   reason?: string;
 };
 
@@ -521,21 +536,37 @@ export interface NodeCoreImpl {
   ): string | undefined;
 
   /**
-   * Native group validation (stage 2). Absent on providers without a native
-   * NodeCore — absence IS the capability signal; never stub this with a throw,
-   * callers gate on `if (nodeCore.validateGroup)`.
+   * Unified native transaction validation (stage 3, subsuming stage 2's
+   * `validateGroup`). Absent on providers without a native NodeCore —
+   * absence IS the capability signal; never stub this with a throw,
+   * callers gate on `if (nodeCore.validateTransactions)`.
    * Throws "Unknown CoValue: <id>" for an unregistered `coId` and
    * "CoValue not loaded: <id>" when a dependency (parent group / owning
    * account) is missing from the registry.
    */
-  validateGroup?(
+  validateTransactions?(
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[];
   /**
    * Native role resolution (stage 2). Absent on providers without a native
    * NodeCore — absence IS the capability signal; never stub this with a throw.
-   * Error contract identical to {@link NodeCoreImpl.validateGroup}.
+   * Error contract identical to {@link NodeCoreImpl.validateTransactions}.
    */
   roleOf?(groupId: string, member: string, atTime?: number): string | undefined;
+  /**
+   * Drop the cached validation engine for `coId`, forcing a full recompute on
+   * the next `validateTransactions`/`roleOf`. Absent on providers without a
+   * native NodeCore — absence IS the capability signal; never stub this.
+   *
+   * LOAD-BEARING CALLER CONTRACT (mirrors `NodeCore::reset_validation` on the
+   * Rust side): the engine cache is keyed ONLY by per-session transaction
+   * counts — `pending` (decrypted meta / source identities) is NOT part of
+   * the key. If pending changes without a new transaction (e.g. a private
+   * tx's meta decrypts later), verdicts stay stale until this is called.
+   * Callers MUST invoke this everywhere TS calls
+   * `CoValueCore.resetParsedTransactions`, and nowhere else. An absent `coId`
+   * is a no-op, not an error.
+   */
+  resetValidation?(coId: string): void;
 }

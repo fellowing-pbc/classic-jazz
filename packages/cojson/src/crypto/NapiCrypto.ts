@@ -631,20 +631,46 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     );
   }
 
-  // === Group Validation (stage 2) ===
-  validateGroup(
+  // === Transaction Validation (stage 3) ===
+  validateTransactions(
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[] {
-    return this.nodeCore.validateGroup(coId, pending).map((v) => ({
-      sessionId: v.sessionId,
-      txIndex: v.txIndex,
-      valid: v.valid,
-      reason: v.reason ?? undefined,
-    }));
+    return this.nodeCore
+      .validateTransactions(
+        coId,
+        pending.map((p) => ({
+          sessionId: p.sessionId,
+          txIndex: p.txIndex,
+          sourceMadeAt: p.sourceMadeAt,
+          metaJson: p.metaJson,
+          // Seam: the native `SourceTxId` object is plain camelCase
+          // (`sessionId`/`txIndex`) because napi objects bypass serde's
+          // `#[serde(rename)]`; the public TS type follows this codebase's
+          // `sessionID` convention for transaction-identity wire objects
+          // (matching `TransactionID`). Bridge the casing here.
+          sourceTxId: p.sourceTxId
+            ? {
+                sessionId: p.sourceTxId.sessionID,
+                txIndex: p.sourceTxId.txIndex,
+              }
+            : undefined,
+        })),
+      )
+      .map((v) => ({
+        sessionId: v.sessionId,
+        txIndex: v.txIndex,
+        valid: v.valid,
+        outcome: v.outcome as "valid" | "invalid" | "validBranchPointerOnly",
+        reason: v.reason ?? undefined,
+      }));
   }
 
   roleOf(groupId: string, member: string, atTime?: number): string | undefined {
     return this.nodeCore.roleOf(groupId, member, atTime) ?? undefined;
+  }
+
+  resetValidation(coId: string): void {
+    this.nodeCore.resetValidation(coId);
   }
 }
