@@ -11,7 +11,6 @@ import { Stringified, parseJSON, stableStringify } from "../jsonStringify.js";
 import { JsonValue } from "../jsonValue.js";
 import { logger } from "../logger.js";
 import { Transaction } from "../coValueCore/verifiedState.js";
-import { ShimNodeCore } from "./ShimNodeCore.js";
 
 function randomBytes(bytesLength = 32): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(bytesLength));
@@ -300,15 +299,11 @@ export abstract class CryptoProvider<Blake3State = any> {
   ): SessionMapImpl;
 
   /**
-   * Node-level registry. Default: TS shim over per-CoValue session maps
-   * (wasm/RN until their native NodeCore ports land). NapiCrypto overrides
-   * this with the native registry.
+   * Node-level registry backed by a native `NodeCore`. Every provider
+   * (Napi/Wasm/RN) overrides this with its native registry adapter — there is
+   * no TS shim fallback.
    */
-  createNodeCore(): NodeCoreImpl {
-    return new ShimNodeCore((coId, headerJson, maxTxSize, skipVerify) =>
-      this.createSessionMap(coId as RawCoID, headerJson, maxTxSize, skipVerify),
-    );
-  }
+  abstract createNodeCore(): NodeCoreImpl;
 }
 
 export type Hash = `hash_z${string}`;
@@ -537,27 +532,24 @@ export interface NodeCoreImpl {
 
   /**
    * Unified native transaction validation (stage 3, subsuming stage 2's
-   * `validateGroup`). Absent on providers without a native NodeCore —
-   * absence IS the capability signal; never stub this with a throw,
-   * callers gate on `if (nodeCore.validateTransactions)`.
+   * `validateGroup`). Validates EVERY ruleset (group, ownedByGroup,
+   * unsafeAllowAll).
    * Throws "Unknown CoValue: <id>" for an unregistered `coId` and
    * "CoValue not loaded: <id>" when a dependency (parent group / owning
    * account) is missing from the registry.
    */
-  validateTransactions?(
+  validateTransactions(
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[];
   /**
-   * Native role resolution (stage 2). Absent on providers without a native
-   * NodeCore — absence IS the capability signal; never stub this with a throw.
+   * Native role resolution (stage 2).
    * Error contract identical to {@link NodeCoreImpl.validateTransactions}.
    */
-  roleOf?(groupId: string, member: string, atTime?: number): string | undefined;
+  roleOf(groupId: string, member: string, atTime?: number): string | undefined;
   /**
    * Drop the cached validation engine for `coId`, forcing a full recompute on
-   * the next `validateTransactions`/`roleOf`. Absent on providers without a
-   * native NodeCore — absence IS the capability signal; never stub this.
+   * the next `validateTransactions`/`roleOf`.
    *
    * LOAD-BEARING CALLER CONTRACT (mirrors `NodeCore::reset_validation` on the
    * Rust side): the engine cache is keyed ONLY by per-session transaction
@@ -568,5 +560,5 @@ export interface NodeCoreImpl {
    * `CoValueCore.resetParsedTransactions`, and nowhere else. An absent `coId`
    * is a no-op, not an error.
    */
-  resetValidation?(coId: string): void;
+  resetValidation(coId: string): void;
 }
