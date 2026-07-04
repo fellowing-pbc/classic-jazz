@@ -336,7 +336,12 @@ describe("group engine fixtures", () => {
     const { node, groupCore, adminID } = newLowLevelGroup();
     const group = expectGroup(groupCore.getCurrentContent());
 
-    // first transaction of the group is the initial-admin self-promotion
+    // first transaction of the group is the initial-admin self-promotion.
+    // NOTE on the two `as any` idioms in this file: `(group.set as any)(...)`
+    // (method cast) is used where the KEY is dynamic — GroupShape's overlapping
+    // index signatures collapse the generic value type to `never` for
+    // non-literal keys; `value as any` (argument cast) suffices where the key
+    // is a known literal and only the value type is off.
     (group.set as any)(adminID, "admin", "trusting");
 
     // a non-initialAdmin attempting the very same self-promotion → invalid

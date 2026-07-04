@@ -520,11 +520,22 @@ export interface NodeCoreImpl {
     keySecret: string,
   ): string | undefined;
 
-  /** Native group validation (stage 2). Absent on providers without a native NodeCore. */
+  /**
+   * Native group validation (stage 2). Absent on providers without a native
+   * NodeCore — absence IS the capability signal; never stub this with a throw,
+   * callers gate on `if (nodeCore.validateGroup)`.
+   * Throws "Unknown CoValue: <id>" for an unregistered `coId` and
+   * "CoValue not loaded: <id>" when a dependency (parent group / owning
+   * account) is missing from the registry.
+   */
   validateGroup?(
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[];
-  /** Native role resolution (stage 2). Absent on providers without a native NodeCore. */
+  /**
+   * Native role resolution (stage 2). Absent on providers without a native
+   * NodeCore — absence IS the capability signal; never stub this with a throw.
+   * Error contract identical to {@link NodeCoreImpl.validateGroup}.
+   */
   roleOf?(groupId: string, member: string, atTime?: number): string | undefined;
 }
