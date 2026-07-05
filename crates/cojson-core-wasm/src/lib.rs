@@ -1098,6 +1098,40 @@ impl NodeCore {
         self.internal.stream_missing_key_ids(&co_id)
     }
 
+    // === coList (RGA list) materialization ===
+
+    #[wasm_bindgen(js_name = listMaterialize)]
+    pub fn list_materialize(&mut self, co_id: String, pending: JsValue) -> Result<f64, JsValue> {
+        let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
+            .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
+        Ok(self
+            .internal
+            .list_materialize(&co_id, &pending_wire_to_rust(pending))
+            .map_err(to_wasm_err)? as f64)
+    }
+
+    #[wasm_bindgen(js_name = listSnapshot)]
+    pub fn list_snapshot(&self, co_id: String) -> Result<String, JsValue> {
+        self.internal.list_snapshot(&co_id).map_err(to_wasm_err)
+    }
+
+    #[wasm_bindgen(js_name = listEntries)]
+    pub fn list_entries(&self, co_id: String) -> Result<String, JsValue> {
+        self.internal.list_entries(&co_id).map_err(to_wasm_err)
+    }
+
+    #[wasm_bindgen(js_name = listDelta)]
+    pub fn list_delta(&self, co_id: String, since_version: f64) -> Result<String, JsValue> {
+        self.internal
+            .list_delta(&co_id, since_version as u64)
+            .map_err(to_wasm_err)
+    }
+
+    #[wasm_bindgen(js_name = listMissingKeyIds)]
+    pub fn list_missing_key_ids(&self, co_id: String) -> Vec<String> {
+        self.internal.list_missing_key_ids(&co_id)
+    }
+
     /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
     /// them in-crate, and materialize the coMap view in ONE crossing — returning
     /// only the compact `IngestOutcomeWire` (`{generation, count, viewVersion,

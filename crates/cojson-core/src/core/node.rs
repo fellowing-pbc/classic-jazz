@@ -489,7 +489,7 @@ impl NodeCore {
             .co_lists
             .get(co_id)
             .map(|v| v.delta(since_version))
-            .unwrap_or_else(|| r#"{"version":0,"reset":true,"entries":[]}"#.to_string()))
+            .unwrap_or_else(|| r#"{"version":0,"reset":true,"entries":[],"total":0}"#.to_string()))
     }
 
     /// The `KeyID`s `co_id`'s materialized coList view still needs a secret for.

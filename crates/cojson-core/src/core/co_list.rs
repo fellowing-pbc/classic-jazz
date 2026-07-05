@@ -189,6 +189,12 @@ pub struct CoListView {
     keys_version: u64,
     /// Monotonic version, bumped once per rebuild. The delta cursor.
     version: u64,
+    /// The count of PROCESSABLE transactions with available changes — the native
+    /// equivalent of `RawCoList.totalValidTransactions` (`coList.ts:343`, which
+    /// accumulates `getValidSortedTransactions(...).length` and so converges to
+    /// this absolute count). A private tx whose key is missing is NOT counted
+    /// (TS `isProcessable` requires decoded `changes`).
+    total_valid_transactions: u64,
     /// `KeyID`s of PRIVATE transactions whose secret was unavailable at build
     /// time (SKIPPED, mirroring TS). Drives TS key acquisition.
     missing_key_ids: HashSet<String>,
@@ -250,11 +256,15 @@ impl CoListView {
         let _ = write!(out, "{}", self.version);
         // A caller already at this version needs no rebuild.
         if since_version == self.version {
-            out.push_str(",\"reset\":false,\"entries\":null}");
+            out.push_str(",\"reset\":false,\"entries\":null,\"total\":");
+            let _ = write!(out, "{}", self.total_valid_transactions);
+            out.push('}');
             return out;
         }
         out.push_str(",\"reset\":true,\"entries\":");
         out.push_str(&self.entries_json());
+        out.push_str(",\"total\":");
+        let _ = write!(out, "{}", self.total_valid_transactions);
         out.push('}');
         out
     }
@@ -609,6 +619,7 @@ fn build_full_view(
 
     let mut build = RgaBuild::default();
     let mut missing_key_ids: HashSet<String> = HashSet::new();
+    let mut total_valid_transactions: u64 = 0;
 
     for tx in &txs {
         let id = (tx.session_id.clone(), tx.tx_index);
@@ -633,6 +644,10 @@ fn build_full_view(
             },
         };
         let Some(changes) = changes else { continue };
+
+        // A processable tx WITH available changes is one `getValidSortedTransactions`
+        // would return — count it toward `totalValidTransactions`.
+        total_valid_transactions += 1;
 
         for (change_idx, change) in changes.iter().enumerate() {
             let op_id = OpId {
@@ -659,6 +674,7 @@ fn build_full_view(
         entries,
         keys_version,
         version,
+        total_valid_transactions,
         missing_key_ids,
     }
 }

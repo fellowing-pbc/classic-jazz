@@ -49,6 +49,30 @@ type DeletionEntry = {
   change: DeletionOpPayload;
 };
 
+/**
+ * The native (Rust-resident) coList materialization delta: `{version, reset,
+ * entries}`. On `reset` the consumer replaces its cached ordered entries with
+ * `entries` (the FULL ordered `{value, madeAt, opID}` list); when the caller is
+ * already caught up (`reset:false`) `entries` is `null` and nothing changes.
+ */
+export type NativeListDelta = {
+  version: number;
+  reset: boolean;
+  entries: { value: JsonValue; madeAt: number; opID: OpID }[] | null;
+  /** The native view's `totalValidTransactions` (processable txs with changes). */
+  total: number;
+};
+
+/**
+ * Implemented by `RawCoList` so `CoValueCore` can drive native materialization
+ * uniformly (the coList twin of `NativeStreamConsumer`).
+ * `consumeNativeListDelta` returns the native view's new monotonic version.
+ */
+export interface NativeListConsumer {
+  consumeNativeListDelta(delta: NativeListDelta): number;
+  rebuildFromCore(): void;
+}
+
 export class RawCoList<
   Item extends JsonValue = JsonValue,
   Meta extends JsonObject | null = null,
@@ -101,6 +125,18 @@ export class RawCoList<
 
   #isDeletionRestricted: boolean;
 
+  /**
+   * True when this coList's entries are fed by the native (Rust-resident) RGA
+   * materializer via {@link consumeNativeListDelta} instead of the TS
+   * {@link processNewTransactions} walk. Set once at construction from
+   * {@link CoValueCore.isNativeCoList}. Time-travel (`atTime`/`atFrontier`)
+   * views keep the TS path (the native view is the live, unfiltered list).
+   */
+  readonly nativeMaterialization: boolean = false;
+  /** Whether the native view was materialized into this content at least once —
+   * the first materialization does NOT bump {@link version}; later rebuilds do. */
+  #nativeMaterializedOnce = false;
+
   private resetInternalState() {
     this.afterStart = [];
     this.beforeEnd = [];
@@ -135,7 +171,39 @@ export class RawCoList<
     this.#isDeletionRestricted =
       ruleset.type === "ownedByGroup" && ruleset.restrictDeletion === true;
 
-    this.processNewTransactions();
+    this.nativeMaterialization =
+      this.atTimeFilter === undefined &&
+      this.atFrontierFilter === undefined &&
+      this.core.isNativeCoList();
+
+    if (this.nativeMaterialization) {
+      this.core.materializeNativeCoListContent(this);
+    } else {
+      this.processNewTransactions();
+    }
+  }
+
+  /**
+   * Rebuild the cached ordered `entries()` from a native delta (`{version,
+   * reset, entries}`). On `reset` the full ordered entry list replaces
+   * `_cachedEntries`; otherwise (already caught up) nothing changes. The entry
+   * shape (`{value, madeAt, opID}`) is identical to the TS path's, so every
+   * reader is unchanged. Returns the native view's new version.
+   */
+  consumeNativeListDelta(delta: NativeListDelta): number {
+    if (delta.reset && delta.entries) {
+      if (this.#nativeMaterializedOnce) {
+        this.version += 1;
+      }
+      this._cachedEntries = delta.entries as {
+        value: Item;
+        madeAt: number;
+        opID: OpID;
+      }[];
+    }
+    this.totalValidTransactions = delta.total;
+    this.#nativeMaterializedOnce = true;
+    return delta.version;
   }
 
   private getInsertionsEntry(opID: OpID) {
@@ -222,6 +290,11 @@ export class RawCoList<
   }
 
   processNewTransactions() {
+    // Native path: the Rust-resident view drives materialization via
+    // `consumeNativeListDelta`; the TS RGA walk is a no-op.
+    if (this.nativeMaterialization) {
+      return;
+    }
     // Get all transactions including invalid ones, so that items referencing
     // entries from invalid init transactions can still find their references.
     const transactions = this.core.getValidSortedTransactions({
@@ -348,6 +421,16 @@ export class RawCoList<
   }
 
   rebuildFromCore() {
+    if (this.nativeMaterialization) {
+      // Full re-pull from the native view. `version` is bumped by
+      // `consumeNativeListDelta` on the `reset` this triggers.
+      this.resetInternalState();
+      this.#nativeMaterializedOnce = false;
+      this.version += 1;
+      this.core.materializeNativeCoListContent(this);
+      return;
+    }
+
     this.version += 1;
 
     this.resetInternalState();

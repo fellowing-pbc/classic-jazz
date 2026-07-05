@@ -177,6 +177,11 @@ export declare class NodeCore {
   streamSnapshotAtFrontier(coId: string, frontierJson: string): string
   /** The `KeyID`s `co_id`'s coStream view still needs a secret for. */
   streamMissingKeyIds(coId: string): Array<string>
+  listMaterialize(coId: string, pending: Array<PendingTx>): number
+  listSnapshot(coId: string): string
+  listEntries(coId: string): string
+  listDelta(coId: string, sinceVersion: number): string
+  listMissingKeyIds(coId: string): Array<string>
   /**
    * R3 stage-1 single-call ingest: add a content chunk's transactions, validate
    * them in-crate, and materialize the coMap view in ONE crossing — returning

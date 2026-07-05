@@ -890,4 +890,36 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
   supportsNativeCoStreamMaterialization(): boolean {
     return false;
   }
+
+  // Likewise, the RN uniffi binding does not yet expose the coList
+  // materialization surface. `supportsNativeCoListMaterialization` returns
+  // `false`, so the coList path stays on the TS RGA materializer and these
+  // stubs are never reached.
+  listMaterialize(_coId: string, _pending: NodeCorePendingTx[]): number {
+    throw new Error(
+      "native coList materialization is not supported on this binding",
+    );
+  }
+
+  listDelta(_coId: string, _sinceVersion: number): string {
+    throw new Error(
+      "native coList materialization is not supported on this binding",
+    );
+  }
+
+  listSnapshot(_coId: string): string {
+    throw new Error(
+      "native coList materialization is not supported on this binding",
+    );
+  }
+
+  listMissingKeyIds(_coId: string): string[] {
+    throw new Error(
+      "native coList materialization is not supported on this binding",
+    );
+  }
+
+  supportsNativeCoListMaterialization(): boolean {
+    return false;
+  }
 }

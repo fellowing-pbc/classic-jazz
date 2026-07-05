@@ -1109,6 +1109,41 @@ impl NodeCore {
     self.internal.stream_missing_key_ids(&co_id)
   }
 
+  // === coList (RGA list) materialization ===
+
+  #[napi]
+  pub fn list_materialize(&mut self, co_id: String, pending: Vec<PendingTx>) -> napi::Result<f64> {
+    Ok(
+      self
+        .internal
+        .list_materialize(&co_id, &to_rust_pending(pending))
+        .map_err(to_napi_err)? as f64,
+    )
+  }
+
+  #[napi]
+  pub fn list_snapshot(&self, co_id: String) -> napi::Result<String> {
+    self.internal.list_snapshot(&co_id).map_err(to_napi_err)
+  }
+
+  #[napi]
+  pub fn list_entries(&self, co_id: String) -> napi::Result<String> {
+    self.internal.list_entries(&co_id).map_err(to_napi_err)
+  }
+
+  #[napi]
+  pub fn list_delta(&self, co_id: String, since_version: f64) -> napi::Result<String> {
+    self
+      .internal
+      .list_delta(&co_id, since_version as u64)
+      .map_err(to_napi_err)
+  }
+
+  #[napi]
+  pub fn list_missing_key_ids(&self, co_id: String) -> Vec<String> {
+    self.internal.list_missing_key_ids(&co_id)
+  }
+
   /// R3 stage-1 single-call ingest: add a content chunk's transactions, validate
   /// them in-crate, and materialize the coMap view in ONE crossing — returning
   /// only the compact `IngestOutcome` (no per-transaction verdict array). The raw

@@ -967,6 +967,31 @@ export class NodeCore {
         return ret[0] !== 0;
     }
     /**
+     * @param {string} co_id
+     * @param {number} since_version
+     * @returns {string}
+     */
+    listDelta(co_id, since_version) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_listDelta(this.__wbg_ptr, ptr0, len0, since_version);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
      * @param {string} co_id
      * @param {string} key
@@ -1014,6 +1039,30 @@ export class NodeCore {
         return ret[0] !== 0;
     }
     /**
+     * @param {string} co_id
+     * @returns {string}
+     */
+    listEntries(co_id) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_listEntries(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Boundary (b): whole materialized map as a JSON object string.
      * @param {string} co_id
      * @returns {string}
@@ -1052,6 +1101,30 @@ export class NodeCore {
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_streamDelta(this.__wbg_ptr, ptr0, len0, since_version);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {string} co_id
+     * @returns {string}
+     */
+    listSnapshot(co_id) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_listSnapshot(this.__wbg_ptr, ptr0, len0);
             var ptr2 = ret[0];
             var len2 = ret[1];
             if (ret[3]) {
@@ -1286,6 +1359,20 @@ export class NodeCore {
         }
     }
     /**
+     * @param {string} co_id
+     * @param {any} pending
+     * @returns {number}
+     */
+    listMaterialize(co_id, pending) {
+        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_listMaterialize(this.__wbg_ptr, ptr0, len0, pending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
      * Drop the cached validation engine for `co_id`, forcing a full recompute
      * on the next `validateTransactions` / `roleOf`. An absent `co_id` is a
      * no-op (not `UnknownCoValue`): callers invoke this on dependants that may
@@ -1421,6 +1508,18 @@ export class NodeCore {
             wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         }
         return v4;
+    }
+    /**
+     * @param {string} co_id
+     * @returns {string[]}
+     */
+    listMissingKeyIds(co_id) {
+        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nodecore_listMissingKeyIds(this.__wbg_ptr, ptr0, len0);
+        var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v2;
     }
     /**
      * Get transaction count for a session (returns -1 if session not found)

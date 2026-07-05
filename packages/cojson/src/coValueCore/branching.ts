@@ -281,7 +281,9 @@ export function mergeBranch(branch: CoValueCore): CoValueCore {
   // sidestep that control-flow narrowing.
   const targetIsNativeCoMap = target.isNativeCoMap();
   const targetIsNativeCoStream = target.isNativeCoStream();
-  const targetIsNative = targetIsNativeCoMap || targetIsNativeCoStream;
+  const targetIsNativeCoList = target.isNativeCoList();
+  const targetIsNative =
+    targetIsNativeCoMap || targetIsNativeCoStream || targetIsNativeCoList;
 
   for (const tx of branchValidTransactions) {
     const mergeMeta: MergedTransactionMetadata = {

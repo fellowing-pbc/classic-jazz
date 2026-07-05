@@ -18,6 +18,7 @@ import {
 } from "../crypto/crypto.js";
 import type { RawCoMap } from "../coValues/coMap.js";
 import type { NativeStreamConsumer } from "../coValues/coStream.js";
+import type { NativeListConsumer } from "../coValues/coList.js";
 import {
   AgentID,
   isDeleteSessionID,
@@ -133,6 +134,36 @@ export function enableNativeBinaryStreamMaterialization() {
 
 export function disableNativeBinaryStreamMaterialization() {
   nativeBinaryStreamMaterializationEnabled = false;
+}
+
+// The native coList (RGA list) materialization path. Kept OFF by default: the
+// Rust view is fixture-verified byte-for-byte against the current TS `RawCoList`
+// for single-node scenarios (sequential edits, private/native-decrypt,
+// branch/merge, and concurrent branches — see
+// crates/cojson-core/src/core/co_list.rs `content_fixture_tests`), and the full
+// coList.test.ts suite passes in isolation with this flag ON. BUT one
+// multi-session, timing-dependent scenario still diverges:
+// `coList.test.ts` › "should handle multiple branches from different sessions
+// with complex operations" fails under full-suite load — native resolves the
+// concurrent inserts `["milk","bread","butter","eggs"]` where TS resolves
+// `["milk","eggs","bread","butter"]`. The two elements ("eggs" vs "bread") are
+// concurrent inserts at the SAME anchor ("milk") from DIFFERENT sessions/branches
+// with a tied `madeAt`; the residual divergence is in the merged-transaction
+// effective made-at / stable-sort tie-break reconstruction across a multi-session
+// merge (branching.ts now also never `t`-compresses for a native coList target,
+// as it does for coMap/coStream, which fixes the isolated run but not this
+// full-suite-timing case). Until that is root-caused and the fresh, forced
+// jazz-tools + cojson runs are genuinely clean with it ON, this stays OFF and
+// coLists use the TS RGA materializer. Enable via
+// `enableNativeCoListMaterialization()` to A/B / continue the investigation.
+let nativeCoListMaterializationEnabled = false;
+
+export function enableNativeCoListMaterialization() {
+  nativeCoListMaterializationEnabled = true;
+}
+
+export function disableNativeCoListMaterialization() {
+  nativeCoListMaterializationEnabled = false;
 }
 
 export class VerifiedTransaction {
@@ -661,6 +692,7 @@ export class CoValueCore {
     // build.
     this.coMapViewVersion = 0;
     this.coStreamViewVersion = 0;
+    this.coListViewVersion = 0;
 
     // Create VerifiedState - Rust validates uniqueness and id match unless skipVerify is true
     try {
@@ -1152,6 +1184,14 @@ export class CoValueCore {
       );
       return;
     }
+    if (this.isNativeCoList()) {
+      // Native path: re-materialize the Rust-resident coList view and push the
+      // ordered-entry delta into the cached content. Same shape as coStream.
+      this.materializeNativeCoList(
+        this._cachedContent as NativeListConsumer | undefined,
+      );
+      return;
+    }
     if (this._cachedContent) {
       this._cachedContent.processNewTransactions();
     }
@@ -1333,6 +1373,78 @@ export class CoValueCore {
     }
     const delta = JSON.parse(nodeCore.streamDelta(this.id, 0));
     this.coStreamViewVersion = content.consumeNativeStreamDelta(delta);
+  }
+
+  // ── Native coList (RGA list) materialization ────────────────────────────────
+  //
+  // Cursor into the native coList view's monotonic version, the coList twin of
+  // {@link coStreamViewVersion}. Reset in lockstep with the native view whenever
+  // `removeVerifiedContent`/`provideHeader` drops the covalue.
+  coListViewVersion = 0;
+
+  /**
+   * Whether this covalue's coList content is fed by the native materializer.
+   * True for a `colist` header that is NOT branched (a branch pulls in source
+   * transactions the branch covalue's native log lacks) and NOT deletion-
+   * restricted (the native RGA does not run the per-deletion group-role check),
+   * on a binding exposing the coList surface, with the flag on.
+   */
+  isNativeCoList(): this is AvailableCoValueCore {
+    const verified = this._verified;
+    if (!verified || verified.header.type !== "colist") return false;
+    if (this.isBranched()) return false;
+    const ruleset = verified.header.ruleset;
+    if (ruleset.type === "ownedByGroup" && ruleset.restrictDeletion === true) {
+      return false;
+    }
+    if (!this.node.nodeCore.supportsNativeCoListMaterialization()) return false;
+    return nativeCoListMaterializationEnabled;
+  }
+
+  /** Resolve every read key the native coList view still needs. coList twin of
+   * {@link #provideMissingCoStreamKeys}. */
+  #provideMissingCoListKeys(): boolean {
+    if (!this.verified) return false;
+    const missing = this.node.nodeCore.listMissingKeyIds(this.id);
+    let provided = false;
+    for (const keyId of missing) {
+      const secret = this.getReadKey(keyId as KeyID);
+      if (secret) {
+        this.node.nodeCore.provideKeySecret(keyId, secret);
+        provided = true;
+      }
+    }
+    return provided;
+  }
+
+  /** (Re)materialize the native coList view and push the ordered-entry delta
+   * since {@link coListViewVersion} into `content`. coList twin of
+   * {@link materializeNativeCoStream}. */
+  private materializeNativeCoList(
+    content: NativeListConsumer | undefined,
+  ): void {
+    if (!content) return;
+    const nodeCore = this.node.nodeCore;
+    const sinceVersion = this.coListViewVersion;
+    nodeCore.listMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    if (this.#provideMissingCoListKeys()) {
+      nodeCore.listMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    }
+    const delta = JSON.parse(nodeCore.listDelta(this.id, sinceVersion));
+    this.coListViewVersion = content.consumeNativeListDelta(delta);
+  }
+
+  /** Build a fresh coList content's entries from the native view (full delta
+   * since version 0 → `reset`). coList twin of
+   * {@link materializeNativeCoStreamContent}. */
+  materializeNativeCoListContent(content: NativeListConsumer): void {
+    const nodeCore = this.node.nodeCore;
+    nodeCore.listMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    if (this.#provideMissingCoListKeys()) {
+      nodeCore.listMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    }
+    const delta = JSON.parse(nodeCore.listDelta(this.id, 0));
+    this.coListViewVersion = content.consumeNativeListDelta(delta);
   }
 
   /**
@@ -1680,7 +1792,11 @@ export class CoValueCore {
       // Native path: hand the write key to the native store up front so the
       // materialization triggered by `processNewTransactions` can decrypt this
       // just-written private tx without a missing-key re-materialize round-trip.
-      if (this.isNativeCoMap() || this.isNativeCoStream()) {
+      if (
+        this.isNativeCoMap() ||
+        this.isNativeCoStream() ||
+        this.isNativeCoList()
+      ) {
         this.node.nodeCore.provideKeySecret(keyID, keySecret);
       }
     } else {
@@ -1778,6 +1894,13 @@ export class CoValueCore {
     const nativeStreamBefore =
       this.isNativeCoStream() && this._cachedContent
         ? this.node.nodeCore.streamSnapshot(this.id)
+        : undefined;
+
+    // The coList twin of `nativeStreamBefore` (both sides come from the same
+    // native serializer, so string equality is a sound change test).
+    const nativeListBefore =
+      this.isNativeCoList() && this._cachedContent
+        ? this.node.nodeCore.listSnapshot(this.id)
         : undefined;
 
     // Drop the native validation engine cache for this CoValue in lockstep with
@@ -1900,6 +2023,34 @@ export class CoValueCore {
       return;
     }
 
+    // Native coList fast path — the coList twin of the coStream block above.
+    if (this.isNativeCoList() && this.#verifiedTransactionsStore.length === 0) {
+      const content = this._cachedContent as NativeListConsumer | undefined;
+      const nodeCore = this.node.nodeCore;
+      if (content) {
+        let freshVersion = nodeCore.listMaterialize(
+          this.id,
+          EMPTY_NODE_CORE_PENDING,
+        );
+        if (this.#provideMissingCoListKeys()) {
+          freshVersion = nodeCore.listMaterialize(
+            this.id,
+            EMPTY_NODE_CORE_PENDING,
+          );
+        }
+        const after = nodeCore.listSnapshot(this.id);
+        if (nativeListBefore !== after) {
+          content.rebuildFromCore();
+        } else {
+          this.coListViewVersion = freshVersion;
+        }
+      } else {
+        this.coListViewVersion = 0;
+      }
+      this.scheduleNotifyUpdate();
+      return;
+    }
+
     // Internal bookkeeping: read the backing field directly (never the
     // self-healing public getter) — this method IS the "already loaded" path,
     // so there's nothing to heal, and going through the getter here risks
@@ -1970,7 +2121,7 @@ export class CoValueCore {
     // unconditionally for a native coMap.
     if (
       !this.#syncingNativeVerifiedTransactions &&
-      (this.isNativeCoMap() || this.isNativeCoStream())
+      (this.isNativeCoMap() || this.isNativeCoStream() || this.isNativeCoList())
     ) {
       this.#syncingNativeVerifiedTransactions = true;
       try {

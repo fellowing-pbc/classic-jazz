@@ -221,6 +221,7 @@ export class NodeCore {
    * Check if this CoValue is deleted
    */
   isDeleted(co_id: string): boolean;
+  listDelta(co_id: string, since_version: number): string;
   /**
    * Boundary (a): JSON value for `key` at `at_time` (ms; omit for latest).
    */
@@ -230,6 +231,7 @@ export class NodeCore {
    * Check whether the CoValue still has pending streaming content.
    */
   isStreaming(co_id: string): boolean;
+  listEntries(co_id: string): string;
   /**
    * Boundary (b): whole materialized map as a JSON object string.
    */
@@ -239,6 +241,7 @@ export class NodeCore {
    * `sessions[sid]` the full `CoStreamItem[]` for a changed session.
    */
   streamDelta(co_id: string, since_version: number): string;
+  listSnapshot(co_id: string): string;
   coValueCount(): number;
   /**
    * Whether a secret for `key_id` has been provided.
@@ -291,6 +294,7 @@ export class NodeCore {
    * Add transactions to a session
    */
   addTransactions(co_id: string, session_id: string, signer_id: string | null | undefined, transactions_json: string, signature: string, skip_verify: boolean): void;
+  listMaterialize(co_id: string, pending: any): number;
   /**
    * Drop the cached validation engine for `co_id`, forcing a full recompute
    * on the next `validateTransactions` / `roleOf`. An absent `co_id` is a
@@ -324,6 +328,7 @@ export class NodeCore {
    * absent). `frontier_json` is `{ sessionID: txCount }`.
    */
   mapGetAtFrontier(co_id: string, key: string, frontier_json: string): string | undefined;
+  listMissingKeyIds(co_id: string): string[];
   /**
    * Get transaction count for a session (returns -1 if session not found)
    */
@@ -536,6 +541,11 @@ export interface InitOutput {
   readonly nodecore_ingestAndMaterialize: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number];
   readonly nodecore_isDeleted: (a: number, b: number, c: number) => [number, number, number];
   readonly nodecore_isStreaming: (a: number, b: number, c: number) => [number, number, number];
+  readonly nodecore_listDelta: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly nodecore_listEntries: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_listMaterialize: (a: number, b: number, c: number, d: any) => [number, number, number];
+  readonly nodecore_listMissingKeyIds: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_listSnapshot: (a: number, b: number, c: number) => [number, number, number, number];
   readonly nodecore_makeNewPrivateTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number) => [number, number, number, number];
   readonly nodecore_makeNewTrustingTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number, number];
   readonly nodecore_mapDelta: (a: number, b: number, c: number, d: number) => [number, number, number, number];

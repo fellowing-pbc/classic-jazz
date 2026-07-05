@@ -734,4 +734,36 @@ export interface NodeCoreImpl {
    * the TS `getValidTransactions` materializer.
    */
   supportsNativeCoStreamMaterialization(): boolean;
+
+  /**
+   * Native coList (RGA list) materialization surface (mirrors the coStream block
+   * above). The native side keeps a Rust-resident ordered entry view of every
+   * gated coList; TS consumes it through the delta below instead of walking the
+   * RGA insertion graph in TS.
+   *
+   * Materialize (or refresh) `coId`'s coList view against the currently-known
+   * valid transactions; returns the view's monotonic version.
+   */
+  listMaterialize(coId: string, pending: NodeCorePendingTx[]): number;
+  /**
+   * RICH delta `{version, reset, entries}` since `sinceVersion`, as JSON — when
+   * `reset` the caller rebuilds its `entries()` from the full ordered `entries`
+   * array; otherwise (already caught up) `entries` is `null` and nothing changes.
+   */
+  listDelta(coId: string, sinceVersion: number): string;
+  /** The whole materialized list as a JSON array of ordered values. */
+  listSnapshot(coId: string): string;
+  /**
+   * The `KeyID`s `coId`'s coList view still needs a secret for (a private tx used
+   * a key not yet in the native key store). The caller resolves each in TS, feeds
+   * it via {@link provideKeySecret}, and re-materializes.
+   */
+  listMissingKeyIds(coId: string): string[];
+  /**
+   * Whether this adapter's native binding exposes the coList materialization
+   * surface. The napi and wasm bindings do; the React Native uniffi binding only
+   * does after an `ubrn` regeneration. When `false` the coList path stays on the
+   * TS RGA materializer.
+   */
+  supportsNativeCoListMaterialization(): boolean;
 }
