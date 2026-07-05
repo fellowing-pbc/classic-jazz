@@ -937,3 +937,25 @@ describe("provideHeader uniqueness validation", () => {
     expect(coValue.provideHeader(invalidHeader)).toBe(false);
   });
 });
+
+describe("CoValueCore.getRuleset", () => {
+  test("returns the header ruleset", () => {
+    const node = createTestNode();
+    const group = node.createGroup();
+    const map = group.createMap();
+
+    expect(map.core.getRuleset()).toEqual(map.core.verified.header.ruleset);
+  });
+});
+
+describe("CoValueCore.getHeaderCreatedAt", () => {
+  test("returns the header createdAt field", () => {
+    const node = createTestNode();
+    const group = node.createGroup();
+    const map = group.createMap();
+
+    expect(map.core.getHeaderCreatedAt()).toEqual(
+      map.core.verified.header.createdAt,
+    );
+  });
+});

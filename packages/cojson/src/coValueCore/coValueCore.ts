@@ -389,7 +389,8 @@ export class CoValueCore {
    * `CoValueCore.verified` may be null when a CoValue is requested to be
    * loaded but no content has been received from storage or peers yet.
    * In this case, it acts as a centralised entry to keep track of peer loading
-   * state and to subscribe to its content when it does become available. */
+   * state and to subscribe to its content when it does become available.
+   * @internal */
   get verified() {
     return this._verified;
   }
@@ -2854,6 +2855,33 @@ export class CoValueCore {
         "Only groups or values owned by groups have read secrets",
       );
     }
+  }
+
+  getRuleset(): CoValueHeader["ruleset"] {
+    if (!this.verified) {
+      throw new Error(
+        "CoValueCore: getRuleset called on coValue without verified state",
+      );
+    }
+
+    return this.verified.header.ruleset;
+  }
+
+  /**
+   * Returns the raw `createdAt` field from this CoValue's header, as recorded
+   * at creation time. May be `null`/`undefined` for CoValues created without
+   * an explicit timestamp — callers should fall back to `earliestTxMadeAt` in
+   * that case (see `CoValueBase.createdAt` in jazz-tools for the reference
+   * fallback pattern).
+   */
+  getHeaderCreatedAt(): CoValueHeader["createdAt"] {
+    if (!this.verified) {
+      throw new Error(
+        "CoValueCore: getHeaderCreatedAt called on coValue without verified state",
+      );
+    }
+
+    return this.verified.header.createdAt;
   }
 
   readKeyCache = new Map<KeyID, KeySecret>();
