@@ -5,10 +5,7 @@ import type {
   CoValueCore,
   DecryptedTransaction,
 } from "../coValueCore/coValueCore.js";
-import {
-  isNativeCoMapMaterializationEnabled,
-  isNativeGroupKeyWritesEnabled,
-} from "../coValueCore/coValueCore.js";
+import { isNativeGroupKeyWritesEnabled } from "../coValueCore/coValueCore.js";
 import type { CoValueUniqueness } from "../coValueCore/verifiedState.js";
 import type {
   CryptoProvider,
@@ -1146,19 +1143,16 @@ export class RawGroup<
 
   /** The `snapshot` fragment to merge into a native group key-write FFI input.
    *
-   *  When native coMap materialization is enabled the FFI is dispatched through
-   *  the NodeCore methods (see `crypto`'s `groupRotateReadKey` etc.), which source
-   *  the group's key state from the node's OWN materialized coMap view — so we
-   *  OMIT the snapshot entirely rather than re-serialize the whole group CoMap and
-   *  marshal it across the FFI boundary on every write (an O(fields) cost per
-   *  write, O(n^2) over a long rotation run). When it is disabled we fall back to
-   *  embedding the TS-materialized snapshot, which the native side then honors
-   *  as-is. */
+   *  The FFI is dispatched through the NodeCore methods (see `crypto`'s
+   *  `groupRotateReadKey` etc.), which source the group's key state from the
+   *  node's OWN materialized coMap view when the backend supports native coMap
+   *  materialization — so we OMIT the snapshot entirely rather than
+   *  re-serialize the whole group CoMap and marshal it across the FFI boundary
+   *  on every write (an O(fields) cost per write, O(n^2) over a long rotation
+   *  run). Otherwise we fall back to embedding the TS-materialized snapshot,
+   *  which the native side then honors as-is. */
   private nativeGroupSnapshotInput(): { snapshot?: Record<string, string> } {
-    if (
-      isNativeCoMapMaterializationEnabled() &&
-      this.core.node.nodeCore.supportsNativeCoMapMaterialization()
-    ) {
+    if (this.core.node.nodeCore.supportsNativeCoMapMaterialization()) {
       return {};
     }
     return { snapshot: this.nativeGroupSnapshot() };

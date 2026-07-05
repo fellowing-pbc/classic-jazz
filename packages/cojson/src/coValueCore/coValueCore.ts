@@ -76,119 +76,13 @@ export function enablePermissionErrors() {
   logPermissionErrors = true;
 }
 
-// The native coMap materialization path (rich per-op delta pulled on every
-// ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
-// materialization should live in the Rust core, not TS. A known absolute
-// performance cost remains on cold-bulk-ingest shapes — the delta transfer can
-// exceed the JS materialization it replaces (see bench/cojson/*.bench.ts) — but
-// it is accepted because the goal is architectural completeness, not raw speed.
-// The TS `RawCoMap` materialization stays in place as fallback/reference pending
-// its own deletion phase; this flag lets it be toggled off if ever needed.
-let nativeCoMapMaterializationEnabled = true;
-
-export function enableNativeCoMapMaterialization() {
-  nativeCoMapMaterializationEnabled = true;
-}
-
-export function disableNativeCoMapMaterialization() {
-  nativeCoMapMaterializationEnabled = false;
-}
-
-export function isNativeCoMapMaterializationEnabled() {
-  return nativeCoMapMaterializationEnabled;
-}
-
-// The native coStream/coFeed materialization path (rich per-session delta pulled
-// on every ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
-// materialization should live in the Rust core, not TS. Same trade-off framing
-// as the coMap flag — a delta-transfer cost is accepted for architectural
-// completeness. The earlier branch-merge-conflict regression ("cheese" winning
-// over "olive oil") was a `meta.t` compression bug: `mergeBranch` omitted the
-// backdated source time for consecutive same-`madeAt` merged txs, and the native
-// `derive_merge_source` has no `previousTransaction.madeAt` fallback, so those
-// entries sorted as freshly written and wrongly won last-write. Fixed in
-// `branching.ts` by never compressing `t` away for a native-gated target (now
-// including coStream/coFeed). The TS `RawCoStreamView` materialization stays in
-// place as fallback/reference; this flag lets it be toggled off if ever needed.
-let nativeCoStreamMaterializationEnabled = true;
-
-export function enableNativeCoStreamMaterialization() {
-  nativeCoStreamMaterializationEnabled = true;
-}
-
-export function disableNativeCoStreamMaterialization() {
-  nativeCoStreamMaterializationEnabled = false;
-}
-
-// The native binaryCoStream materialization path (same Rust coStream view,
-// projected into chunks/start/ended in TS) is ON by default per the 100%-Rust
-// scope goal, same trade-off framing as the coMap/coStream flags. The earlier
-// stale-chunk regression (4 chunks where 2 were expected after re-starting an
-// already-ended stream) was a projection bug: `#rederiveBinaryProjection` walked
-// EVERY materialized item and appended every chunk, unlike the TS
-// `processNewTransactions` path which freezes after the first `end`
-// (`if (this.ended) return`). Fixed in `binaryCoStream.ts` by breaking the
-// projection at the first `end` marker. Kept as a SEPARATE flag from the
-// coStream one so binary streams can be toggled independently.
-let nativeBinaryStreamMaterializationEnabled = true;
-
-export function enableNativeBinaryStreamMaterialization() {
-  nativeBinaryStreamMaterializationEnabled = true;
-}
-
-export function disableNativeBinaryStreamMaterialization() {
-  nativeBinaryStreamMaterializationEnabled = false;
-}
-
-// The native coList (RGA list) materialization path. ON by default per the
-// 100%-Rust scope goal (same trade-off framing as the coMap/coStream flags): the
-// Rust view is fixture-verified byte-for-byte against the TS `RawCoList` (see
-// crates/cojson-core/src/core/co_list.rs `content_fixture_tests`) and the full
-// coList.test.ts suite passes repeatedly, both isolated and under full-suite load.
-// The earlier multi-session regression — `coList.test.ts` › "should handle
-// multiple branches from different sessions with complex operations" resolving the
-// concurrent inserts as `["milk","bread","butter","eggs"]` instead of TS's
-// `["milk","eggs","bread","butter"]` — was an RGA tie-break bug. Two branch
-// merges of the SAME source `(session, txIndex)` (differing only by branch),
-// anchored at the same element and appended within one millisecond, tie on EVERY
-// time/identity key; TS's stable sort then preserves the transaction ARRIVAL order
-// it accumulates in `toProcessTransactions`, whereas the native from-scratch
-// rebuild re-scanned the session map GROUPED BY SESSION and flipped them. Fixed in
-// the Rust core by stamping every committed transaction with a process-global
-// `arrival_seq` (session_log.rs) and using it as the coList sort's final tie-break
-// (`sort_for_colist`, co_list.rs), reproducing TS's arrival order deterministically.
-// Toggle off via `disableNativeCoListMaterialization()`.
-let nativeCoListMaterializationEnabled = true;
-
-export function enableNativeCoListMaterialization() {
-  nativeCoListMaterializationEnabled = true;
-}
-
-export function disableNativeCoListMaterialization() {
-  nativeCoListMaterializationEnabled = false;
-}
-
-// coPlainText (the grapheme text CRDT) is a thin `RawCoList` subclass: its
-// entries are single graphemes and it emits the SAME `pre`/`app`/`del` wire ops
-// as a coList, so the native (Rust-resident) RGA materializer — which is
-// header-type-agnostic (`ensure_co_list` never inspects the covalue type) —
-// reproduces its `entries()`/`toString()` byte-for-byte with no extra Rust code.
-// This flag gates that native path for `coplaintext` headers independently of
-// the coList flag; default ON after byte-for-byte content-fixture replay
-// (`data/co_plain_text_content/*`, covering grapheme inserts/deletes,
-// insert-after-deleted, multi-codepoint graphemes, two-session concurrent
-// same-anchor inserts, and branch/merge) plus the full cojson + jazz-tools
-// suites. Toggle off via `disableNativeCoPlainTextMaterialization()` /
-// `enableNativeCoPlainTextMaterialization()`.
-let nativeCoPlainTextMaterializationEnabled = true;
-
-export function enableNativeCoPlainTextMaterialization() {
-  nativeCoPlainTextMaterializationEnabled = true;
-}
-
-export function disableNativeCoPlainTextMaterialization() {
-  nativeCoPlainTextMaterializationEnabled = false;
-}
+// The native coMap/coStream/coList/coPlainText/binaryCoStream materialization
+// paths (rich per-op/per-session/RGA deltas pulled on every ingest) are always
+// on per the 100%-Rust scope goal: cojson's CRDT materialization should live in
+// the Rust core, not TS. The TS `RawCoMap`/`RawCoStreamView`/`RawCoList`
+// materialization stays in place as fallback/reference for the structural cases
+// (groups/accounts, branches, deletion-restricted lists) the native views don't
+// cover — see `isNativeCoMap`/`isNativeCoStream`/`isNativeCoList` below.
 
 // The native group key-management WRITE path (rotateReadKey / addMemberInternal /
 // createInvite / removeMember / extend), gated behind
@@ -1371,12 +1265,10 @@ export class CoValueCore {
   isNativeCoMap(): this is AvailableCoValueCore {
     const verified = this._verified;
     return (
-      nativeCoMapMaterializationEnabled &&
       !!verified &&
       verified.header.type === "comap" &&
       verified.header.ruleset.type !== "group" &&
-      !this.isBranched() &&
-      this.node.nodeCore.supportsNativeCoMapMaterialization()
+      !this.isBranched()
     );
   }
 
@@ -1566,21 +1458,13 @@ export class CoValueCore {
   /**
    * Whether this covalue's coStream content is fed by the native materializer.
    * True for a `costream` header (plain coStream/coFeed OR binaryCoStream) that
-   * is NOT branched, on a binding exposing the coStream surface. A binary meta
-   * (`meta.type === "binary"`) is gated by the binary flag, everything else by
-   * the coStream flag, so the two content shapes can be toggled independently.
+   * is NOT branched, on a binding exposing the coStream surface.
    */
   isNativeCoStream(): this is AvailableCoValueCore {
     const verified = this._verified;
     if (!verified || verified.header.type !== "costream") return false;
     if (this.isBranched()) return false;
-    if (!this.node.nodeCore.supportsNativeCoStreamMaterialization())
-      return false;
-    const isBinary =
-      (verified.header.meta as { type?: string } | null)?.type === "binary";
-    return isBinary
-      ? nativeBinaryStreamMaterializationEnabled
-      : nativeCoStreamMaterializationEnabled;
+    return true;
   }
 
   /**
@@ -1652,22 +1536,20 @@ export class CoValueCore {
 
   /**
    * Whether this covalue's coList content is fed by the native materializer.
-   * True for a `colist` header that is NOT branched (a branch pulls in source
-   * transactions the branch covalue's native log lacks) and NOT deletion-
-   * restricted (the native RGA does not run the per-deletion group-role check),
-   * on a binding exposing the coList surface, with the flag on.
+   * True for a `colist` header (or a `coplaintext` header, which shares the
+   * coList RGA materializer — same wire ops, same native view) that is NOT
+   * branched (a branch pulls in source transactions the branch covalue's
+   * native log lacks) and NOT deletion-restricted (the native RGA does not
+   * run the per-deletion group-role check), on a binding exposing the coList
+   * surface.
    */
   isNativeCoList(): this is AvailableCoValueCore {
     const verified = this._verified;
     if (!verified) return false;
-    // coPlainText shares the coList RGA materializer (same wire ops, same native
-    // view) but is gated by its own flag.
-    let flagEnabled: boolean;
-    if (verified.header.type === "colist") {
-      flagEnabled = nativeCoListMaterializationEnabled;
-    } else if (verified.header.type === "coplaintext") {
-      flagEnabled = nativeCoPlainTextMaterializationEnabled;
-    } else {
+    if (
+      verified.header.type !== "colist" &&
+      verified.header.type !== "coplaintext"
+    ) {
       return false;
     }
     if (this.isBranched()) return false;
@@ -1675,8 +1557,7 @@ export class CoValueCore {
     if (ruleset.type === "ownedByGroup" && ruleset.restrictDeletion === true) {
       return false;
     }
-    if (!this.node.nodeCore.supportsNativeCoListMaterialization()) return false;
-    return flagEnabled;
+    return true;
   }
 
   /** Resolve every read key the native coList view still needs. coList twin of
