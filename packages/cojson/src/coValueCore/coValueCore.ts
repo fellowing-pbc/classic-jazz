@@ -94,16 +94,18 @@ export function disableNativeCoMapMaterialization() {
 }
 
 // The native coStream/coFeed materialization path (rich per-session delta pulled
-// on every ingest). OFF by default: enabling it regressed real behavior —
-// `coFeed.branch.test.ts`'s branch-merge-conflict-resolution test produced a
-// wrong value ("cheese" instead of "olive oil"), a genuine correctness bug in
-// the native path's branch/merge handling (the wiring pass incorrectly assumed
-// coStream had no branch/merge semantics to account for). Correctness is a hard
-// gate independent of the "100% Rust" scope goal — do not re-enable without
-// first fixing the branch-merge divergence and re-verifying the full jazz-tools
-// suite (2120/8) stays green. The TS `RawCoStreamView` materialization is the
-// live default path pending that fix.
-let nativeCoStreamMaterializationEnabled = false;
+// on every ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
+// materialization should live in the Rust core, not TS. Same trade-off framing
+// as the coMap flag — a delta-transfer cost is accepted for architectural
+// completeness. The earlier branch-merge-conflict regression ("cheese" winning
+// over "olive oil") was a `meta.t` compression bug: `mergeBranch` omitted the
+// backdated source time for consecutive same-`madeAt` merged txs, and the native
+// `derive_merge_source` has no `previousTransaction.madeAt` fallback, so those
+// entries sorted as freshly written and wrongly won last-write. Fixed in
+// `branching.ts` by never compressing `t` away for a native-gated target (now
+// including coStream/coFeed). The TS `RawCoStreamView` materialization stays in
+// place as fallback/reference; this flag lets it be toggled off if ever needed.
+let nativeCoStreamMaterializationEnabled = true;
 
 export function enableNativeCoStreamMaterialization() {
   nativeCoStreamMaterializationEnabled = true;
@@ -114,15 +116,16 @@ export function disableNativeCoStreamMaterialization() {
 }
 
 // The native binaryCoStream materialization path (same Rust coStream view,
-// projected into chunks/start/ended in TS). OFF by default: enabling it
-// regressed real behavior — `coFeed.test.ts`'s FileStream Mutation test
-// accumulated stale/duplicate chunks after a mutation (4 chunks present where
-// 2 were expected), a genuine correctness bug, not merely a performance
-// trade-off. Do not re-enable without first fixing the stale-chunk-retention
-// bug and re-verifying the full jazz-tools suite (2120/8) stays green. Kept as
-// a SEPARATE flag from the coStream one so binary streams can be diagnosed and
-// re-enabled independently once fixed.
-let nativeBinaryStreamMaterializationEnabled = false;
+// projected into chunks/start/ended in TS) is ON by default per the 100%-Rust
+// scope goal, same trade-off framing as the coMap/coStream flags. The earlier
+// stale-chunk regression (4 chunks where 2 were expected after re-starting an
+// already-ended stream) was a projection bug: `#rederiveBinaryProjection` walked
+// EVERY materialized item and appended every chunk, unlike the TS
+// `processNewTransactions` path which freezes after the first `end`
+// (`if (this.ended) return`). Fixed in `binaryCoStream.ts` by breaking the
+// projection at the first `end` marker. Kept as a SEPARATE flag from the
+// coStream one so binary streams can be toggled independently.
+let nativeBinaryStreamMaterializationEnabled = true;
 
 export function enableNativeBinaryStreamMaterialization() {
   nativeBinaryStreamMaterializationEnabled = true;
