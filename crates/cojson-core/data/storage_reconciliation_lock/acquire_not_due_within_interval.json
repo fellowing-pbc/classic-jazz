@@ -1,0 +1,28 @@
+{
+  "description": "released recently, interval not elapsed: not_due, no write",
+  "op": "acquire",
+  "seedRow": {
+    "holderSessionId": "session_b",
+    "acquiredAt": 0,
+    "releasedAt": 100,
+    "lastProcessedOffset": 5
+  },
+  "sessionId": "session_a",
+  "now": 10099,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "acquireResult": {
+      "acquired": false,
+      "reason": "not_due"
+    },
+    "resultRow": {
+      "holderSessionId": "session_b",
+      "acquiredAt": 0,
+      "lastProcessedOffset": 5,
+      "releasedAt": 100
+    }
+  }
+}

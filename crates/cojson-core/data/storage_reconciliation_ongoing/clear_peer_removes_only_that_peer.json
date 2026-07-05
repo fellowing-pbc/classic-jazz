@@ -1,0 +1,47 @@
+{
+  "description": "clearPeer drops one peer's state and leaves the other",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-A",
+      "pending": [
+        "co_A"
+      ]
+    },
+    {
+      "op": "trackBatch",
+      "peerId": "peer-2",
+      "batchId": "batch-B",
+      "pending": [
+        "co_B"
+      ]
+    },
+    {
+      "op": "clearPeer",
+      "peerId": "peer-1"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_A"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-2",
+      "covalueId": "co_B"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      null,
+      null,
+      [],
+      [
+        "batch-B"
+      ]
+    ],
+    "ongoingPeerCount": 0
+  }
+}

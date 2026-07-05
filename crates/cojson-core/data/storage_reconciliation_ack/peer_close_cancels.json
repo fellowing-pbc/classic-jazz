@@ -1,0 +1,27 @@
+{
+  "description": "a peer close cancels the wait, clears pending, and never fires the callback",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 50
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "waitId": 1
+    },
+    {
+      "op": "peerClose",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "cancel:1"
+    ],
+    "pending": []
+  }
+}

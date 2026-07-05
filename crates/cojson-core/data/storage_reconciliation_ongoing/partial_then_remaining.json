@@ -1,0 +1,41 @@
+{
+  "description": "three-covalue batch completes only on the last mark",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-1",
+      "pending": [
+        "co_A",
+        "co_B",
+        "co_C"
+      ]
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_B"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_A"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_C"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      [],
+      [],
+      [
+        "batch-1"
+      ]
+    ],
+    "ongoingPeerCount": 0
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "owner renews a live lock: offset updated",
+  "op": "renew",
+  "seedRow": {
+    "holderSessionId": "session_a",
+    "acquiredAt": 200,
+    "lastProcessedOffset": 1
+  },
+  "sessionId": "session_a",
+  "now": 1,
+  "offset": 77,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "resultRow": {
+      "holderSessionId": "session_a",
+      "acquiredAt": 200,
+      "lastProcessedOffset": 77
+    }
+  }
+}

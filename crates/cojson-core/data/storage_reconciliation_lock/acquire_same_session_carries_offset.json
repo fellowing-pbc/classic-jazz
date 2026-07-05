@@ -1,0 +1,26 @@
+{
+  "description": "same session re-acquires its own live lock: offset carried forward",
+  "op": "acquire",
+  "seedRow": {
+    "holderSessionId": "session_a",
+    "acquiredAt": 200,
+    "lastProcessedOffset": 9
+  },
+  "sessionId": "session_a",
+  "now": 300,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "acquireResult": {
+      "acquired": true,
+      "lastProcessedOffset": 9
+    },
+    "resultRow": {
+      "holderSessionId": "session_a",
+      "acquiredAt": 300,
+      "lastProcessedOffset": 9
+    }
+  }
+}

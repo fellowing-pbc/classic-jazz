@@ -1,0 +1,46 @@
+{
+  "description": "acks and closes are isolated per peer",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 10
+    },
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-2",
+      "nextOffset": 20
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "waitId": 1
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-2",
+      "waitId": 2
+    },
+    {
+      "op": "peerClose",
+      "peerId": "peer-1"
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-2"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "cancel:1",
+      "offset:20",
+      "ack:2"
+    ],
+    "pending": []
+  }
+}

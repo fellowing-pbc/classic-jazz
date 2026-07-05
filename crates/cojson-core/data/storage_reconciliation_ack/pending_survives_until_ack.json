@@ -1,0 +1,33 @@
+{
+  "description": "multiple tracked batches stay pending until each is acked",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 11
+    },
+    {
+      "op": "trackBatch",
+      "batchId": "batch-2",
+      "peerId": "peer-1",
+      "nextOffset": 22
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "offset:11"
+    ],
+    "pending": [
+      [
+        "batch-2#peer-1",
+        22
+      ]
+    ]
+  }
+}

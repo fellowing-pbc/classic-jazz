@@ -1,0 +1,55 @@
+{
+  "description": "a covalue in several batches completes all that become empty, in order",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-1",
+      "pending": [
+        "co_A"
+      ]
+    },
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-2",
+      "pending": [
+        "co_A",
+        "co_B"
+      ]
+    },
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-3",
+      "pending": [
+        "co_B"
+      ]
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_A"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_B"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      null,
+      null,
+      [
+        "batch-1"
+      ],
+      [
+        "batch-2",
+        "batch-3"
+      ]
+    ],
+    "ongoingPeerCount": 0
+  }
+}

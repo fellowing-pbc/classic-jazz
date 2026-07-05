@@ -1,0 +1,23 @@
+{
+  "description": "owner releases: releasedAt set, offset reset to 0",
+  "op": "release",
+  "seedRow": {
+    "holderSessionId": "session_a",
+    "acquiredAt": 200,
+    "lastProcessedOffset": 8
+  },
+  "sessionId": "session_a",
+  "now": 999,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "resultRow": {
+      "holderSessionId": "session_a",
+      "acquiredAt": 200,
+      "lastProcessedOffset": 0,
+      "releasedAt": 999
+    }
+  }
+}

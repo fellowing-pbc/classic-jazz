@@ -1,0 +1,29 @@
+{
+  "description": "a tracked batch fires its wait callback on ack, returning the offset",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 100
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "waitId": 1
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "offset:100",
+      "ack:1"
+    ],
+    "pending": []
+  }
+}

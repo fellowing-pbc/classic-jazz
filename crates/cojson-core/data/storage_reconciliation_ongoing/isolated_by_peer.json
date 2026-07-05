@@ -1,0 +1,44 @@
+{
+  "description": "state is isolated per peer",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-A",
+      "pending": [
+        "co_A"
+      ]
+    },
+    {
+      "op": "trackBatch",
+      "peerId": "peer-2",
+      "batchId": "batch-B",
+      "pending": [
+        "co_A"
+      ]
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_A"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-2",
+      "covalueId": "co_A"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      null,
+      [
+        "batch-A"
+      ],
+      [
+        "batch-B"
+      ]
+    ],
+    "ongoingPeerCount": 0
+  }
+}

@@ -9,6 +9,7 @@ pub mod core {
     pub mod nonce;
     pub mod known_state;
     pub mod peer_known_state;
+    pub mod storage_reconciliation;
     pub mod session_log;
     pub mod session_map;
     pub use keys::*;

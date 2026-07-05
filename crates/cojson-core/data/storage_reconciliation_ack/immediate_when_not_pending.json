@@ -1,0 +1,17 @@
+{
+  "description": "waiting on a batch that is not pending fires the callback immediately",
+  "ops": [
+    {
+      "op": "waitForAck",
+      "batchId": "missing",
+      "peerId": "peer-1",
+      "waitId": 1
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "immediate:1"
+    ],
+    "pending": []
+  }
+}

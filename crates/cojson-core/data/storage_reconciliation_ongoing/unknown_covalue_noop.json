@@ -1,0 +1,25 @@
+{
+  "description": "marking a covalue that is not tracked returns no completed batches",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-1",
+      "pending": [
+        "co_A"
+      ]
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_Z"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      []
+    ],
+    "ongoingPeerCount": 1
+  }
+}

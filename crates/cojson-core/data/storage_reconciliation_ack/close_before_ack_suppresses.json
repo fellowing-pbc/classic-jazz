@@ -1,0 +1,32 @@
+{
+  "description": "after a peer close the batch is no longer pending, so a later ack fires nothing",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 50
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "waitId": 1
+    },
+    {
+      "op": "peerClose",
+      "peerId": "peer-1"
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "cancel:1"
+    ],
+    "pending": []
+  }
+}

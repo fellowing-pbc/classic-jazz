@@ -1,0 +1,26 @@
+{
+  "description": "another session holds a live, non-expired lock: lock_held, no write",
+  "op": "acquire",
+  "seedRow": {
+    "holderSessionId": "session_b",
+    "acquiredAt": 200,
+    "lastProcessedOffset": 3
+  },
+  "sessionId": "session_a",
+  "now": 1199,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "acquireResult": {
+      "acquired": false,
+      "reason": "lock_held"
+    },
+    "resultRow": {
+      "holderSessionId": "session_b",
+      "acquiredAt": 200,
+      "lastProcessedOffset": 3
+    }
+  }
+}

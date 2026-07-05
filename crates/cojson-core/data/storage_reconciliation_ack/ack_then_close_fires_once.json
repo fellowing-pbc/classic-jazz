@@ -1,0 +1,33 @@
+{
+  "description": "a close after the ack does not re-fire or re-cancel the wait",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 50
+    },
+    {
+      "op": "waitForAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "waitId": 1
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1"
+    },
+    {
+      "op": "peerClose",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "offset:50",
+      "ack:1"
+    ],
+    "pending": []
+  }
+}

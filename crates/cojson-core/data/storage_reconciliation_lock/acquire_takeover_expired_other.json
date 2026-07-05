@@ -1,0 +1,26 @@
+{
+  "description": "another session's lock has expired (TTL): taken over, offset carried",
+  "op": "acquire",
+  "seedRow": {
+    "holderSessionId": "session_b",
+    "acquiredAt": 200,
+    "lastProcessedOffset": 3
+  },
+  "sessionId": "session_a",
+  "now": 1201,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "acquireResult": {
+      "acquired": true,
+      "lastProcessedOffset": 3
+    },
+    "resultRow": {
+      "holderSessionId": "session_a",
+      "acquiredAt": 1201,
+      "lastProcessedOffset": 3
+    }
+  }
+}

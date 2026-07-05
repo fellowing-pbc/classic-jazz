@@ -1,0 +1,22 @@
+{
+  "description": "handleAck with no registered wait still returns and clears the offset",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "batchId": "batch-1",
+      "peerId": "peer-1",
+      "nextOffset": 77
+    },
+    {
+      "op": "handleAck",
+      "batchId": "batch-1",
+      "peerId": "peer-1"
+    }
+  ],
+  "expected": {
+    "eventLog": [
+      "offset:77"
+    ],
+    "pending": []
+  }
+}

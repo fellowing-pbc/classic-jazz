@@ -1,0 +1,34 @@
+{
+  "description": "a batch completes only when all its covalues are marked",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-1",
+      "pending": [
+        "co_A",
+        "co_B"
+      ]
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_A"
+    },
+    {
+      "op": "markItemComplete",
+      "peerId": "peer-1",
+      "covalueId": "co_B"
+    }
+  ],
+  "expected": {
+    "results": [
+      null,
+      [],
+      [
+        "batch-1"
+      ]
+    ],
+    "ongoingPeerCount": 0
+  }
+}

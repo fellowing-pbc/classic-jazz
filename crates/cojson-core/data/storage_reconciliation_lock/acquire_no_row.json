@@ -1,0 +1,22 @@
+{
+  "description": "no existing lock: acquired with offset 0",
+  "op": "acquire",
+  "seedRow": null,
+  "sessionId": "session_a",
+  "now": 500,
+  "config": {
+    "lockTtlMs": 1000,
+    "reconciliationIntervalMs": 10000
+  },
+  "expected": {
+    "acquireResult": {
+      "acquired": true,
+      "lastProcessedOffset": 0
+    },
+    "resultRow": {
+      "holderSessionId": "session_a",
+      "acquiredAt": 500,
+      "lastProcessedOffset": 0
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "description": "empty batches are not tracked",
+  "ops": [
+    {
+      "op": "trackBatch",
+      "peerId": "peer-1",
+      "batchId": "batch-1",
+      "pending": []
+    }
+  ],
+  "expected": {
+    "results": [
+      null
+    ],
+    "ongoingPeerCount": 0
+  }
+}
