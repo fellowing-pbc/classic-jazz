@@ -48,7 +48,7 @@ export function getTransactionChanges(
     }
 
     return (
-      coValue.core.verified.decryptTransaction(
+      coValue.core.decryptTransaction(
         tx.txID.sessionID,
         tx.txID.txIndex,
         readKey,
