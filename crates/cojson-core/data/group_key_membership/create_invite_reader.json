@@ -1,0 +1,39 @@
+{
+  "description": "createInvite('reader') delegates to addMemberInternal(inviteAgentID, 'readerInvite'): set role + reveal the read key to the invite agent.",
+  "groupId": "co_zhrYvwnqqsjkEaX5eYA4BEjnuPm",
+  "sessionId": "sealer_zD4AyAXv7DW1n2A6fVN7gHqSk5qt6YfeduSPV7UbtKAbj/signer_zC5bgc8VgCXXucyUCNsCHgjJgNVKnG7Go75Swewg5mtMN_session_zhhwPoXMbpb9",
+  "startTxIndex": 4,
+  "memberKey": "sealer_zEx2VsBLYMsAZ4CoPZnZAz9rKYMrtEaPaXyoLissyEobW/signer_z5zkcWBURhXUmbuGuXysucoxJCnkWuiBte9CHNLyHiGXs",
+  "memberAgentSealerId": "sealer_zEx2VsBLYMsAZ4CoPZnZAz9rKYMrtEaPaXyoLissyEobW",
+  "role": "readerInvite",
+  "fromSealerSecret": "sealerSecret_zCs4FDwMu5q4NsSARsdthZMTPZoKr3qsrVMBSGzKnp1Gg",
+  "currentReadKey": {
+    "id": "key_z2Ka1uqH1xsGSXWkPF",
+    "secret": "keySecret_z7YuTsr36D6AYSobcFK1YHdnqomfvnwBkT5jPEFGaLc2Y"
+  },
+  "existingWriteOnlyKeys": [],
+  "freshWriteOnlyKey": null,
+  "members": [
+    {
+      "memberKey": "sealer_zD4AyAXv7DW1n2A6fVN7gHqSk5qt6YfeduSPV7UbtKAbj/signer_zC5bgc8VgCXXucyUCNsCHgjJgNVKnG7Go75Swewg5mtMN",
+      "agentSealerId": "sealer_zD4AyAXv7DW1n2A6fVN7gHqSk5qt6YfeduSPV7UbtKAbj"
+    }
+  ],
+  "parents": [],
+  "snapshot": {
+    "sealer_zD4AyAXv7DW1n2A6fVN7gHqSk5qt6YfeduSPV7UbtKAbj/signer_zC5bgc8VgCXXucyUCNsCHgjJgNVKnG7Go75Swewg5mtMN": "admin",
+    "key_z2Ka1uqH1xsGSXWkPF_for_sealer_zD4AyAXv7DW1n2A6fVN7gHqSk5qt6YfeduSPV7UbtKAbj/signer_zC5bgc8VgCXXucyUCNsCHgjJgNVKnG7Go75Swewg5mtMN": "sealed_USF28tODHyO4JTnO_tRrihxf1I1OUQfhopCKheuUND0GCW9WsovzatCHy3Kvy6JvyWRBAjDQNnOJ5ns2udm5S5Nc8Fz0kPH5F3A==",
+    "readKey": "key_z2Ka1uqH1xsGSXWkPF",
+    "groupSealer": "key_z2Ka1uqH1xsGSXWkPF@sealer_z49k7svVPKrYUNhQ1kixWYZmzPSC3yGDqarZBRxRaUHz8"
+  },
+  "expectedWrites": [
+    {
+      "field": "sealer_zEx2VsBLYMsAZ4CoPZnZAz9rKYMrtEaPaXyoLissyEobW/signer_z5zkcWBURhXUmbuGuXysucoxJCnkWuiBte9CHNLyHiGXs",
+      "value": "readerInvite"
+    },
+    {
+      "field": "key_z2Ka1uqH1xsGSXWkPF_for_sealer_zEx2VsBLYMsAZ4CoPZnZAz9rKYMrtEaPaXyoLissyEobW/signer_z5zkcWBURhXUmbuGuXysucoxJCnkWuiBte9CHNLyHiGXs",
+      "value": "sealed_URGzZRuYy47PF1hNT2_Vm30l9U02-I9QZ5ovX0AOou2Ykbqm3XNor_NWceirBlhWXXrUaKq59ABWA4TYRFVpa2Nlp_5F2UkDXJQ=="
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "description": "addMember(everyone, 'reader'): set everyone=reader then store the read key secret in plaintext under `${readKey}_for_everyone`.",
+  "groupId": "co_zkeb7oimuYqrbuXdBzffvVyi8Ht",
+  "sessionId": "sealer_zB1ZhMP9J5U38khFRNDQSzXcGkoPEDdRRgLXmAFuiCqSj/signer_zEB8Bgh1NmTvz3TCx97iD48BB2tApsdMLEqMaZhydajhv_session_z6zo3N36kEDp",
+  "startTxIndex": 4,
+  "memberKey": "everyone",
+  "memberAgentSealerId": "",
+  "role": "reader",
+  "fromSealerSecret": "sealerSecret_z3MoaShY9roZJN1mf13NC6XoVeXuvzBiyV2n74mA8EbFn",
+  "currentReadKey": {
+    "id": "key_z23y2K38j3DPCmKXwV",
+    "secret": "keySecret_z79RstiwYzTovGyJgf8gR9QqM22LHWdTGPrmKMnwRM2sv"
+  },
+  "existingWriteOnlyKeys": [],
+  "freshWriteOnlyKey": null,
+  "members": [
+    {
+      "memberKey": "sealer_zB1ZhMP9J5U38khFRNDQSzXcGkoPEDdRRgLXmAFuiCqSj/signer_zEB8Bgh1NmTvz3TCx97iD48BB2tApsdMLEqMaZhydajhv",
+      "agentSealerId": "sealer_zB1ZhMP9J5U38khFRNDQSzXcGkoPEDdRRgLXmAFuiCqSj"
+    }
+  ],
+  "parents": [],
+  "snapshot": {
+    "sealer_zB1ZhMP9J5U38khFRNDQSzXcGkoPEDdRRgLXmAFuiCqSj/signer_zEB8Bgh1NmTvz3TCx97iD48BB2tApsdMLEqMaZhydajhv": "admin",
+    "key_z23y2K38j3DPCmKXwV_for_sealer_zB1ZhMP9J5U38khFRNDQSzXcGkoPEDdRRgLXmAFuiCqSj/signer_zEB8Bgh1NmTvz3TCx97iD48BB2tApsdMLEqMaZhydajhv": "sealed_UaqlypBnRbMftzcqc1B9Z_c7hMsR7Ion3D-9inBZ1Rij9U2T5KSildTnXg7u59-egPaP_lN5b3r4le6Q4ci73HL-1D7WXs7Z2sQ==",
+    "readKey": "key_z23y2K38j3DPCmKXwV",
+    "groupSealer": "key_z23y2K38j3DPCmKXwV@sealer_z5cRGUf7UpKR3nGaahMKa9BSMs1pKxRWtJ8QJwW6Lu6NF"
+  },
+  "expectedWrites": [
+    {
+      "field": "everyone",
+      "value": "reader"
+    },
+    {
+      "field": "key_z23y2K38j3DPCmKXwV_for_everyone",
+      "value": "keySecret_z79RstiwYzTovGyJgf8gR9QqM22LHWdTGPrmKMnwRM2sv"
+    }
+  ]
+}

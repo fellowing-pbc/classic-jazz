@@ -1,0 +1,50 @@
+{
+  "description": "Add a fresh writeOnly member: set role, create writeKeyFor_, reveal the dedicated key to self and to the admin reader.",
+  "groupId": "co_z8d8BnFwHWDSUwvnsBrMpmGRKmA",
+  "sessionId": "sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF/signer_zGopYeg39vpTsfZn8qjhdRHMVyfJiEYsxtwwCF7FHiRff_session_zKKpYuwE9nYy",
+  "startTxIndex": 4,
+  "memberKey": "co_zZof9xSAd1BtysZGKBVpTn6LSi5",
+  "memberAgentSealerId": "sealer_z7KFVqPxw3HCpKUjgMPw7rjZjEkBJxuh2CdWYgLANWhyb",
+  "role": "writeOnly",
+  "fromSealerSecret": "sealerSecret_z2nqu7cnRRx2mBbLUaMX7YiQpPPDST8ASFJykSEfgef66",
+  "currentReadKey": {
+    "id": "key_z2c5PzRb8ChnK3rCY4",
+    "secret": "keySecret_zBUWneCWVKSnAG8f85yXwNrFugYhKAh8Qhy5xgYt37BXd"
+  },
+  "existingWriteOnlyKeys": [],
+  "freshWriteOnlyKey": {
+    "id": "key_z38dDyodd5qdUdyE5S",
+    "secret": "keySecret_zBw6dGVmdAnFhKrEqMreZcLvvSFyboL8eXzkL4H3tLXxT"
+  },
+  "members": [
+    {
+      "memberKey": "sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF/signer_zGopYeg39vpTsfZn8qjhdRHMVyfJiEYsxtwwCF7FHiRff",
+      "agentSealerId": "sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF"
+    }
+  ],
+  "parents": [],
+  "snapshot": {
+    "sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF/signer_zGopYeg39vpTsfZn8qjhdRHMVyfJiEYsxtwwCF7FHiRff": "admin",
+    "key_z2c5PzRb8ChnK3rCY4_for_sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF/signer_zGopYeg39vpTsfZn8qjhdRHMVyfJiEYsxtwwCF7FHiRff": "sealed_UGm-pzFa4DsNWxt0Lmwp5eFjcnm1tI5SpcOao1t8ZNWYyAts4SRyWcKBS-3hE4YimqtVNicX_UpzCrF3aDhbYcsl4TOyxqcj9-w==",
+    "readKey": "key_z2c5PzRb8ChnK3rCY4",
+    "groupSealer": "key_z2c5PzRb8ChnK3rCY4@sealer_zCwp1CFGS2n1boWUo8oKYy8QWiJ7ZzoQb4faZgHxvraHj"
+  },
+  "expectedWrites": [
+    {
+      "field": "co_zZof9xSAd1BtysZGKBVpTn6LSi5",
+      "value": "writeOnly"
+    },
+    {
+      "field": "writeKeyFor_co_zZof9xSAd1BtysZGKBVpTn6LSi5",
+      "value": "key_z38dDyodd5qdUdyE5S"
+    },
+    {
+      "field": "key_z38dDyodd5qdUdyE5S_for_co_zZof9xSAd1BtysZGKBVpTn6LSi5",
+      "value": "sealed_UN7xl34DTjLkbI1BAY0Dq0Rvj552Fd3vQOmad0laEXCMN0pH_GgcgKc1lLoHm2XJpHEsFrBLZypJSb4TqxrtxIlVKlaFRsrAKng=="
+    },
+    {
+      "field": "key_z38dDyodd5qdUdyE5S_for_sealer_zEECJZk99yyU9U9bziCvtjcfpqFPHxAV1qZbZocX6TELF/signer_zGopYeg39vpTsfZn8qjhdRHMVyfJiEYsxtwwCF7FHiRff",
+      "value": "sealed_ULXeNKBfrsnmS0Ed3tx7EjY7lVFyCvzMJ2kVM8OerC2jBbQm8Dlz4q1ADS5e6hIbLZkoU8TgROCUpHLxr4tkzJGOFDAkpPCiq0A=="
+    }
+  ]
+}

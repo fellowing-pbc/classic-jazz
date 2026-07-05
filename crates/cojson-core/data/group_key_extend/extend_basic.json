@@ -1,0 +1,24 @@
+{
+  "description": "extend(parent): set parent_<id>='extend' then reveal the child read key to the parent read key via encryptKeySecret (standard/account-member path).",
+  "parentId": "co_zSR32N46JUoQHgF8TpZrFXi1sMt",
+  "parentRefValue": "extend",
+  "parent": {
+    "readKeyId": "key_zuorFk7taQbx7xMmG",
+    "readKeySecret": "keySecret_zBTXBWPhdnL4cb9cGC8HFTfnvy5WjjAzfQVuB5cL6iN4q"
+  },
+  "childReadKey": {
+    "id": "key_zamGQDWsaeMnDkFJK",
+    "secret": "keySecret_zJ31z4Zi9JjZMj9gYwJe8WFFpyKHGwxGNFKqiQiEChTgZ"
+  },
+  "writeOnlyKeys": [],
+  "expectedWrites": [
+    {
+      "field": "parent_co_zSR32N46JUoQHgF8TpZrFXi1sMt",
+      "value": "extend"
+    },
+    {
+      "field": "key_zamGQDWsaeMnDkFJK_for_key_zuorFk7taQbx7xMmG",
+      "value": "encrypted_UpAGGbVhal4Nr1f5nu9En88sIqJiUuSO_JguL4DGyt9txukv6zu4l3y2ct_CVwJAPG6rKpVyNXJoL"
+    }
+  ]
+}

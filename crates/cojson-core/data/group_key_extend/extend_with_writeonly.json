@@ -1,0 +1,33 @@
+{
+  "description": "extend(parent) with a writeOnly member: revealAllWriteOnlyKeys reveals the child read key AND each writeOnly key to the parent read key.",
+  "parentId": "co_zckZ8onJ5jZ6F737dkyftZRc9Ng",
+  "parentRefValue": "extend",
+  "parent": {
+    "readKeyId": "key_z3xtFFHQWN9qpYWhD5",
+    "readKeySecret": "keySecret_z8tgWDGzqeZxSgTdEazKQ3ML48cEoLTxCqrA1t8xMcKti"
+  },
+  "childReadKey": {
+    "id": "key_z2KMMjKx65Pwd6LKSM",
+    "secret": "keySecret_z2MycvZ9B3z7UzvfnEVykjSXJbJsMaruTdQZ5rYcPnWr9"
+  },
+  "writeOnlyKeys": [
+    {
+      "id": "key_z2qWNoxrENEWbFZqEp",
+      "secret": "keySecret_zAKvGxzhFip23y35QKXNHpA8iYvXDehSYmtajaivt1dvy"
+    }
+  ],
+  "expectedWrites": [
+    {
+      "field": "parent_co_zckZ8onJ5jZ6F737dkyftZRc9Ng",
+      "value": "extend"
+    },
+    {
+      "field": "key_z2KMMjKx65Pwd6LKSM_for_key_z3xtFFHQWN9qpYWhD5",
+      "value": "encrypted_UCrZn0DgSrG8jeZUoxhG-d7-0VKhR7AGrIBRnIqEF3XknBQOvIa9qAGxk3pTX6UIZR2gCgJdS6_-6"
+    },
+    {
+      "field": "key_z2qWNoxrENEWbFZqEp_for_key_z3xtFFHQWN9qpYWhD5",
+      "value": "encrypted_U-KA2xntfmP4ykIiMHBhd4qyyT1w3t2WZNXAzJn5ZlGMQuqbU9VJKR5_nGgzCzKKeTlA2gfRVV0MV"
+    }
+  ]
+}
