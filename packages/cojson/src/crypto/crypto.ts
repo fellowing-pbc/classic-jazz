@@ -551,19 +551,19 @@ export interface NodeCoreImpl {
   setStreamingKnownState(coId: string, streamingJson: string): void;
 
   /**
-   * SHADOW-ONLY native port of `VerifiedState.newContentSince`. Given the
-   * peer's optimistic known state as JSON (`{id, header, sessions}`, or omitted
-   * for `undefined`), returns the `NewContentMessage[]` that SHOULD be sent,
-   * encoded as a JSON string, or `null`/`undefined` when there is nothing to
-   * send. Read-only: mutates no native state and drives no live sync behavior.
+   * Native port of `VerifiedState.newContentSince` (default-on production path,
+   * driven by `sync.ts`'s `#sendNewContent`). Given the peer's optimistic known
+   * state as JSON (`{id, header, sessions}`, or omitted for `undefined`),
+   * returns the unified native-result envelope JSON string (see
+   * {@link parseNativeResult}): on success `value` is the `NewContentMessage[]`
+   * that SHOULD be sent, or `null` when there is nothing to send; on error the
+   * `{"ok":false,"kind":"error",…}` envelope. Read-only: mutates no native state.
    *
-   * Optional so that only the napi backend (where the sync shadow comparison
-   * runs) need implement it; other backends satisfy the interface without it.
+   * Optional so that only the napi/wasm backends implement it; RN satisfies the
+   * interface without it, and the caller gates on
+   * {@link VerifiedState.supportsNativeContentDecision} first.
    */
-  contentToSend?(
-    coId: string,
-    knownStateJson?: string,
-  ): string | null | undefined;
+  contentToSend?(coId: string, knownStateJson?: string): string;
 
   // === Deletion ===
   markAsDeleted(coId: string): void;
@@ -794,25 +794,28 @@ export interface NodeCoreImpl {
   supportsNativeCoListMaterialization(): boolean;
 
   /**
-   * Native group key-management WRITE path (stage 2). Each function is a
-   * JSON-string-in / JSON-string-out wrapper over the pure, fixture-verified
+   * Native group key-management WRITE path (default-on production). Each function
+   * is a JSON-string-in / JSON-string-out wrapper over the pure, fixture-verified
    * orchestration in `crates/cojson-core/src/core/group_key_{rotation,
-   * membership,extend}.rs`. Given the group's materialized CoMap `snapshot` plus
-   * the non-native inputs TS resolves at runtime (fresh random keys, resolved
-   * agent sealer ids, resolved read-key secrets, `startTxIndex`), they return the
-   * exact ordered `(field, value)` writes `group.ts`'s corresponding write path
-   * would emit — which the caller applies via `group.set` / `group.delete`.
+   * membership,extend}.rs`. Given the non-native inputs TS resolves at runtime
+   * (fresh random keys, resolved agent sealer ids, resolved read-key secrets,
+   * `startTxIndex`), they return the exact ordered writes `group.ts`'s
+   * corresponding write path would emit — which the caller applies via
+   * `group.set` / `group.delete`. The group's key state is NOT passed in: the
+   * four `NodeCore` instance methods self-source it from the node's own
+   * materialized coMap view (`extend` is stateless and needs none).
    *
    * Optional so only the napi and wasm backends (which expose the FFI) implement
    * them; the React Native uniffi binding does not yet, and returns `false` from
    * {@link supportsNativeGroupKeyWrites}. Callers MUST gate on that before use.
    *
-   * `groupRotateReadKey` returns `{ skipped: boolean, writes: [...] }`;
-   * `groupAddEveryoneWriteOnly` returns a mutation array
-   * `[{ op: "set" | "del", field, value? }, ...]`; the others return a write
-   * array `[{ field, value }, ...]`. A thrown error signals a deferred/unsupported
-   * branch (e.g. `everyone -> writeOnly` from `groupAddMemberInternal`), and the
-   * caller falls back to the TS write path.
+   * Every function returns the unified native-result envelope JSON string (see
+   * {@link parseNativeResult}): on success `value` is either `{ skipped: true }`
+   * (the no-op case — only rotation can skip) or
+   * `{ writes: [{ op: "set" | "delete", field, value? }, ...] }`; on failure the
+   * `{"ok":false,"kind":"error",…}` envelope, which the caller logs before
+   * falling back to the TS write path (an `error` is thus distinguishable from a
+   * deliberate fallback — no genuine failure is silently swallowed).
    */
   groupRotateReadKey?(inputJson: string): string;
   groupAddMemberInternal?(inputJson: string): string;
@@ -828,15 +831,17 @@ export interface NodeCoreImpl {
   supportsNativeGroupKeyWrites(): boolean;
 
   /**
-   * Native storage per-session WRITE-DECISION path (storage phase). A pure,
-   * fixture-verified JSON-string-in / JSON-string-out wrapper over
+   * Native storage per-session WRITE-DECISION path (default-on production). A
+   * pure, fixture-verified JSON-string-in / JSON-string-out wrapper over
    * `crates/cojson-core/src/core/storage_write_plan.rs`'s `plan_session_write`.
    * Given one session's stored row-state (`lastIdx`, `bytesSinceLastSignature`)
    * plus the incoming content message's `after` and per-transaction sizes, it
-   * returns the exact `SessionWritePlan` decision `storeSingle`/`putNewTxs` would
-   * compute inline (gap guard, dedup offset/count, new `lastIdx`, intermediate
-   * signature checkpoint, rolling bytes). The caller performs the SAME DB reads
-   * and writes; only the decision values come from here.
+   * returns the unified native-result envelope JSON string (see
+   * {@link parseNativeResult}): on success `value` is the `SessionWritePlan`
+   * decision `storeSingle`/`putNewTxs` would compute inline (gap guard, dedup
+   * offset/count, new `lastIdx`, intermediate signature checkpoint, rolling
+   * bytes); on error the `{"ok":false,"kind":"error",…}` envelope. The caller
+   * performs the SAME DB reads and writes; only the decision values come from here.
    *
    * Optional so only the napi and wasm backends (which expose the FFI) implement
    * it; the React Native uniffi binding does not yet, and returns `false` from

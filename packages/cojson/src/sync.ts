@@ -329,21 +329,37 @@ export class SyncManager {
 
     const optimisticKnownState = peer.getOptimisticKnownState(id);
 
-    // Phase 3 (narrow cutover): behind a default-OFF flag, compute the content
-    // pieces with the native Rust `content_to_send` decision instead of the TS
-    // `newContentSince`. The native path returns the SAME `NewContentMessage[]`
-    // shape (proven byte-identical in Phase 2 shadow mode), so everything
-    // downstream — trySendToPeer, combineOptimisticWith, deletion handling,
-    // expectContentUntil — operates identically on whichever result was
-    // produced. Falls back to the TS path when the backend does not advertise
-    // the native capability.
+    // Default-on: compute the content pieces with the native Rust
+    // `content_to_send` decision instead of the TS `newContentSince`. The native
+    // path returns the SAME `NewContentMessage[]` shape (proven byte-identical in
+    // shadow mode), so everything downstream — trySendToPeer,
+    // combineOptimisticWith, deletion handling, expectContentUntil — operates
+    // identically on whichever result was produced. Falls back to the TS path
+    // when the backend does not advertise the native capability, OR when the
+    // native decision returns a genuine error (which is LOGGED, never silently
+    // swallowed — distinguishing a real Rust-side failure from a plain fallback).
     const useNative =
       isNativeSyncContentDecisionEnabled() &&
       coValue.verified.supportsNativeContentDecision();
 
-    const newContentPieces = useNative
-      ? coValue.verified.newContentSinceNative(optimisticKnownState)
-      : coValue.newContentSince(optimisticKnownState);
+    let newContentPieces: NewContentMessage[] | undefined;
+    if (useNative) {
+      const nativeResult =
+        coValue.verified.newContentSinceNative(optimisticKnownState);
+      if (nativeResult.ok) {
+        newContentPieces = nativeResult.value ?? undefined;
+      } else {
+        if (nativeResult.kind === "error") {
+          logger.error(
+            "Native content decision failed; falling back to TS newContentSince",
+            { id, message: nativeResult.message },
+          );
+        }
+        newContentPieces = coValue.newContentSince(optimisticKnownState);
+      }
+    } else {
+      newContentPieces = coValue.newContentSince(optimisticKnownState);
+    }
 
     // SHADOW-MODE ONLY (Phase 2): run the native content decision alongside the
     // real one and record whether they agree. Provably inert by default — the

@@ -66,15 +66,15 @@ export declare class NodeCore {
   /** Check whether the CoValue still has pending streaming content. */
   isStreaming(coId: string): boolean
   /**
-   * SHADOW-ONLY native content decision (native port of TS
-   * `VerifiedState.newContentSince`). Given the peer's optimistic known state
-   * as JSON (`{id, header, sessions}`, or omitted for `undefined`), returns
-   * the `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string,
-   * or `null` when there is nothing to send. Read-only: mutates no state and
-   * drives no live sync behavior — it exists purely to be compared against the
-   * TS path.
+   * Native content decision (default-on production port of TS
+   * `VerifiedState.newContentSince`, driven by `sync.ts`'s `#sendNewContent`).
+   * Given the peer's optimistic known state as JSON (`{id, header, sessions}`,
+   * or omitted for `undefined`), returns the unified `native_result` envelope
+   * JSON string — on success `value` is the `NewContentMessage[]` that SHOULD be
+   * sent, or `null` when there is nothing to send; on error the
+   * `{"ok":false,"kind":"error",…}` envelope. Read-only: mutates no state.
    */
-  contentToSend(coId: string, knownStateJson?: string | undefined | null): string | null
+  contentToSend(coId: string, knownStateJson?: string | undefined | null): string
   /** Set streaming known state */
   setStreamingKnownState(coId: string, streamingJson: string): void
   /** Mark this CoValue as deleted */
@@ -415,28 +415,10 @@ export declare function getSealerId(secret: Uint8Array): string
 export declare function getSignerId(secret: Uint8Array): string
 
 /**
- * Reproduce `addMember(everyone, "writeOnly")` — returns a JSON array of
- * mutations `[{ op, field, value? }]` (set OR del).
- */
-export declare function groupAddEveryoneWriteOnly(inputJson: string): string
-
-/**
- * Reproduce `RawGroup.addMemberInternal` (add/createInvite) — returns a JSON
- * array of writes.
- */
-export declare function groupAddMemberInternal(inputJson: string): string
-
-/**
- * Reproduce `RawGroup.extend` (standard/account-member parent path) — returns a
- * JSON array of writes.
+ * Reproduce `RawGroup.extend` (standard/account-member parent path) — returns
+ * the unified `native_result` envelope (`value` is `{ "writes": [...] }`).
  */
 export declare function groupExtend(inputJson: string): string
-
-/** Reproduce `RawGroup.removeMember` — returns a JSON array of writes. */
-export declare function groupRemoveMember(inputJson: string): string
-
-/** Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON. */
-export declare function groupRotateReadKey(inputJson: string): string
 
 /**
  * Validation verdict for a single transaction, mirroring `Verdict` on the
@@ -506,8 +488,8 @@ export interface PendingTx {
 }
 
 /**
- * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
- * `SessionWritePlan` JSON.
+ * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns the
+ * unified `native_result` envelope (`value` is the `SessionWritePlan`).
  */
 export declare function planSessionWrite(inputJson: string): string
 

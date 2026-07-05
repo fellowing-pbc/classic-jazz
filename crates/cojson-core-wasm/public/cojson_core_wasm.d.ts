@@ -1,32 +1,16 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
- */
-export function groupRotateReadKey(input_json: string): string;
-/**
- * Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
- */
-export function groupAddMemberInternal(input_json: string): string;
-export function init(): void;
-/**
- * Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
- * write array.
+ * Reproduce `RawGroup.extend` (standard/account-member parent path) — returns
+ * the unified `native_result` envelope (`value` is `{ "writes": [...] }`).
  */
 export function groupExtend(input_json: string): string;
 /**
- * Reproduce `RawGroup.removeMember` — JSON write array.
- */
-export function groupRemoveMember(input_json: string): string;
-/**
- * Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
- */
-export function groupAddEveryoneWriteOnly(input_json: string): string;
-/**
- * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
- * `SessionWritePlan` JSON.
+ * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns the
+ * unified `native_result` envelope (`value` is the `SessionWritePlan`).
  */
 export function planSessionWrite(input_json: string): string;
+export function init(): void;
 /**
  * WASM-exposed function to verify an Ed25519 signature.
  * - `verifying_key`: 32 bytes of verifying key material
@@ -280,15 +264,15 @@ export class NodeCore {
    */
   mapDeltaRich(co_id: string, since_version: number): string;
   /**
-   * SHADOW-ONLY native content decision (native port of TS
-   * `VerifiedState.newContentSince`). Given the peer's optimistic known state
-   * as JSON (`{id, header, sessions}`, or `undefined`), returns the
-   * `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string, or
-   * `undefined` when there is nothing to send. Read-only: mutates no state and
-   * drives no live sync behavior — it exists purely to be compared against the
-   * TS path.
+   * Native content decision (default-on production port of TS
+   * `VerifiedState.newContentSince`, driven by `sync.ts`'s `#sendNewContent`).
+   * Given the peer's optimistic known state as JSON (`{id, header, sessions}`,
+   * or `undefined`), returns the unified `native_result` envelope JSON string —
+   * on success `value` is the `NewContentMessage[]` that SHOULD be sent, or
+   * `null` when there is nothing to send; on error the
+   * `{"ok":false,"kind":"error",…}` envelope. Read-only: mutates no state.
    */
-  contentToSend(co_id: string, known_state_json?: string | null): any;
+  contentToSend(co_id: string, known_state_json?: string | null): string;
   /**
    * Creates or replaces; replacing drops the previous session state.
    * Mirrors TS semantics where constructing a new VerifiedState for an
@@ -568,14 +552,10 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_nodecore_free: (a: number, b: number) => void;
   readonly __wbg_sessionmap_free: (a: number, b: number) => void;
-  readonly groupAddEveryoneWriteOnly: (a: number, b: number) => [number, number, number, number];
-  readonly groupAddMemberInternal: (a: number, b: number) => [number, number, number, number];
-  readonly groupExtend: (a: number, b: number) => [number, number, number, number];
-  readonly groupRemoveMember: (a: number, b: number) => [number, number, number, number];
-  readonly groupRotateReadKey: (a: number, b: number) => [number, number, number, number];
+  readonly groupExtend: (a: number, b: number) => [number, number];
   readonly nodecore_addTransactions: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number];
   readonly nodecore_coValueCount: (a: number) => number;
-  readonly nodecore_contentToSend: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly nodecore_contentToSend: (a: number, b: number, c: number, d: number, e: number) => [number, number];
   readonly nodecore_createCoValue: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
   readonly nodecore_decryptTransaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
   readonly nodecore_decryptTransactionMeta: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
@@ -589,10 +569,10 @@ export interface InitOutput {
   readonly nodecore_getSignatureAfter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly nodecore_getTransaction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly nodecore_getTransactionCount: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-  readonly nodecore_groupAddEveryoneWriteOnly: (a: number, b: number, c: number) => [number, number, number, number];
-  readonly nodecore_groupAddMemberInternal: (a: number, b: number, c: number) => [number, number, number, number];
-  readonly nodecore_groupRemoveMember: (a: number, b: number, c: number) => [number, number, number, number];
-  readonly nodecore_groupRotateReadKey: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_groupAddEveryoneWriteOnly: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_groupAddMemberInternal: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_groupRemoveMember: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_groupRotateReadKey: (a: number, b: number, c: number) => [number, number];
   readonly nodecore_hasCoValue: (a: number, b: number, c: number) => number;
   readonly nodecore_hasKeySecret: (a: number, b: number, c: number) => number;
   readonly nodecore_ingestAndMaterialize: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number];
@@ -629,7 +609,7 @@ export interface InitOutput {
   readonly nodecore_streamSnapshotAtFrontier: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
   readonly nodecore_validateTransactions: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly nodecore_validateTransactionsDelta: (a: number, b: number, c: number, d: number, e: number, f: any) => [number, number, number];
-  readonly planSessionWrite: (a: number, b: number) => [number, number, number, number];
+  readonly planSessionWrite: (a: number, b: number) => [number, number];
   readonly sessionmap_addTransactions: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
   readonly sessionmap_decryptTransaction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly sessionmap_decryptTransactionMeta: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];

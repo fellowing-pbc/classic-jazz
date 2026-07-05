@@ -790,89 +790,113 @@ impl NodeCore {
         Ok(GroupKeyState::from_snapshot(&snapshot))
     }
 
-    // === group key-management write path (native snapshot lookup) ===
+    // === group key-management write path (self-sourced group state) ===
     //
-    // These four methods are the NodeCore-resident entry points for the group
-    // key-management write FFI. Unlike the stateless
-    // [`crate::core::group_key_ffi`] `*_json` functions — which require the caller
-    // to embed a full materialized-group snapshot in the input JSON — these look
-    // the [`GroupKeyState`] up from this node's OWN already-materialized coMap view
-    // (via [`NodeCore::group_key_state`]) whenever the input omits `snapshot`
-    // (`null`). That lets `group.ts` skip re-serializing the group's whole CoMap
-    // (an O(fields) cost per write, O(n^2) over a long rotation run) and marshaling
-    // it across the FFI boundary on every key-management write. If the input DOES
-    // carry a snapshot (the coMap-materialization-off fallback), it is honored
-    // as-is, so behavior is identical to the stateless functions in that mode.
+    // These four methods are the NodeCore-resident entry points `group.ts`'s
+    // `try*Native` write paths call (default-on production). Each parses the
+    // non-native inputs TS resolves at runtime, looks the [`GroupKeyState`] up
+    // from this node's OWN already-materialized coMap view (via
+    // [`NodeCore::group_key_state`]) — so the group's whole CoMap never has to be
+    // re-serialized in TS and marshaled across the FFI on every write — and runs
+    // the pure orchestration. Every method returns the unified `native_result`
+    // envelope JSON string (`{"ok":true,"value":…}` on success, where `value` is
+    // `{"skipped":true}` or `{"writes":[…]}`, and `{"ok":false,"kind":"error",…}`
+    // on any parse / unknown-covalue / orchestration failure), so the TS caller
+    // can distinguish and log a genuine failure instead of silently falling back.
 
-    /// [`crate::core::group_key_ffi::rotate_read_key_json`] with the group state
-    /// sourced from this node's coMap view when the input omits `snapshot`.
-    pub fn group_rotate_read_key(&mut self, input_json: &str) -> Result<String, String> {
+    /// `rotate_read_key` with group state self-sourced from this node's coMap view.
+    pub fn group_rotate_read_key(&mut self, input_json: &str) -> String {
         let inp: crate::core::group_key_ffi::RotateInputWire =
-            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
-        crate::core::group_key_ffi::rotate_read_key_from_wire(&inp, &state)
-    }
-
-    /// [`crate::core::group_key_ffi::add_member_internal_json`] with the group
-    /// state sourced from this node's coMap view when the input omits `snapshot`.
-    pub fn group_add_member_internal(&mut self, input_json: &str) -> Result<String, String> {
-        let inp: crate::core::group_key_ffi::AddMemberInputWire =
-            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
-        crate::core::group_key_ffi::add_member_internal_from_wire(&inp, &state)
-    }
-
-    /// [`crate::core::group_key_ffi::add_everyone_write_only_json`] with the group
-    /// state sourced from this node's coMap view when the input omits `snapshot`.
-    pub fn group_add_everyone_write_only(&mut self, input_json: &str) -> Result<String, String> {
-        let inp: crate::core::group_key_ffi::EveryoneWriteOnlyInputWire =
-            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
-        crate::core::group_key_ffi::add_everyone_write_only_from_wire(&inp, &state)
-    }
-
-    /// [`crate::core::group_key_ffi::remove_member_json`] with the group state
-    /// sourced from this node's coMap view when the input omits `snapshot`.
-    pub fn group_remove_member(&mut self, input_json: &str) -> Result<String, String> {
-        let inp: crate::core::group_key_ffi::RemoveMemberInputWire =
-            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
-        crate::core::group_key_ffi::remove_member_from_wire(&inp, &state)
-    }
-
-    /// Build the [`GroupKeyState`] for a group-key write: from `snapshot` when the
-    /// caller provided one (a non-null JSON object), otherwise from this node's own
-    /// materialized coMap view for `group_id`.
-    fn resolve_group_key_state(
-        &mut self,
-        group_id: &str,
-        snapshot: &serde_json::Value,
-    ) -> Result<GroupKeyState, String> {
-        if snapshot.is_null() {
-            self.group_key_state(group_id, &[]).map_err(|e| e.to_string())
-        } else {
-            Ok(GroupKeyState::from_snapshot(snapshot))
-        }
-    }
-
-    /// SHADOW-ONLY native content decision. Delegates to
-    /// [`SessionMapImpl::content_to_send`] for `co_id`, parsing the optional
-    /// peer known-state JSON (`{id, header, sessions}`) the TS sync layer would
-    /// pass to `newContentSince`. Returns the resulting `NewContentMessage[]`
-    /// encoded as a JSON string, or `None` when nothing should be sent.
-    ///
-    /// Pure read — nothing is mutated and no live sync behavior depends on the
-    /// result; it exists only to be compared against the TS path.
-    pub fn content_to_send(
-        &self,
-        co_id: &str,
-        known_state_json: Option<&str>,
-    ) -> Result<Option<String>, SessionMapError> {
-        let known_state = match known_state_json {
-            Some(json) => Some(serde_json::from_str::<crate::core::KnownState>(json)?),
-            None => None,
+            match serde_json::from_str(input_json) {
+                Ok(v) => v,
+                Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+            };
+        let state = match self.group_key_state(&inp.group_id, &[]) {
+            Ok(s) => s,
+            Err(e) => return crate::core::native_result::error_json(&e.to_string()),
         };
-        self.get(co_id)?.content_to_send(known_state.as_ref())
+        crate::core::native_result::to_result_json(
+            crate::core::group_key_ffi::rotate_read_key_from_wire(&inp, &state),
+        )
+    }
+
+    /// `add_member_internal` with group state self-sourced from this node's view.
+    pub fn group_add_member_internal(&mut self, input_json: &str) -> String {
+        let inp: crate::core::group_key_ffi::AddMemberInputWire =
+            match serde_json::from_str(input_json) {
+                Ok(v) => v,
+                Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+            };
+        let state = match self.group_key_state(&inp.group_id, &[]) {
+            Ok(s) => s,
+            Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+        };
+        crate::core::native_result::to_result_json(
+            crate::core::group_key_ffi::add_member_internal_from_wire(&inp, &state),
+        )
+    }
+
+    /// `add_everyone_write_only` with group state self-sourced from this node's view.
+    pub fn group_add_everyone_write_only(&mut self, input_json: &str) -> String {
+        let inp: crate::core::group_key_ffi::EveryoneWriteOnlyInputWire =
+            match serde_json::from_str(input_json) {
+                Ok(v) => v,
+                Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+            };
+        let state = match self.group_key_state(&inp.group_id, &[]) {
+            Ok(s) => s,
+            Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+        };
+        crate::core::native_result::to_result_json(
+            crate::core::group_key_ffi::add_everyone_write_only_from_wire(&inp, &state),
+        )
+    }
+
+    /// `remove_member` with group state self-sourced from this node's coMap view.
+    pub fn group_remove_member(&mut self, input_json: &str) -> String {
+        let inp: crate::core::group_key_ffi::RemoveMemberInputWire =
+            match serde_json::from_str(input_json) {
+                Ok(v) => v,
+                Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+            };
+        let state = match self.group_key_state(&inp.group_id, &[]) {
+            Ok(s) => s,
+            Err(e) => return crate::core::native_result::error_json(&e.to_string()),
+        };
+        crate::core::native_result::to_result_json(
+            crate::core::group_key_ffi::remove_member_from_wire(&inp, &state),
+        )
+    }
+
+    /// Native content decision (default-on production port of TS
+    /// `VerifiedState.newContentSince`, driven by `sync.ts`'s `#sendNewContent`).
+    /// Delegates to [`SessionMapImpl::content_to_send`] for `co_id`, parsing the
+    /// optional peer known-state JSON (`{id, header, sessions}`). Returns the
+    /// unified `native_result` envelope JSON string: on success `value` is the
+    /// `NewContentMessage[]`, or `null` when there is nothing to send; on any
+    /// parse / unknown-covalue error the `{"ok":false,"kind":"error",…}` envelope
+    /// so the caller can log it and fall back to the TS path. Pure read — mutates
+    /// nothing.
+    pub fn content_to_send(&self, co_id: &str, known_state_json: Option<&str>) -> String {
+        let inner = || -> Result<Option<String>, String> {
+            let known_state = match known_state_json {
+                Some(json) => {
+                    Some(serde_json::from_str::<crate::core::KnownState>(json).map_err(|e| e.to_string())?)
+                }
+                None => None,
+            };
+            self.get(co_id)
+                .map_err(|e| e.to_string())?
+                .content_to_send(known_state.as_ref())
+                .map_err(|e| e.to_string())
+        };
+        match inner() {
+            // `content_to_send` already serializes the `NewContentMessage[]` by
+            // hand (to preserve session insertion order); splice it in verbatim.
+            Ok(Some(arr_json)) => crate::core::native_result::ok_json_raw(&arr_json),
+            Ok(None) => crate::core::native_result::ok_json_raw("null"),
+            Err(e) => crate::core::native_result::error_json(&e),
+        }
     }
 
     pub fn co_value_count(&self) -> usize {

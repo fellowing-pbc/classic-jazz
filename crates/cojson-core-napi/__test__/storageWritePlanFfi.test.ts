@@ -64,8 +64,11 @@ describe("storage write-plan FFI round-trip (napi)", () => {
       for (const step of fx.steps) {
         test(step.label, () => {
           // Feed the step's exact input object straight through the wire (the
-          // wrapper ignores the fixture-only `label`/`expected` keys).
-          const out = JSON.parse(planSessionWrite(JSON.stringify(step)));
+          // wrapper ignores the fixture-only `label`/`expected` keys). The
+          // response is the unified native-result envelope; the plan is `value`.
+          const env = JSON.parse(planSessionWrite(JSON.stringify(step)));
+          expect(env.ok).toBe(true);
+          const out = env.value;
           expect(out.invalidGap).toBe(step.expected.invalidGap);
           expect(out.noOp).toBe(step.expected.noOp);
           expect(out.actuallyNewCount).toBe(step.expected.actuallyNewCount);
@@ -84,7 +87,10 @@ describe("storage write-plan FFI round-trip (napi)", () => {
 });
 
 describe("error propagation across the FFI boundary (napi)", () => {
-  test("malformed JSON throws", () => {
-    expect(() => planSessionWrite("{ not json")).toThrow();
+  test("malformed JSON yields an error-kind envelope (not a throw)", () => {
+    const env = JSON.parse(planSessionWrite("{ not json"));
+    expect(env.ok).toBe(false);
+    expect(env.kind).toBe("error");
+    expect(typeof env.message).toBe("string");
   });
 });

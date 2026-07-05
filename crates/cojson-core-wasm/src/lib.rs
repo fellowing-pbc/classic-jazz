@@ -803,25 +803,17 @@ impl NodeCore {
             .is_streaming())
     }
 
-    /// SHADOW-ONLY native content decision (native port of TS
-    /// `VerifiedState.newContentSince`). Given the peer's optimistic known state
-    /// as JSON (`{id, header, sessions}`, or `undefined`), returns the
-    /// `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string, or
-    /// `undefined` when there is nothing to send. Read-only: mutates no state and
-    /// drives no live sync behavior — it exists purely to be compared against the
-    /// TS path.
+    /// Native content decision (default-on production port of TS
+    /// `VerifiedState.newContentSince`, driven by `sync.ts`'s `#sendNewContent`).
+    /// Given the peer's optimistic known state as JSON (`{id, header, sessions}`,
+    /// or `undefined`), returns the unified `native_result` envelope JSON string —
+    /// on success `value` is the `NewContentMessage[]` that SHOULD be sent, or
+    /// `null` when there is nothing to send; on error the
+    /// `{"ok":false,"kind":"error",…}` envelope. Read-only: mutates no state.
     #[wasm_bindgen(js_name = contentToSend)]
-    pub fn content_to_send(
-        &self,
-        co_id: String,
-        known_state_json: Option<String>,
-    ) -> Result<JsValue, JsValue> {
-        Ok(self
-            .internal
+    pub fn content_to_send(&self, co_id: String, known_state_json: Option<String>) -> String {
+        self.internal
             .content_to_send(&co_id, known_state_json.as_deref())
-            .map_err(to_wasm_err)?
-            .map(JsValue::from)
-            .unwrap_or_else(JsValue::undefined))
     }
 
     /// Set streaming known state
@@ -1212,98 +1204,67 @@ impl NodeCore {
         self.internal.missing_key_ids(&co_id)
     }
 
-    // === group key-management write path (native snapshot lookup) ===
+    // === group key-management write path (self-sourced group state) ===
     //
-    // NodeCore-resident counterparts of the module-level `groupRotateReadKey` etc.
-    // functions below. These source the group's key state from THIS node's own
-    // materialized coMap view when the input omits `snapshot`, so `group.ts` need
-    // not re-serialize the whole group CoMap on every key-management write.
+    // The `NodeCore`-resident entry points `group.ts`'s `try*Native` write paths
+    // call (default-on production). Each sources the group's key state from THIS
+    // node's own materialized coMap view, so `group.ts` never re-serializes the
+    // whole group CoMap on a key-management write, and returns the unified
+    // `native_result` envelope JSON string (errors ride in-envelope, never thrown).
 
     #[wasm_bindgen(js_name = groupRotateReadKey)]
-    pub fn group_rotate_read_key(&mut self, input_json: String) -> Result<String, JsValue> {
-        self.internal
-            .group_rotate_read_key(&input_json)
-            .map_err(to_wasm_err)
+    pub fn group_rotate_read_key(&mut self, input_json: String) -> String {
+        self.internal.group_rotate_read_key(&input_json)
     }
 
     #[wasm_bindgen(js_name = groupAddMemberInternal)]
-    pub fn group_add_member_internal(&mut self, input_json: String) -> Result<String, JsValue> {
-        self.internal
-            .group_add_member_internal(&input_json)
-            .map_err(to_wasm_err)
+    pub fn group_add_member_internal(&mut self, input_json: String) -> String {
+        self.internal.group_add_member_internal(&input_json)
     }
 
     #[wasm_bindgen(js_name = groupAddEveryoneWriteOnly)]
-    pub fn group_add_everyone_write_only(&mut self, input_json: String) -> Result<String, JsValue> {
-        self.internal
-            .group_add_everyone_write_only(&input_json)
-            .map_err(to_wasm_err)
+    pub fn group_add_everyone_write_only(&mut self, input_json: String) -> String {
+        self.internal.group_add_everyone_write_only(&input_json)
     }
 
     #[wasm_bindgen(js_name = groupRemoveMember)]
-    pub fn group_remove_member(&mut self, input_json: String) -> Result<String, JsValue> {
-        self.internal
-            .group_remove_member(&input_json)
-            .map_err(to_wasm_err)
+    pub fn group_remove_member(&mut self, input_json: String) -> String {
+        self.internal.group_remove_member(&input_json)
     }
 }
 
 // ============================================================================
-// Group key-management write paths (JSON wire; native-only, stage-1 FFI surface)
+// Group key-management write path: stateless `extend` (JSON wire)
 // ============================================================================
 //
-// Thin wasm wrappers over `cojson_core::core::group_key_ffi`, byte-identical in
-// behaviour to their napi twins. Each takes the call's inputs as a single JSON
-// string and returns a JSON string (the ordered `(field, value)` write list, or
-// `{ skipped, writes }` for rotation, or a `{ op, field, value? }` mutation
-// array for the everyone->writeOnly path). NOTHING in cojson production TS calls
-// these yet — group.ts wiring is stage 2.
+// `extend` is the one group-key write with no group-state lookup, so it stays a
+// free binding function (rotate/addMember/addEveryone/removeMember are `NodeCore`
+// instance methods that self-source group state). Byte-identical to its napi
+// twin. Returns the unified `native_result` envelope JSON string. Default-on
+// production code: `group.ts`'s `tryExtendNative` calls it.
 
-/// Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
-#[wasm_bindgen(js_name = groupRotateReadKey)]
-pub fn group_rotate_read_key(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::group_key_ffi::rotate_read_key_json(&input_json).map_err(to_wasm_err)
-}
-
-/// Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
-#[wasm_bindgen(js_name = groupAddMemberInternal)]
-pub fn group_add_member_internal(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::group_key_ffi::add_member_internal_json(&input_json).map_err(to_wasm_err)
-}
-
-/// Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
-#[wasm_bindgen(js_name = groupAddEveryoneWriteOnly)]
-pub fn group_add_everyone_write_only(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::group_key_ffi::add_everyone_write_only_json(&input_json).map_err(to_wasm_err)
-}
-
-/// Reproduce `RawGroup.removeMember` — JSON write array.
-#[wasm_bindgen(js_name = groupRemoveMember)]
-pub fn group_remove_member(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::group_key_ffi::remove_member_json(&input_json).map_err(to_wasm_err)
-}
-
-/// Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
-/// write array.
+/// Reproduce `RawGroup.extend` (standard/account-member parent path) — returns
+/// the unified `native_result` envelope (`value` is `{ "writes": [...] }`).
 #[wasm_bindgen(js_name = groupExtend)]
-pub fn group_extend(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::group_key_ffi::extend_json(&input_json).map_err(to_wasm_err)
+pub fn group_extend(input_json: String) -> String {
+    cojson_core::core::group_key_ffi::extend_json(&input_json)
 }
 
 // ============================================================================
-// Storage per-session write decision (JSON wire; native-only, stage-1 FFI surface)
+// Storage per-session write decision (JSON wire)
 // ============================================================================
 //
 // Thin wasm wrapper over `cojson_core::core::storage_write_plan`, byte-identical
 // in behaviour to its napi twin. Takes one session's stored row-state plus the
 // incoming content message's `after`/tx sizes as a single JSON string and
-// returns the `SessionWritePlan` JSON. Routing over JSON keeps every `i64` off
-// the ABI as a native number. NOTHING in cojson production TS calls this yet —
-// storage wiring is deliberately gated behind a later, default-false flag.
+// returns the unified `native_result` envelope (`value` is the `SessionWritePlan`).
+// Routing over JSON keeps every `i64` off the ABI as a native number. Default-on
+// production code: `storage{Sync,Async}.ts` call it for the per-session write
+// decision.
 
-/// Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
-/// `SessionWritePlan` JSON.
+/// Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns the
+/// unified `native_result` envelope (`value` is the `SessionWritePlan`).
 #[wasm_bindgen(js_name = planSessionWrite)]
-pub fn plan_session_write(input_json: String) -> Result<String, JsValue> {
-    cojson_core::core::storage_write_plan::plan_session_write_json(&input_json).map_err(to_wasm_err)
+pub fn plan_session_write(input_json: String) -> String {
+    cojson_core::core::storage_write_plan::plan_session_write_json(&input_json)
 }

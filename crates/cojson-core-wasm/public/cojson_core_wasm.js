@@ -186,165 +186,49 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 /**
- * Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
+ * Reproduce `RawGroup.extend` (standard/account-member parent path) — returns
+ * the unified `native_result` envelope (`value` is `{ "writes": [...] }`).
  * @param {string} input_json
  * @returns {string}
  */
-export function groupRotateReadKey(input_json) {
-    let deferred3_0;
-    let deferred3_1;
+export function groupExtend(input_json) {
+    let deferred2_0;
+    let deferred2_1;
     try {
         const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupRotateReadKey(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
+        const ret = wasm.groupExtend(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
     } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
 }
 
 /**
- * Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
+ * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns the
+ * unified `native_result` envelope (`value` is the `SessionWritePlan`).
  * @param {string} input_json
  * @returns {string}
  */
-export function groupAddMemberInternal(input_json) {
-    let deferred3_0;
-    let deferred3_1;
+export function planSessionWrite(input_json) {
+    let deferred2_0;
+    let deferred2_1;
     try {
         const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupAddMemberInternal(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
+        const ret = wasm.planSessionWrite(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
     } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
 }
 
 export function init() {
     wasm.init();
-}
-
-/**
- * Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
- * write array.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupExtend(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupExtend(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `RawGroup.removeMember` — JSON write array.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupRemoveMember(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupRemoveMember(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupAddEveryoneWriteOnly(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupAddEveryoneWriteOnly(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
- * `SessionWritePlan` JSON.
- * @param {string} input_json
- * @returns {string}
- */
-export function planSessionWrite(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.planSessionWrite(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
 }
 
 function passArray8ToWasm0(arg, malloc) {
@@ -1342,27 +1226,32 @@ export class NodeCore {
         }
     }
     /**
-     * SHADOW-ONLY native content decision (native port of TS
-     * `VerifiedState.newContentSince`). Given the peer's optimistic known state
-     * as JSON (`{id, header, sessions}`, or `undefined`), returns the
-     * `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string, or
-     * `undefined` when there is nothing to send. Read-only: mutates no state and
-     * drives no live sync behavior — it exists purely to be compared against the
-     * TS path.
+     * Native content decision (default-on production port of TS
+     * `VerifiedState.newContentSince`, driven by `sync.ts`'s `#sendNewContent`).
+     * Given the peer's optimistic known state as JSON (`{id, header, sessions}`,
+     * or `undefined`), returns the unified `native_result` envelope JSON string —
+     * on success `value` is the `NewContentMessage[]` that SHOULD be sent, or
+     * `null` when there is nothing to send; on error the
+     * `{"ok":false,"kind":"error",…}` envelope. Read-only: mutates no state.
      * @param {string} co_id
      * @param {string | null} [known_state_json]
-     * @returns {any}
+     * @returns {string}
      */
     contentToSend(co_id, known_state_json) {
-        const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(known_state_json) ? 0 : passStringToWasm0(known_state_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        var len1 = WASM_VECTOR_LEN;
-        const ret = wasm.nodecore_contentToSend(this.__wbg_ptr, ptr0, len0, ptr1, len1);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(known_state_json) ? 0 : passStringToWasm0(known_state_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var len1 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_contentToSend(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            deferred3_0 = ret[0];
+            deferred3_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
         }
-        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Creates or replaces; replacing drops the previous session state.
@@ -1668,23 +1557,17 @@ export class NodeCore {
      * @returns {string}
      */
     groupRemoveMember(input_json) {
-        let deferred3_0;
-        let deferred3_1;
+        let deferred2_0;
+        let deferred2_1;
         try {
             const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_groupRemoveMember(this.__wbg_ptr, ptr0, len0);
-            var ptr2 = ret[0];
-            var len2 = ret[1];
-            if (ret[3]) {
-                ptr2 = 0; len2 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
     }
     /**
@@ -1747,23 +1630,17 @@ export class NodeCore {
      * @returns {string}
      */
     groupRotateReadKey(input_json) {
-        let deferred3_0;
-        let deferred3_1;
+        let deferred2_0;
+        let deferred2_1;
         try {
             const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_groupRotateReadKey(this.__wbg_ptr, ptr0, len0);
-            var ptr2 = ret[0];
-            var len2 = ret[1];
-            if (ret[3]) {
-                ptr2 = 0; len2 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
     }
     /**
@@ -1944,23 +1821,17 @@ export class NodeCore {
      * @returns {string}
      */
     groupAddMemberInternal(input_json) {
-        let deferred3_0;
-        let deferred3_1;
+        let deferred2_0;
+        let deferred2_1;
         try {
             const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_groupAddMemberInternal(this.__wbg_ptr, ptr0, len0);
-            var ptr2 = ret[0];
-            var len2 = ret[1];
-            if (ret[3]) {
-                ptr2 = 0; len2 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
     }
     /**
@@ -2096,23 +1967,17 @@ export class NodeCore {
      * @returns {string}
      */
     groupAddEveryoneWriteOnly(input_json) {
-        let deferred3_0;
-        let deferred3_1;
+        let deferred2_0;
+        let deferred2_1;
         try {
             const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_groupAddEveryoneWriteOnly(this.__wbg_ptr, ptr0, len0);
-            var ptr2 = ret[0];
-            var len2 = ret[1];
-            if (ret[3]) {
-                ptr2 = 0; len2 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred3_0 = ptr2;
-            deferred3_1 = len2;
-            return getStringFromWasm0(ptr2, len2);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
         } finally {
-            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
     }
     /**

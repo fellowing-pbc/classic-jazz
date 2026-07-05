@@ -632,11 +632,9 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     this.nodeCore.setStreamingKnownState(coId, streamingJson);
   }
 
-  // SHADOW-ONLY: forwards the native content decision (see NodeCoreImpl).
-  contentToSend(
-    coId: string,
-    knownStateJson?: string,
-  ): string | null | undefined {
+  // Forwards the native content decision (default-on production; see
+  // NodeCoreImpl). Returns the unified native-result envelope JSON string.
+  contentToSend(coId: string, knownStateJson?: string): string {
     return this.nodeCore.contentToSend(coId, knownStateJson);
   }
 

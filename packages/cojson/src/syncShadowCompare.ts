@@ -125,7 +125,15 @@ export function maybeRunShadowContentCompare(
 
     let nativePieces: NewContentMessage[] | undefined;
     try {
-      nativePieces = verified.newContentSinceNative(knownState);
+      const result = verified.newContentSinceNative(knownState);
+      if (!result.ok) {
+        // The envelope now carries native failures in-band (an `error` kind);
+        // `unsupported` is already handled above, so anything here is an error.
+        throw new Error(
+          result.kind === "error" ? result.message : "unsupported",
+        );
+      }
+      nativePieces = result.value ?? undefined;
     } catch (error) {
       shadowStats.nativeErrors++;
       const message = error instanceof Error ? error.message : String(error);

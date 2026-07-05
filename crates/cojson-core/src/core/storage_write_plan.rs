@@ -260,20 +260,25 @@ struct PlanSessionWriteInputWire {
 }
 
 /// JSON-string-in / JSON-string-out wrapper for [`plan_session_write`]. Returns
-/// the serialized [`SessionWritePlan`] (camelCase). This is the FFI-facing
-/// surface consumed by the napi/wasm binding crates; nothing in production TS
-/// calls it yet (wiring is a later, separately gated phase).
-pub fn plan_session_write_json(input_json: &str) -> Result<String, String> {
+/// the unified `native_result` envelope JSON string: on success `value` is the
+/// [`SessionWritePlan`] (camelCase, always present); on a malformed-input parse
+/// failure the `{"ok":false,"kind":"error",…}` envelope. This is the FFI-facing
+/// surface consumed by the napi/wasm binding crates and, in production, by
+/// `storage{Sync,Async}.ts`'s per-session write decision (default-on).
+pub fn plan_session_write_json(input_json: &str) -> String {
+    crate::core::native_result::to_result_json(plan_session_write_result(input_json))
+}
+
+fn plan_session_write_result(input_json: &str) -> Result<SessionWritePlan, String> {
     let inp: PlanSessionWriteInputWire =
         serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-    let plan = plan_session_write(
+    Ok(plan_session_write(
         inp.last_idx,
         inp.after,
         inp.bytes_since_last_signature,
         &inp.new_tx_sizes,
         inp.max_recommended_tx_size,
-    );
-    serde_json::to_string(&plan).map_err(|e| e.to_string())
+    ))
 }
 
 #[cfg(test)]
@@ -521,9 +526,11 @@ mod tests {
             let raw_val: serde_json::Value = serde_json::from_str(&raw).unwrap();
             let raw_steps = raw_val["steps"].as_array().unwrap();
             for (step, raw_step) in f.steps.iter().zip(raw_steps) {
-                let out_json = plan_session_write_json(&raw_step.to_string())
-                    .unwrap_or_else(|e| panic!("wire {name} [{}]: {e}", step.label));
-                let out: serde_json::Value = serde_json::from_str(&out_json).unwrap();
+                let env: serde_json::Value =
+                    serde_json::from_str(&plan_session_write_json(&raw_step.to_string())).unwrap();
+                assert_eq!(env["ok"], serde_json::json!(true), "ok {name} [{}]", step.label);
+                // Unified envelope: the plan lives under `value`.
+                let out = &env["value"];
                 let e = &step.expected;
                 assert_eq!(out["invalidGap"], serde_json::json!(e.invalid_gap), "invalidGap {name} [{}]", step.label);
                 assert_eq!(out["noOp"], serde_json::json!(e.no_op), "noOp {name} [{}]", step.label);

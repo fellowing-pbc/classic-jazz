@@ -26,6 +26,7 @@ import {
   isParentGroupReference,
 } from "../ids.js";
 import { JsonObject, JsonValue } from "../jsonValue.js";
+import { parseNativeResult } from "../crypto/nativeResult.js";
 import { logger } from "../logger.js";
 import {
   AccountRole,
@@ -49,6 +50,18 @@ import { RawCoStream } from "./coStream.js";
 
 export const EVERYONE = "everyone" as const;
 export type Everyone = "everyone";
+
+/** One entry of a native group-key-write result: a `group.set` (with a value)
+ *  or a `group.delete` (without). The unified shape every native group-key
+ *  write now emits. */
+type NativeGroupWrite =
+  | { op: "set"; field: string; value: string }
+  | { op: "delete"; field: string };
+
+/** The success `value` of a native group-key-write result envelope: either the
+ *  deliberate no-op case (`{ skipped: true }`, only rotation can skip) or the
+ *  ordered write list. */
+type NativeGroupWriteValue = { skipped: true } | { writes: NativeGroupWrite[] };
 
 /**
  * Format a composite groupSealer value that includes the readKeyID.
@@ -1127,37 +1140,6 @@ export class RawGroup<
     );
   }
 
-  /** Materialize the current group CoMap as a `{field: value}` object of
-   *  string-valued fields — the `snapshot` `GroupKeyState::from_snapshot`
-   *  consumes (it keeps only string values, exactly as this does). */
-  private nativeGroupSnapshot(): Record<string, string> {
-    const snapshot: Record<string, string> = {};
-    for (const key of this.keys()) {
-      const value = this.get(key as keyof GroupShape & string);
-      if (typeof value === "string") {
-        snapshot[key] = value;
-      }
-    }
-    return snapshot;
-  }
-
-  /** The `snapshot` fragment to merge into a native group key-write FFI input.
-   *
-   *  The FFI is dispatched through the NodeCore methods (see `crypto`'s
-   *  `groupRotateReadKey` etc.), which source the group's key state from the
-   *  node's OWN materialized coMap view when the backend supports native coMap
-   *  materialization — so we OMIT the snapshot entirely rather than
-   *  re-serialize the whole group CoMap and marshal it across the FFI boundary
-   *  on every write (an O(fields) cost per write, O(n^2) over a long rotation
-   *  run). Otherwise we fall back to embedding the TS-materialized snapshot,
-   *  which the native side then honors as-is. */
-  private nativeGroupSnapshotInput(): { snapshot?: Record<string, string> } {
-    if (this.core.node.nodeCore.supportsNativeCoMapMaterialization()) {
-      return {};
-    }
-    return { snapshot: this.nativeGroupSnapshot() };
-  }
-
   /** Resolve a member key to the sealer id revelations are sealed *to*
    *  (`getAgentSealerID(resolveAccountAgent(...))`), or undefined if the
    *  member's agent can't be resolved. */
@@ -1252,12 +1234,45 @@ export class RawGroup<
     );
   }
 
-  /** Apply an ordered native write list as contiguous trusting sets (see the
-   *  transaction-index invariant above). */
-  private applyNativeWrites(writes: { field: string; value: string }[]) {
-    for (const w of writes) {
-      this.setTrusting(w.field, w.value);
+  /**
+   * Parse a native group-key-write result envelope and, on success, APPLY its
+   * ordered writes as contiguous trusting sets/deletes (see the
+   * transaction-index invariant above). Returns:
+   *   - `"fallback"` — the native path did not produce a result (`unsupported`,
+   *     or a genuine `error` which is LOGGED first, never silently swallowed);
+   *     the caller must fall back to the TS write path (nothing applied yet).
+   *   - `"skipped"`  — the native decision was a deliberate no-op (only rotation
+   *     can skip); the caller treats the operation as fully handled.
+   *   - `"applied"`  — the writes were applied; the caller runs any post-write
+   *     role assertion and returns success.
+   */
+  private applyNativeGroupResult(
+    json: string | undefined,
+    operation: string,
+  ): "fallback" | "skipped" | "applied" {
+    const result = parseNativeResult<NativeGroupWriteValue>(json);
+    if (!result.ok) {
+      if (result.kind === "error") {
+        logger.error(
+          `Native group key write (${operation}) failed; falling back to TS`,
+          { groupId: this.id, message: result.message },
+        );
+      }
+      return "fallback";
     }
+    const value = result.value;
+    if (!("writes" in value)) {
+      // The deliberate no-op case (`{ skipped: true }`).
+      return "skipped";
+    }
+    for (const w of value.writes) {
+      if (w.op === "delete") {
+        this.deleteTrusting(w.field);
+      } else {
+        this.setTrusting(w.field, w.value);
+      }
+    }
+    return "applied";
   }
 
   /** Mirror `addMemberInternal`'s post-`set` role assertion (group.ts:606/658/674):
@@ -1341,37 +1356,16 @@ export class RawGroup<
       members,
       writeOnlyFreshKeys,
       parents,
-      ...this.nativeGroupSnapshotInput(),
     };
 
-    let out: { skipped: boolean; writes: { field: string; value: string }[] };
-    try {
-      out = JSON.parse(
+    // rotation is the only path that can legitimately no-op ("skipped"); both
+    // "skipped" and "applied" mean it was fully handled natively.
+    return (
+      this.applyNativeGroupResult(
         this.core.node.nodeCore.groupRotateReadKey!(JSON.stringify(input)),
-      );
-    } catch {
-      return false;
-    }
-    if (out.skipped) {
-      return true;
-    }
-    this.applyNativeWrites(out.writes);
-    return true;
-  }
-
-  /** Invoke the native `add_member_internal` FFI; undefined on a deferred branch. */
-  private callAddMemberInternal(
-    input: unknown,
-  ): { field: string; value: string }[] | undefined {
-    try {
-      return JSON.parse(
-        this.core.node.nodeCore.groupAddMemberInternal!(JSON.stringify(input)),
-      );
-    } catch {
-      // Deferred/unsupported branch (e.g. everyone -> writeOnly) or any native
-      // error → fall back to the TS write path (nothing has been applied yet).
-      return undefined;
-    }
+        "rotateReadKey",
+      ) !== "fallback"
+    );
   }
 
   /** Reproduce `addMemberInternal` via the native FFI. Returns false to fall back. */
@@ -1401,25 +1395,28 @@ export class RawGroup<
         return false; // TS throws "Can't add member without read key secret"
       }
       const { sessionID, txIndex } = this.core.nextTransactionID();
-      const writes = this.callAddMemberInternal({
-        groupId: this.id,
-        sessionId: sessionID,
-        startTxIndex: txIndex,
-        memberKey: EVERYONE,
-        memberAgentSealerId: "",
-        role,
-        fromSealerSecret,
-        currentReadKey: {
-          id: maybeCurrentReadKey.id,
-          secret: maybeCurrentReadKey.secret,
-        },
-        existingWriteOnlyKeys: [],
-        members: [],
-        parents: [],
-        ...this.nativeGroupSnapshotInput(),
-      });
-      if (writes === undefined) return false;
-      this.applyNativeWrites(writes);
+      const outcome = this.applyNativeGroupResult(
+        this.core.node.nodeCore.groupAddMemberInternal!(
+          JSON.stringify({
+            groupId: this.id,
+            sessionId: sessionID,
+            startTxIndex: txIndex,
+            memberKey: EVERYONE,
+            memberAgentSealerId: "",
+            role,
+            fromSealerSecret,
+            currentReadKey: {
+              id: maybeCurrentReadKey.id,
+              secret: maybeCurrentReadKey.secret,
+            },
+            existingWriteOnlyKeys: [],
+            members: [],
+            parents: [],
+          }),
+        ),
+        "addMemberInternal(everyone)",
+      );
+      if (outcome === "fallback") return false;
       this.assertNativeMemberRole(EVERYONE, role);
       return true;
     }
@@ -1481,25 +1478,28 @@ export class RawGroup<
       }
 
       const { sessionID, txIndex } = this.core.nextTransactionID();
-      const writes = this.callAddMemberInternal({
-        groupId: this.id,
-        sessionId: sessionID,
-        startTxIndex: txIndex,
-        memberKey,
-        memberAgentSealerId,
-        role,
-        fromSealerSecret,
-        currentReadKey,
-        existingWriteOnlyKeys: [],
-        freshWriteOnlyKey,
-        rotationNewReadKey,
-        rotationWriteOnlyFreshKeys,
-        members,
-        parents,
-        ...this.nativeGroupSnapshotInput(),
-      });
-      if (writes === undefined) return false;
-      this.applyNativeWrites(writes);
+      const outcome = this.applyNativeGroupResult(
+        this.core.node.nodeCore.groupAddMemberInternal!(
+          JSON.stringify({
+            groupId: this.id,
+            sessionId: sessionID,
+            startTxIndex: txIndex,
+            memberKey,
+            memberAgentSealerId,
+            role,
+            fromSealerSecret,
+            currentReadKey,
+            existingWriteOnlyKeys: [],
+            freshWriteOnlyKey,
+            rotationNewReadKey,
+            rotationWriteOnlyFreshKeys,
+            members,
+            parents,
+          }),
+        ),
+        "addMemberInternal(writeOnly)",
+      );
+      if (outcome === "fallback") return false;
       this.assertNativeMemberRole(memberKey, role);
       return true;
     }
@@ -1517,25 +1517,28 @@ export class RawGroup<
     }
 
     const { sessionID, txIndex } = this.core.nextTransactionID();
-    const writes = this.callAddMemberInternal({
-      groupId: this.id,
-      sessionId: sessionID,
-      startTxIndex: txIndex,
-      memberKey,
-      memberAgentSealerId,
-      role,
-      fromSealerSecret,
-      currentReadKey: {
-        id: maybeCurrentReadKey.id,
-        secret: maybeCurrentReadKey.secret,
-      },
-      existingWriteOnlyKeys,
-      members: [],
-      parents: [],
-      ...this.nativeGroupSnapshotInput(),
-    });
-    if (writes === undefined) return false;
-    this.applyNativeWrites(writes);
+    const outcome = this.applyNativeGroupResult(
+      this.core.node.nodeCore.groupAddMemberInternal!(
+        JSON.stringify({
+          groupId: this.id,
+          sessionId: sessionID,
+          startTxIndex: txIndex,
+          memberKey,
+          memberAgentSealerId,
+          role,
+          fromSealerSecret,
+          currentReadKey: {
+            id: maybeCurrentReadKey.id,
+            secret: maybeCurrentReadKey.secret,
+          },
+          existingWriteOnlyKeys,
+          members: [],
+          parents: [],
+        }),
+      ),
+      "addMemberInternal(reader)",
+    );
+    if (outcome === "fallback") return false;
     this.assertNativeMemberRole(memberKey, role);
     return true;
   }
@@ -1594,25 +1597,12 @@ export class RawGroup<
       rotationWriteOnlyFreshKeys,
       members,
       parents,
-      ...this.nativeGroupSnapshotInput(),
     };
-    let muts: { op: "set" | "del"; field: string; value?: string }[];
-    try {
-      muts = JSON.parse(
-        this.core.node.nodeCore.groupAddEveryoneWriteOnly!(
-          JSON.stringify(input),
-        ),
-      );
-    } catch {
-      return false;
-    }
-    for (const m of muts) {
-      if (m.op === "del") {
-        this.deleteTrusting(m.field);
-      } else {
-        this.setTrusting(m.field, m.value!);
-      }
-    }
+    const outcome = this.applyNativeGroupResult(
+      this.core.node.nodeCore.groupAddEveryoneWriteOnly!(JSON.stringify(input)),
+      "addEveryoneWriteOnly",
+    );
+    if (outcome === "fallback") return false;
     this.assertNativeMemberRole(EVERYONE, "writeOnly");
     return true;
   }
@@ -1685,17 +1675,12 @@ export class RawGroup<
       members,
       writeOnlyFreshKeys,
       parents,
-      ...this.nativeGroupSnapshotInput(),
     };
-    let writes: { field: string; value: string }[];
-    try {
-      writes = JSON.parse(
-        this.core.node.nodeCore.groupRemoveMember!(JSON.stringify(input)),
-      );
-    } catch {
-      return false;
-    }
-    this.applyNativeWrites(writes);
+    const outcome = this.applyNativeGroupResult(
+      this.core.node.nodeCore.groupRemoveMember!(JSON.stringify(input)),
+      "removeMember",
+    );
+    if (outcome === "fallback") return false;
     // Mirror removeMember's post-write assertion (group.ts:1494-1498).
     if (this.get(memberKey as RawAccountID | AgentID) !== "revoked") {
       throw new Error(
@@ -1737,9 +1722,8 @@ export class RawGroup<
       writeOnlyKeys.push({ id: keyID, secret });
     }
 
-    let writes: { field: string; value: string }[];
-    try {
-      writes = JSON.parse(
+    return (
+      this.applyNativeGroupResult(
         this.core.node.nodeCore.groupExtend!(
           JSON.stringify({
             parentId: parent.id,
@@ -1752,12 +1736,9 @@ export class RawGroup<
             writeOnlyKeys,
           }),
         ),
-      );
-    } catch {
-      return false;
-    }
-    this.applyNativeWrites(writes);
-    return true;
+        "extend",
+      ) !== "fallback"
+    );
   }
 
   /** @internal */

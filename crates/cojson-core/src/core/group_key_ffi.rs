@@ -31,15 +31,19 @@
 //! `pure(fixture.input) == fixture.expectedWrites` — proves the wire layer is
 //! byte-lossless.
 //!
-//! Outputs:
-//! - the write-list functions return a JSON array `[{ "field", "value" }, …]`.
-//! - [`rotate_read_key_json`] returns `{ "skipped": bool, "writes": [...] }`
-//!   (rotation can early-return with no writes).
-//! - [`add_everyone_write_only_json`] returns a mutation array
-//!   `[{ "op": "set"|"del", "field", "value"? }, …]` (it can emit a delete).
+//! Output — every group-key write returns the unified success value (wrapped by
+//! `native_result` in the `{"ok":true,"value":…}` envelope at the FFI edge):
+//! - `{ "skipped": true }` for the no-op case (only rotation can skip);
+//! - `{ "writes": [{ "op": "set"|"delete", "field", "value"? }, …] }` otherwise.
+//!   An add/rotate/extend only ever emits `set`s; the sole `delete` comes from
+//!   the `everyone -> writeOnly` path (it removes `${readKey}_for_everyone`).
 //!
-//! This module is native-only and is intentionally NOT wired into production
-//! `group.ts` (stage 2).
+//! These write paths are default-on production code: `group.ts`'s
+//! `try*Native` methods drive them through the `NodeCore`-instance-method
+//! variants in [`crate::core::node`] (which self-source the group state from the
+//! node's own materialized coMap view). [`extend_json`] is the one stateless
+//! wrapper still exposed as a free binding function (extend needs no group-state
+//! lookup).
 
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +59,7 @@ use crate::core::group_key_rotation::{
 };
 use crate::core::group_key_state::GroupKeyState;
 use crate::core::group_keys::{GroupKeyMutation, GroupKeyWrite};
+use crate::core::native_result::to_result_json;
 
 // ---------------------------------------------------------------------------
 // Shared input leaf DTOs (mirror the fixture JSON, camelCase).
@@ -111,34 +116,30 @@ fn to_parents(v: &[ParentWire]) -> Vec<ParentResolution> {
 }
 
 // ---------------------------------------------------------------------------
-// Shared output leaf DTOs.
+// Shared output DTO: the unified group-key write result.
+//
+// Every group-key write serializes to ONE shape (see `native_result`): either
+// `{ "skipped": true }` or `{ "writes": [{ "op", "field", "value"? }] }`. A
+// single `MutationWire` entry models both a `set` (with a value) and a `delete`
+// (without) so the four set-only paths and the one path that also deletes share
+// the same entry shape.
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct WriteWire {
-    field: String,
-    value: String,
-}
-impl From<&GroupKeyWrite> for WriteWire {
-    fn from(w: &GroupKeyWrite) -> Self {
-        WriteWire {
-            field: w.field.clone(),
-            value: w.value.clone(),
-        }
-    }
-}
-
-fn writes_to_json(writes: &[GroupKeyWrite]) -> Result<String, String> {
-    let wire: Vec<WriteWire> = writes.iter().map(WriteWire::from).collect();
-    serde_json::to_string(&wire).map_err(|e| e.to_string())
-}
-
-#[derive(Serialize)]
-struct MutationWire {
+pub(crate) struct MutationWire {
     op: &'static str,
     field: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<String>,
+}
+impl From<&GroupKeyWrite> for MutationWire {
+    fn from(w: &GroupKeyWrite) -> Self {
+        MutationWire {
+            op: "set",
+            field: w.field.clone(),
+            value: Some(w.value.clone()),
+        }
+    }
 }
 impl From<&GroupKeyMutation> for MutationWire {
     fn from(m: &GroupKeyMutation) -> Self {
@@ -149,7 +150,7 @@ impl From<&GroupKeyMutation> for MutationWire {
                 value: Some(w.value.clone()),
             },
             GroupKeyMutation::Delete { field } => MutationWire {
-                op: "del",
+                op: "delete",
                 field: field.clone(),
                 value: None,
             },
@@ -157,10 +158,25 @@ impl From<&GroupKeyMutation> for MutationWire {
     }
 }
 
+/// The unified success payload of a group-key write. Serializes untagged to
+/// `{ "skipped": true }` or `{ "writes": [...] }`.
 #[derive(Serialize)]
-struct RotateOutputWire {
-    skipped: bool,
-    writes: Vec<WriteWire>,
+#[serde(untagged)]
+pub(crate) enum GroupWriteOut {
+    Skipped { skipped: bool },
+    Writes { writes: Vec<MutationWire> },
+}
+impl GroupWriteOut {
+    fn from_writes(writes: &[GroupKeyWrite]) -> GroupWriteOut {
+        GroupWriteOut::Writes {
+            writes: writes.iter().map(MutationWire::from).collect(),
+        }
+    }
+    fn from_mutations(muts: &[GroupKeyMutation]) -> GroupWriteOut {
+        GroupWriteOut::Writes {
+            writes: muts.iter().map(MutationWire::from).collect(),
+        }
+    }
 }
 
 fn parse_role(role: &str) -> Result<Role, String> {
@@ -191,31 +207,15 @@ pub(crate) struct RotateInputWire {
     members: Vec<MemberWire>,
     write_only_fresh_keys: Vec<KeyPairWire>,
     parents: Vec<ParentWire>,
-    /// The materialized group CoMap snapshot. Optional on the wire: when omitted
-    /// (`null`) the caller (a `NodeCore` method) supplies the [`GroupKeyState`]
-    /// from its own already-materialized coMap view via
-    /// [`rotate_read_key_from_wire`], so the snapshot never has to be re-serialized
-    /// in TS and marshaled across the FFI boundary on every write.
-    #[serde(default)]
-    pub(crate) snapshot: serde_json::Value,
-}
-
-/// Wire wrapper for [`rotate_read_key`]. Returns
-/// `{ "skipped": bool, "writes": [...] }`. Builds the [`GroupKeyState`] from the
-/// snapshot embedded in the input JSON.
-pub fn rotate_read_key_json(input_json: &str) -> Result<String, String> {
-    let inp: RotateInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-    let state = GroupKeyState::from_snapshot(&inp.snapshot);
-    rotate_read_key_from_wire(&inp, &state)
 }
 
 /// Run [`rotate_read_key`] over an already-parsed wire input and an externally
-/// provided [`GroupKeyState`] (from a `NodeCore` coMap view). Returns
-/// `{ "skipped": bool, "writes": [...] }`.
+/// provided [`GroupKeyState`] (self-sourced from the node's materialized coMap
+/// view). Returns the unified [`GroupWriteOut`].
 pub(crate) fn rotate_read_key_from_wire(
     inp: &RotateInputWire,
     state: &GroupKeyState,
-) -> Result<String, String> {
+) -> Result<GroupWriteOut, String> {
     let trigger = match inp.trigger.kind.as_str() {
         "rotate" => RotationTrigger::Rotate,
         "removeEveryone" => RotationTrigger::RemoveEveryone,
@@ -245,16 +245,10 @@ pub(crate) fn rotate_read_key_from_wire(
         parents: &parents,
     };
     let out = match rotate_read_key(&rotate_input).map_err(|e| e.to_string())? {
-        RotateOutcome::SkippedEveryoneCanRead => RotateOutputWire {
-            skipped: true,
-            writes: Vec::new(),
-        },
-        RotateOutcome::Rotated(w) => RotateOutputWire {
-            skipped: false,
-            writes: w.iter().map(WriteWire::from).collect(),
-        },
+        RotateOutcome::SkippedEveryoneCanRead => GroupWriteOut::Skipped { skipped: true },
+        RotateOutcome::Rotated(w) => GroupWriteOut::from_writes(&w),
     };
-    serde_json::to_string(&out).map_err(|e| e.to_string())
+    Ok(out)
 }
 
 // ===========================================================================
@@ -281,25 +275,15 @@ pub(crate) struct AddMemberInputWire {
     rotation_write_only_fresh_keys: Vec<KeyPairWire>,
     members: Vec<MemberWire>,
     parents: Vec<ParentWire>,
-    /// Optional on the wire — see [`RotateInputWire::snapshot`].
-    #[serde(default)]
-    pub(crate) snapshot: serde_json::Value,
-}
-
-/// Wire wrapper for [`add_member_internal`]. Returns a JSON array of writes.
-/// Builds the [`GroupKeyState`] from the snapshot embedded in the input JSON.
-pub fn add_member_internal_json(input_json: &str) -> Result<String, String> {
-    let inp: AddMemberInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-    let state = GroupKeyState::from_snapshot(&inp.snapshot);
-    add_member_internal_from_wire(&inp, &state)
 }
 
 /// Run [`add_member_internal`] over an already-parsed wire input and an
-/// externally provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+/// externally provided [`GroupKeyState`] (self-sourced from the node's
+/// materialized coMap view). Returns the unified [`GroupWriteOut`].
 pub(crate) fn add_member_internal_from_wire(
     inp: &AddMemberInputWire,
     state: &GroupKeyState,
-) -> Result<String, String> {
+) -> Result<GroupWriteOut, String> {
     let role = parse_role(&inp.role)?;
     let members = to_members(&inp.members);
     let parents = to_parents(&inp.parents);
@@ -329,7 +313,7 @@ pub(crate) fn add_member_internal_from_wire(
         parents: &parents,
     };
     let writes = add_member_internal(&input).map_err(|e| e.to_string())?;
-    writes_to_json(&writes)
+    Ok(GroupWriteOut::from_writes(&writes))
 }
 
 // ===========================================================================
@@ -350,27 +334,16 @@ pub(crate) struct EveryoneWriteOnlyInputWire {
     rotation_write_only_fresh_keys: Vec<KeyPairWire>,
     members: Vec<MemberWire>,
     parents: Vec<ParentWire>,
-    /// Optional on the wire — see [`RotateInputWire::snapshot`].
-    #[serde(default)]
-    pub(crate) snapshot: serde_json::Value,
-}
-
-/// Wire wrapper for [`add_everyone_write_only`]. Returns a JSON array of
-/// mutations `[{ "op": "set"|"del", "field", "value"? }, …]`. Builds the
-/// [`GroupKeyState`] from the snapshot embedded in the input JSON.
-pub fn add_everyone_write_only_json(input_json: &str) -> Result<String, String> {
-    let inp: EveryoneWriteOnlyInputWire =
-        serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-    let state = GroupKeyState::from_snapshot(&inp.snapshot);
-    add_everyone_write_only_from_wire(&inp, &state)
 }
 
 /// Run [`add_everyone_write_only`] over an already-parsed wire input and an
-/// externally provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+/// externally provided [`GroupKeyState`] (self-sourced from the node's
+/// materialized coMap view). Returns the unified [`GroupWriteOut`] — this is the
+/// one path whose writes can include a `delete` (`${readKey}_for_everyone`).
 pub(crate) fn add_everyone_write_only_from_wire(
     inp: &EveryoneWriteOnlyInputWire,
     state: &GroupKeyState,
-) -> Result<String, String> {
+) -> Result<GroupWriteOut, String> {
     let members = to_members(&inp.members);
     let parents = to_parents(&inp.parents);
     let rotation_wo = to_keys(&inp.rotation_write_only_fresh_keys);
@@ -392,8 +365,7 @@ pub(crate) fn add_everyone_write_only_from_wire(
         parents: &parents,
     };
     let muts = add_everyone_write_only(&input).map_err(|e| e.to_string())?;
-    let wire: Vec<MutationWire> = muts.iter().map(MutationWire::from).collect();
-    serde_json::to_string(&wire).map_err(|e| e.to_string())
+    Ok(GroupWriteOut::from_mutations(&muts))
 }
 
 // ===========================================================================
@@ -414,27 +386,16 @@ pub(crate) struct RemoveMemberInputWire {
     members: Vec<MemberWire>,
     write_only_fresh_keys: Vec<KeyPairWire>,
     parents: Vec<ParentWire>,
-    /// Optional on the wire — see [`RotateInputWire::snapshot`].
-    #[serde(default)]
-    pub(crate) snapshot: serde_json::Value,
-}
-
-/// Wire wrapper for [`remove_member`]. The rotation trigger is always
-/// `RemoveMember(member_key)` (as in `RawGroup.removeMember`). Returns a JSON
-/// array of writes. Builds the [`GroupKeyState`] from the snapshot embedded in
-/// the input JSON.
-pub fn remove_member_json(input_json: &str) -> Result<String, String> {
-    let inp: RemoveMemberInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
-    let state = GroupKeyState::from_snapshot(&inp.snapshot);
-    remove_member_from_wire(&inp, &state)
 }
 
 /// Run [`remove_member`] over an already-parsed wire input and an externally
-/// provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+/// provided [`GroupKeyState`] (self-sourced from the node's materialized coMap
+/// view). The rotation trigger is always `RemoveMember(member_key)` (as in
+/// `RawGroup.removeMember`). Returns the unified [`GroupWriteOut`].
 pub(crate) fn remove_member_from_wire(
     inp: &RemoveMemberInputWire,
     state: &GroupKeyState,
-) -> Result<String, String> {
+) -> Result<GroupWriteOut, String> {
     let members = to_members(&inp.members);
     let wo = to_keys(&inp.write_only_fresh_keys);
     let parents = to_parents(&inp.parents);
@@ -454,7 +415,7 @@ pub(crate) fn remove_member_from_wire(
     };
     let writes = remove_member(&rotate_input, &inp.member_key, inp.caller_is_admin_or_manager)
         .map_err(|e| e.to_string())?;
-    writes_to_json(&writes)
+    Ok(GroupWriteOut::from_writes(&writes))
 }
 
 // ===========================================================================
@@ -471,9 +432,15 @@ struct ExtendInputWire {
     write_only_keys: Vec<KeyPairWire>,
 }
 
-/// Wire wrapper for [`extend`] (standard/account-member parent path). Returns a
-/// JSON array of writes.
-pub fn extend_json(input_json: &str) -> Result<String, String> {
+/// Wire wrapper for [`extend`] (standard/account-member parent path). Extend is
+/// stateless (it needs no group-state lookup), so this is the one group-key
+/// write still exposed as a free binding function. Returns the unified result
+/// wrapped in the `native_result` envelope JSON string.
+pub fn extend_json(input_json: &str) -> String {
+    to_result_json(extend_build(input_json))
+}
+
+fn extend_build(input_json: &str) -> Result<GroupWriteOut, String> {
     let inp: ExtendInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
     let write_only_keys = to_keys(&inp.write_only_keys);
 
@@ -488,7 +455,7 @@ pub fn extend_json(input_json: &str) -> Result<String, String> {
         write_only_keys: &write_only_keys,
     };
     let writes = extend(&input).map_err(|e| format!("{e:?}"))?;
-    writes_to_json(&writes)
+    Ok(GroupWriteOut::from_writes(&writes))
 }
 
 #[cfg(test)]
@@ -509,15 +476,46 @@ mod tests {
         (text, value)
     }
 
+    /// Group state, as the production `NodeCore` methods self-source it, is built
+    /// here from the fixture's own `snapshot` (the input wire structs no longer
+    /// carry a `snapshot` field, so serde simply ignores it in `text`).
+    fn state_of(fx: &serde_json::Value) -> GroupKeyState {
+        GroupKeyState::from_snapshot(&fx["snapshot"])
+    }
+
+    /// Normalize a fixture's `expectedWrites` (`[{field,value[,op]}]`, where `op`
+    /// defaults to "set" and a delete uses the legacy "del") into the unified
+    /// `{ "writes": [{ "op": "set"|"delete", "field", "value"? }] }` shape the
+    /// wire now emits, so a single equality check proves byte-losslessness.
+    fn expected_writes(fx: &serde_json::Value) -> serde_json::Value {
+        let writes: Vec<serde_json::Value> = fx["expectedWrites"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|w| {
+                let op = w.get("op").and_then(|o| o.as_str()).unwrap_or("set");
+                if op == "del" || op == "delete" {
+                    json!({ "op": "delete", "field": w["field"] })
+                } else {
+                    json!({ "op": "set", "field": w["field"], "value": w["value"] })
+                }
+            })
+            .collect();
+        json!({ "writes": writes })
+    }
+
     #[test]
     fn rotate_read_key_wire_roundtrip() {
         for name in ["readers_only", "remove_member", "write_only", "with_parent"] {
             let (text, fx) = fixture(&format!("data/group_key_rotation/{name}.json"));
-            let out: serde_json::Value =
-                serde_json::from_str(&rotate_read_key_json(&text).unwrap()).unwrap();
-            assert_eq!(out["skipped"], json!(false), "[{name}] should not skip");
+            let inp: RotateInputWire = serde_json::from_str(&text).unwrap();
+            let out = serde_json::to_value(
+                rotate_read_key_from_wire(&inp, &state_of(&fx)).unwrap(),
+            )
+            .unwrap();
             assert_eq!(
-                out["writes"], fx["expectedWrites"],
+                out,
+                expected_writes(&fx),
                 "[{name}] rotate wire writes must equal fixture expectedWrites"
             );
         }
@@ -534,10 +532,14 @@ mod tests {
             "write_only_demotion",
         ] {
             let (text, fx) = fixture(&format!("data/group_key_membership/{name}.json"));
-            let out: serde_json::Value =
-                serde_json::from_str(&add_member_internal_json(&text).unwrap()).unwrap();
+            let inp: AddMemberInputWire = serde_json::from_str(&text).unwrap();
+            let out = serde_json::to_value(
+                add_member_internal_from_wire(&inp, &state_of(&fx)).unwrap(),
+            )
+            .unwrap();
             assert_eq!(
-                out, fx["expectedWrites"],
+                out,
+                expected_writes(&fx),
                 "[{name}] add_member wire writes must equal fixture expectedWrites"
             );
         }
@@ -546,43 +548,32 @@ mod tests {
     #[test]
     fn add_everyone_write_only_wire_roundtrip() {
         let (text, fx) = fixture("data/group_key_membership/everyone_write_only.json");
-        let out: serde_json::Value =
-            serde_json::from_str(&add_everyone_write_only_json(&text).unwrap()).unwrap();
-        // Normalize the fixture's expectedWrites: its `op` defaults to "set" and a
-        // set carries a `value`; a `del` carries none. Build the same shape the
-        // wire emits and compare.
-        let expected: Vec<serde_json::Value> = fx["expectedWrites"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|w| {
-                let op = w.get("op").and_then(|o| o.as_str()).unwrap_or("set");
-                if op == "del" {
-                    json!({ "op": "del", "field": w["field"] })
-                } else {
-                    json!({ "op": "set", "field": w["field"], "value": w["value"] })
-                }
-            })
-            .collect();
-        assert_eq!(out, serde_json::Value::Array(expected));
+        let inp: EveryoneWriteOnlyInputWire = serde_json::from_str(&text).unwrap();
+        let out =
+            serde_json::to_value(add_everyone_write_only_from_wire(&inp, &state_of(&fx)).unwrap())
+                .unwrap();
+        assert_eq!(out, expected_writes(&fx));
     }
 
     #[test]
     fn remove_member_wire_roundtrip() {
         let (text, fx) = fixture("data/group_key_membership/remove_reader.json");
-        let out: serde_json::Value =
-            serde_json::from_str(&remove_member_json(&text).unwrap()).unwrap();
-        assert_eq!(out, fx["expectedWrites"]);
+        let inp: RemoveMemberInputWire = serde_json::from_str(&text).unwrap();
+        let out =
+            serde_json::to_value(remove_member_from_wire(&inp, &state_of(&fx)).unwrap()).unwrap();
+        assert_eq!(out, expected_writes(&fx));
     }
 
     #[test]
     fn extend_wire_roundtrip() {
         for name in ["extend_basic", "extend_with_writeonly"] {
             let (text, fx) = fixture(&format!("data/group_key_extend/{name}.json"));
-            let out: serde_json::Value =
-                serde_json::from_str(&extend_json(&text).unwrap()).unwrap();
+            // extend_json returns the full `native_result` envelope.
+            let env: serde_json::Value = serde_json::from_str(&extend_json(&text)).unwrap();
+            assert_eq!(env["ok"], json!(true), "[{name}] extend must succeed");
             assert_eq!(
-                out, fx["expectedWrites"],
+                env["value"],
+                expected_writes(&fx),
                 "[{name}] extend wire writes must equal fixture expectedWrites"
             );
         }
@@ -595,9 +586,10 @@ mod tests {
             "groupId": "co_z", "sessionId": "co_z_session_z", "startTxIndex": 0,
             "fromSealerSecret": "sealerSecret_z", "currentReadKey": {"id":"key_z","secret":"keySecret_z"},
             "newReadKey": {"id":"key_z2","secret":"keySecret_z2"},
-            "members": [], "writeOnlyFreshKeys": [], "parents": [], "snapshot": {}
+            "members": [], "writeOnlyFreshKeys": [], "parents": []
         })
         .to_string();
-        assert!(rotate_read_key_json(&bad).is_err());
+        let inp: RotateInputWire = serde_json::from_str(&bad).unwrap();
+        assert!(rotate_read_key_from_wire(&inp, &GroupKeyState::from_snapshot(&json!({})),).is_err());
     }
 }
