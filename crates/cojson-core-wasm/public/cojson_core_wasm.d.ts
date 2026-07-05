@@ -143,31 +143,6 @@ export function seal(message: Uint8Array, sender_secret: string, recipient_id: s
  */
 export function unsealForGroup(sealed_message: Uint8Array, recipient_secret: string, nonce_material: Uint8Array): Uint8Array;
 /**
- * WASM-exposed function to derive a sealer ID from a sealer secret.
- * - `secret`: Raw bytes of the sealer secret
- * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
- */
-export function getSealerId(secret: Uint8Array): string;
-/**
- * Generate a new X25519 private key using secure random number generation.
- * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
- * This key can be reused for multiple Diffie-Hellman exchanges.
- */
-export function newX25519PrivateKey(): Uint8Array;
-/**
- * WASM-exposed function to derive an X25519 public key from a private key.
- * - `private_key`: 32 bytes of private key material
- * Returns 32 bytes of public key material or throws JsError if key is invalid.
- */
-export function x25519PublicKey(private_key: Uint8Array): Uint8Array;
-/**
- * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
- * - `private_key`: 32 bytes of private key material
- * - `public_key`: 32 bytes of public key material
- * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
- */
-export function x25519DiffieHellman(private_key: Uint8Array, public_key: Uint8Array): Uint8Array;
-/**
  * WASM-exposed function to encrypt bytes with a key secret and nonce material.
  * - `value`: The raw bytes to encrypt
  * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
@@ -204,6 +179,31 @@ export function getSignerId(secret: Uint8Array): string;
  * Returns true if signature is valid, false otherwise, or throws JsError if verification fails.
  */
 export function verify(signature: Uint8Array, message: Uint8Array, id: Uint8Array): boolean;
+/**
+ * WASM-exposed function to derive a sealer ID from a sealer secret.
+ * - `secret`: Raw bytes of the sealer secret
+ * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
+ */
+export function getSealerId(secret: Uint8Array): string;
+/**
+ * Generate a new X25519 private key using secure random number generation.
+ * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
+ * This key can be reused for multiple Diffie-Hellman exchanges.
+ */
+export function newX25519PrivateKey(): Uint8Array;
+/**
+ * WASM-exposed function to derive an X25519 public key from a private key.
+ * - `private_key`: 32 bytes of private key material
+ * Returns 32 bytes of public key material or throws JsError if key is invalid.
+ */
+export function x25519PublicKey(private_key: Uint8Array): Uint8Array;
+/**
+ * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
+ * - `private_key`: 32 bytes of private key material
+ * - `public_key`: 32 bytes of public key material
+ * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
+ */
+export function x25519DiffieHellman(private_key: Uint8Array, public_key: Uint8Array): Uint8Array;
 export class Blake3Hasher {
   free(): void;
   constructor();
@@ -234,6 +234,11 @@ export class NodeCore {
    * Boundary (b): whole materialized map as a JSON object string.
    */
   mapSnapshot(co_id: string): string;
+  /**
+   * RICH delta `{version, reset, sessions}` since `since_version`, each
+   * `sessions[sid]` the full `CoStreamItem[]` for a changed session.
+   */
+  streamDelta(co_id: string, since_version: number): string;
   coValueCount(): number;
   /**
    * Whether a secret for `key_id` has been provided.
@@ -279,6 +284,10 @@ export class NodeCore {
   missingKeyIds(co_id: string): string[];
   removeCoValue(co_id: string): boolean;
   /**
+   * Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+   */
+  streamSnapshot(co_id: string): string;
+  /**
    * Add transactions to a session
    */
   addTransactions(co_id: string, session_id: string, signer_id: string | null | undefined, transactions_json: string, signature: string, skip_verify: boolean): void;
@@ -297,6 +306,11 @@ export class NodeCore {
    * Feed a resolved `KeyID -> KeySecret` to the native key store (idempotent).
    */
   provideKeySecret(key_id: string, key_secret: string): void;
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coStream view; returns
+   * the current monotonic version.
+   */
+  streamMaterialize(co_id: string, pending: any): number;
   /**
    * Decrypt transaction changes
    */
@@ -333,6 +347,10 @@ export class NodeCore {
    */
   ingestAndMaterialize(co_id: string, session_id: string, signer_id: string | null | undefined, transactions_json: string, signature: string, skip_verify: boolean, since_version: number, pending: any): any;
   /**
+   * The `KeyID`s `co_id`'s coStream view still needs a secret for.
+   */
+  streamMissingKeyIds(co_id: string): string[];
+  /**
    * Decrypt transaction meta
    */
   decryptTransactionMeta(co_id: string, session_id: string, tx_index: number, key_secret: string): string | undefined;
@@ -349,6 +367,11 @@ export class NodeCore {
    * Set streaming known state
    */
   setStreamingKnownState(co_id: string, streaming_json: string): void;
+  /**
+   * Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
+   * `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
+   */
+  streamSnapshotAtFrontier(co_id: string, frontier_json: string): string;
   /**
    * Delta counterpart of `validateTransactions`: given the caller's
    * `(since_generation, since_count)` cursor, return only the verdicts it has
@@ -531,6 +554,11 @@ export interface InitOutput {
   readonly nodecore_resetValidation: (a: number, b: number, c: number) => void;
   readonly nodecore_roleOf: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
   readonly nodecore_setStreamingKnownState: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+  readonly nodecore_streamDelta: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly nodecore_streamMaterialize: (a: number, b: number, c: number, d: any) => [number, number, number];
+  readonly nodecore_streamMissingKeyIds: (a: number, b: number, c: number) => [number, number];
+  readonly nodecore_streamSnapshot: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly nodecore_streamSnapshotAtFrontier: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
   readonly nodecore_validateTransactions: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly nodecore_validateTransactionsDelta: (a: number, b: number, c: number, d: number, e: number, f: any) => [number, number, number];
   readonly sessionmap_addTransactions: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
@@ -578,15 +606,15 @@ export interface InitOutput {
   readonly sealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly unseal: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
   readonly unsealForGroup: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-  readonly getSealerId: (a: number, b: number) => [number, number, number, number];
-  readonly newX25519PrivateKey: () => [number, number];
-  readonly x25519DiffieHellman: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-  readonly x25519PublicKey: (a: number, b: number) => [number, number, number, number];
   readonly decrypt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly encrypt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly getSignerId: (a: number, b: number) => [number, number, number, number];
   readonly sign: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly verify: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+  readonly getSealerId: (a: number, b: number) => [number, number, number, number];
+  readonly newX25519PrivateKey: () => [number, number];
+  readonly x25519DiffieHellman: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly x25519PublicKey: (a: number, b: number) => [number, number, number, number];
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
