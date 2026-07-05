@@ -1,0 +1,62 @@
+{
+  "description": "addMember(everyone,'writeOnly') after everyone was a reader: set everyone=writeOnly, rotateReadKey('everyone') (RemoveEveryone bypasses the guard), then delete `${readKey}_for_everyone` (the plaintext reveal).",
+  "groupId": "co_zm9ygmnrFsdyG7P1MCN36cL587S",
+  "sessionId": "sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT/signer_z8UThJNfTmS2CD3nAVNbroz28NKMZJdi8nzMZ3MQpaL4d_session_zH5EyxYFFmoe",
+  "startTxIndex": 6,
+  "fromSealerSecret": "sealerSecret_z7yJ4rbhHn2G4tP8ia1acDknrZC8DWbN3ZdBRBib3vE2t",
+  "currentReadKey": {
+    "id": "key_znvKhU6sCd7xTQcM7",
+    "secret": "keySecret_zCz2b14mDuG5ESNC4EUMzCJzFzZakx43eUuSu4Scs7Yhs"
+  },
+  "rotationNewReadKey": {
+    "id": "key_zkAMyQj9QfRmFpNha",
+    "secret": "keySecret_zEKExBKxerU6v2qHDbiKuBQ8r4H8trcHuyYAaz5wMyuRn"
+  },
+  "rotationWriteOnlyFreshKeys": [],
+  "members": [
+    {
+      "memberKey": "sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT/signer_z8UThJNfTmS2CD3nAVNbroz28NKMZJdi8nzMZ3MQpaL4d",
+      "agentSealerId": "sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT"
+    }
+  ],
+  "parents": [],
+  "snapshot": {
+    "sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT/signer_z8UThJNfTmS2CD3nAVNbroz28NKMZJdi8nzMZ3MQpaL4d": "admin",
+    "key_znvKhU6sCd7xTQcM7_for_sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT/signer_z8UThJNfTmS2CD3nAVNbroz28NKMZJdi8nzMZ3MQpaL4d": "sealed_Uj0HCLkD372Jkb-0nexZiET8Tr4Pf2fYjrYHXdfGB5iv84iRctX4B0gJW8nvfhgSPOZdiIH52_VrXOCwfu1LYPCDjPhDZUSL6rA==",
+    "readKey": "key_znvKhU6sCd7xTQcM7",
+    "groupSealer": "key_znvKhU6sCd7xTQcM7@sealer_z3hqr4UsWEq59uEibpCDo5TykHshMQLMdpDH2WBaKU173",
+    "everyone": "reader",
+    "key_znvKhU6sCd7xTQcM7_for_everyone": "keySecret_zCz2b14mDuG5ESNC4EUMzCJzFzZakx43eUuSu4Scs7Yhs"
+  },
+  "expectedWrites": [
+    {
+      "field": "everyone",
+      "value": "writeOnly",
+      "op": "set"
+    },
+    {
+      "field": "key_zkAMyQj9QfRmFpNha_for_sealer_zBDZqVGtVAPd2kHrobt4nHk7M2n9wPb5fTgEezrXbFFVT/signer_z8UThJNfTmS2CD3nAVNbroz28NKMZJdi8nzMZ3MQpaL4d",
+      "value": "sealed_Ug644Yyb6GmKuzzSMmC14jUjbfkCm9YkQfjodsACypkxYOJ_xwitCvQ7PRM07adeDAhuCSh_aizJEKgdQdYdv21cqkkB7sK9gjA==",
+      "op": "set"
+    },
+    {
+      "field": "key_znvKhU6sCd7xTQcM7_for_key_zkAMyQj9QfRmFpNha",
+      "value": "encrypted_Um0jSUXL3smgI3xS_Lz3z9othtjEEwNauUtFck0Ly9C6EKlcbdoxdOof5n5YbAwxaFOkei7ij36l8",
+      "op": "set"
+    },
+    {
+      "field": "readKey",
+      "value": "key_zkAMyQj9QfRmFpNha",
+      "op": "set"
+    },
+    {
+      "field": "groupSealer",
+      "value": "key_zkAMyQj9QfRmFpNha@sealer_zC11iSzi6yz5rxQVgZRUnMDy6sevUjh8THmZvBLRqmmoo",
+      "op": "set"
+    },
+    {
+      "field": "key_znvKhU6sCd7xTQcM7_for_everyone",
+      "op": "del"
+    }
+  ]
+}

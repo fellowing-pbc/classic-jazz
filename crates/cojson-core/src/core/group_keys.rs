@@ -29,6 +29,39 @@ pub struct GroupKeyWrite {
     pub value: String,
 }
 
+/// A single mutation of the group CoMap — either a `group.set(field, value)`
+/// ([`GroupKeyWrite`]) or a `group.delete(field)` (`{ op: "del", key }`).
+///
+/// Almost every key-management path emits only `set`s, so those paths keep
+/// returning `Vec<GroupKeyWrite>`. The one path that also `delete`s a field is
+/// `addMember(everyone, "writeOnly")` (it removes `${readKey}_for_everyone`), so
+/// that path returns `Vec<GroupKeyMutation>` instead. Keeping `delete` as a
+/// separate wrapper (rather than a field on `GroupKeyWrite`) avoids churning the
+/// many `set`-only encoders/orchestrators and their byte fixtures.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GroupKeyMutation {
+    /// `group.set(field, value, "trusting")`.
+    Set(GroupKeyWrite),
+    /// `group.delete(field, "trusting")` — a `{ op: "del", key: field }` op.
+    Delete { field: String },
+}
+
+impl GroupKeyMutation {
+    /// The CoMap field this mutation targets.
+    pub fn field(&self) -> &str {
+        match self {
+            GroupKeyMutation::Set(w) => &w.field,
+            GroupKeyMutation::Delete { field } => field,
+        }
+    }
+}
+
+impl From<GroupKeyWrite> for GroupKeyMutation {
+    fn from(w: GroupKeyWrite) -> Self {
+        GroupKeyMutation::Set(w)
+    }
+}
+
 /// Build the seal/sealForGroup nonce material, matching TS
 /// `stableStringify({ in: groupId, tx: { sessionID, txIndex } })`.
 ///

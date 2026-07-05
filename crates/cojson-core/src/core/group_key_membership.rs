@@ -28,27 +28,32 @@
 //! TS's exact emission order. (The `writeKeyFor_*` and plain-role sets carry no seal
 //! but still consume a transaction, matching TS.)
 //!
-//! # Scope — branches deliberately NOT handled (returned as [`AddMemberError::Deferred`])
+//! # writeOnly demotion of a reader-class member (handled)
 //!
-//! Two `addMemberInternal` branches invoke `rotateReadKey` and/or a CoMap `delete`,
-//! which this write-list model does not yet fold in:
+//! When an existing reader/writer/manager/admin is *changed* to
+//! `writeOnly`/`writeOnlyInvite`, TS first calls `rotateReadKey(memberKey)`
+//! (group.ts:646-654) BEFORE creating the writeOnly key. [`add_member_internal`]
+//! reproduces this: when the demotion branch applies it internally invokes
+//! [`rotate_read_key`] with `RotationTrigger::RemoveMember(member_key)` (so the
+//! member — which still carries its OLD reader-class role, matching TS's call
+//! order — is excluded from the re-reveal), prepends that rotation's writes, and
+//! threads the rotation's write count into the subsequent writeOnly-grant writes'
+//! transaction indices (the member seals are tx-index-sensitive). The caller
+//! supplies the rotation's fresh read key and any rotation writeOnly fresh keys via
+//! [`AddMemberInput::rotation_new_read_key`] /
+//! [`AddMemberInput::rotation_write_only_fresh_keys`].
 //!
-//! - **writeOnly demotion of a reader-class member.** When an existing
-//!   reader/writer/manager/admin is *changed* to `writeOnly`/`writeOnlyInvite`, TS
-//!   first calls `rotateReadKey(memberKey)` (group.ts:630-637) before creating the
-//!   writeOnly key. Composing that rotation's full write stream (with its own
-//!   resolved inputs) into the add is left deferred. The common cases — adding a
-//!   *fresh* writeOnly member, or a member whose previous role is not reader-class —
-//!   take no rotation and ARE handled.
-//! - **`everyone` → `writeOnly`.** This path issues a CoMap `delete` of the
-//!   `${readKey}_for_everyone` field (group.ts:600) and, when demoting a prior
-//!   reader/writer, a preceding `rotateReadKey("everyone")`. Deletes are a different
-//!   op than the `set`s modeled here, so this is deferred. `everyone` → `reader` /
-//!   `writer` (a plaintext read-key reveal, all `set`s) IS handled.
+//! # `everyone` → `writeOnly` (handled by a dedicated function)
 //!
-//! These deferrals are surfaced as typed errors rather than guessed at — the
-//! security-sensitive rotation/delete accounting is explicitly a human-reviewed
-//! future step (mirroring rotation's own documented deferrals).
+//! That path issues a CoMap `delete` of the `${readKey}_for_everyone` field
+//! (group.ts:617) and, when demoting a prior reader/writer, a preceding
+//! `rotateReadKey("everyone")`. Because a `delete` is a different op than the
+//! `set`s [`add_member_internal`] models, it is handled by the dedicated
+//! [`add_everyone_write_only`], which returns [`GroupKeyMutation`]s (set OR delete).
+//! `add_member_internal`'s `everyone` branch still handles `everyone` → `reader` /
+//! `writer` (a plaintext read-key reveal, all `set`s) and returns
+//! [`AddMemberError::Deferred`] for `everyone` → `writeOnly` to point callers at the
+//! dedicated function.
 //!
 //! This module is native-only and intentionally NOT wired into production
 //! `group.ts`.
@@ -60,20 +65,26 @@ use crate::core::group_key_rotation::{
     RotateReadKeyInput, RotationTrigger,
 };
 use crate::core::group_key_state::{GroupKeyState, EVERYONE};
-use crate::core::group_keys::{reveal_key_to_member, GroupKeyWrite};
+use crate::core::group_keys::{reveal_key_to_member, GroupKeyMutation, GroupKeyWrite};
 use crate::crypto::error::CryptoError;
 
 /// Error cases for [`add_member_internal`].
 #[derive(Debug)]
 pub enum AddMemberError {
-    /// A branch that requires `rotateReadKey` and/or a CoMap `delete` was hit; see
-    /// the module-level scope note. Carries a human-readable reason.
+    /// A branch that requires a CoMap `delete` was hit within the pure `set`-only
+    /// model of [`add_member_internal`]; see the module-level scope note and the
+    /// dedicated [`add_everyone_write_only`]. Carries a human-readable reason.
     Deferred(&'static str),
     /// `everyone` was given a role other than reader/writer/writeOnly
     /// (group.ts:574-577).
     InvalidEveryoneRole(Role),
     /// A writeOnly branch was hit but no fresh writeOnly key was supplied.
     MissingFreshWriteOnlyKey,
+    /// A writeOnly *demotion of a reader-class member* was hit (which first rotates
+    /// the read key) but no fresh rotation read key was supplied.
+    MissingRotationReadKey,
+    /// The preceding `rotateReadKey(memberKey)` of a writeOnly demotion failed.
+    Rotation(RotateError),
     /// A leaf encoder failed.
     Crypto(CryptoError),
 }
@@ -93,6 +104,15 @@ impl std::fmt::Display for AddMemberError {
             }
             AddMemberError::MissingFreshWriteOnlyKey => {
                 write!(f, "writeOnly branch requires a fresh writeOnly key")
+            }
+            AddMemberError::MissingRotationReadKey => {
+                write!(
+                    f,
+                    "writeOnly demotion of a reader-class member requires a fresh rotation read key"
+                )
+            }
+            AddMemberError::Rotation(e) => {
+                write!(f, "preceding rotateReadKey failed in add_member_internal: {e}")
             }
             AddMemberError::Crypto(e) => write!(f, "crypto error in add_member_internal: {e:?}"),
         }
@@ -138,6 +158,14 @@ pub struct AddMemberInput<'a> {
     /// The fresh writeOnly key `(id, secret)` for the new member
     /// (`crypto.newRandomKeySecret()`), required by the writeOnly branch.
     pub fresh_write_only_key: Option<&'a KeyPair>,
+    /// The fresh read key `(id, secret)` for the preceding `rotateReadKey(memberKey)`
+    /// of a **writeOnly demotion of a reader-class member** (`crypto.newRandomKeySecret()`,
+    /// consumed FIRST by the rotation). Required only on that branch; ignored otherwise.
+    pub rotation_new_read_key: Option<&'a KeyPair>,
+    /// One fresh writeOnly key per writeOnly member the preceding demotion rotation
+    /// re-keys, in writeOnly-member order (see [`crate::core::group_key_rotation`]).
+    /// Empty unless the demotion rotation has pre-existing writeOnly members.
+    pub rotation_write_only_fresh_keys: &'a [KeyPair],
     /// Existing members in `getMemberKeys()` order with resolved sealer ids — the
     /// writeOnly branch reveals the fresh key to each reader-class member.
     pub members: &'a [MemberResolution],
@@ -164,6 +192,8 @@ pub fn add_member_internal(
         current_read_key,
         existing_write_only_keys,
         fresh_write_only_key,
+        rotation_new_read_key,
+        rotation_write_only_fresh_keys,
         members,
         parents,
     } = input;
@@ -200,28 +230,60 @@ pub fn add_member_internal(
             }
             Role::WriteOnly => {
                 // Involves delete(`${readKey}_for_everyone`) and possibly
-                // rotateReadKey("everyone"); see module scope note.
+                // rotateReadKey("everyone"); a `delete` is not a `GroupKeyWrite`
+                // (set), so this `set`-only function defers to the dedicated
+                // `add_everyone_write_only`, which returns `GroupKeyMutation`s.
                 return Err(AddMemberError::Deferred(
-                    "everyone -> writeOnly requires a CoMap delete (and possibly rotation)",
+                    "everyone -> writeOnly emits a CoMap delete; use add_everyone_write_only",
                 ));
             }
             other => return Err(AddMemberError::InvalidEveryoneRole(other)),
         }
     }
 
-    // --- non-everyone: writeOnly branch (group.ts:629-647) ------------------
+    // --- non-everyone: writeOnly branch (group.ts:646-664) ------------------
     if matches!(role, Role::WriteOnly | Role::WriteOnlyInvite) {
-        // Demotion of a reader-class member first rotates the read key.
+        // Demotion of a reader-class member first rotates the read key
+        // (group.ts:647-654): `rotateReadKey(memberKey)` runs BEFORE
+        // `set(memberKey, role)`, so at rotation time the member still carries its
+        // OLD reader-class role and is excluded via `RemoveMember`. The rotation's
+        // writes consume a contiguous run of transaction indices starting at
+        // `start_tx_index`; the writeOnly-grant writes below continue from where the
+        // rotation left off (their member seals are tx-index-sensitive).
         if matches!(
             state.direct_role(member_key),
             Some(Role::Reader) | Some(Role::Writer) | Some(Role::Manager) | Some(Role::Admin)
         ) {
-            return Err(AddMemberError::Deferred(
-                "writeOnly demotion of a reader-class member requires a preceding rotateReadKey",
-            ));
+            let new_read_key =
+                rotation_new_read_key.ok_or(AddMemberError::MissingRotationReadKey)?;
+            // Struct-literal fields need the exact `&'a _` types; the destructured
+            // bindings are double-refs (match ergonomics), so deref once.
+            let rotate_input = RotateReadKeyInput {
+                state: *state,
+                group_id: *group_id,
+                session_id: *session_id,
+                start_tx_index: *start_tx_index,
+                trigger: RotationTrigger::RemoveMember(member_key.to_string()),
+                from_sealer_secret: *from_sealer_secret,
+                current_read_key: current_read_key.clone(),
+                new_read_key: new_read_key.clone(),
+                members: *members,
+                write_only_fresh_keys: *rotation_write_only_fresh_keys,
+                parents: *parents,
+            };
+            match rotate_read_key(&rotate_input).map_err(AddMemberError::Rotation)? {
+                RotateOutcome::Rotated(rotation_writes) => {
+                    // Continue the writeOnly-grant writes from where rotation left off.
+                    tx += rotation_writes.len() as u64;
+                    writes.extend(rotation_writes);
+                }
+                // `rotateReadKey` early-returned (everyone can already read); it wrote
+                // nothing, so the grant writes start at `start_tx_index` unchanged.
+                RotateOutcome::SkippedEveryoneCanRead => {}
+            }
         }
 
-        // set(memberKey, role) (group.ts:639)
+        // set(memberKey, role) (group.ts:656)
         writes.push(GroupKeyWrite {
             field: member_key.to_string(),
             value: role.as_str().to_string(),
@@ -256,8 +318,9 @@ pub fn add_member_internal(
         // `can_read` is exactly TS's role set here (reader/writer/admin/manager +
         // reader/writer/admin-invite; NOT managerInvite, NOT writeOnly). The newly
         // added member carries `writeOnly` post-`set`, so it is excluded — we skip
-        // `member_key` explicitly to reproduce that (its pre-state role may still be
-        // reader-class in a demotion, but that path is deferred above).
+        // `member_key` explicitly to reproduce that (in a demotion its PRE-state role
+        // is still reader-class here, so the explicit skip is what excludes it; the
+        // preceding rotation already excluded it via `RemoveMember`).
         for m in members.iter() {
             if m.member_key == member_key {
                 continue;
@@ -328,6 +391,110 @@ pub fn add_member_internal(
 
     let _ = tx;
     Ok(writes)
+}
+
+/// All inputs to [`add_everyone_write_only`].
+pub struct EveryoneWriteOnlyInput<'a> {
+    /// The materialized group CoMap snapshot BEFORE the add — `state.everyone_role()`
+    /// gives `everyone`'s previous role, which decides whether a rotation precedes
+    /// the delete.
+    pub state: &'a GroupKeyState,
+    /// The group's CoValue id (seal nonce material for the rotation's member seals).
+    pub group_id: &'a str,
+    /// The current session id (seal nonce material).
+    pub session_id: &'a str,
+    /// `group.core.nextTransactionID().txIndex` immediately before the add — the
+    /// `set(everyone, "writeOnly")` consumes this index; the rotation (if any) starts
+    /// at `start_tx_index + 1`.
+    pub start_tx_index: u64,
+    /// The current agent's sealer secret (`from` of every rotation member seal).
+    pub from_sealer_secret: &'a str,
+    /// The group's current read key `(id, secret)` (`getCurrentReadKey()`), captured
+    /// BEFORE any writes: its `id` names the `${id}_for_everyone` field deleted at the
+    /// end, and it is the rotation's `current_read_key`.
+    pub current_read_key: KeyPair,
+    /// The fresh read key `(id, secret)` for the preceding `rotateReadKey("everyone")`
+    /// — required only when `everyone`'s previous role is `reader`/`writer`.
+    pub rotation_new_read_key: Option<&'a KeyPair>,
+    /// One fresh writeOnly key per writeOnly member the rotation re-keys, in
+    /// writeOnly-member order. Empty unless the rotation runs and has writeOnly members.
+    pub rotation_write_only_fresh_keys: &'a [KeyPair],
+    /// Members in `getMemberKeys()` order with resolved sealer ids (rotation input).
+    pub members: &'a [MemberResolution],
+    /// Parent groups in `getParentGroups()` order (rotation input, standard path).
+    pub parents: &'a [ParentResolution],
+}
+
+/// Reproduce `addMember(everyone, "writeOnly")` (group.ts:590-627) as an ordered
+/// list of group-map [`GroupKeyMutation`]s (set OR delete).
+///
+/// TS emits, in order:
+/// 1. `set(everyone, "writeOnly")`.
+/// 2. **Only when** `everyone`'s previous role was `reader`/`writer`:
+///    `rotateReadKey("everyone")` — a full rotation with the `RemoveEveryone`
+///    trigger (which bypasses the "everyone can already read" early-return guard).
+///    Its writes start at `start_tx_index + 1` (the `set` above consumed
+///    `start_tx_index`).
+/// 3. `delete(`${currentReadKey.id}_for_everyone`)` — removes the plaintext
+///    read-key reveal that made the group readable by everyone. The `del` op is
+///    tx-index independent, so its position after the rotation does not change its
+///    bytes.
+///
+/// Returns an empty vec when `everyone` is already `writeOnly` (TS's
+/// `previousRole === role` early return). Errors if the previous role is neither a
+/// valid everyone role nor absent, or if a needed rotation read key is missing.
+pub fn add_everyone_write_only(
+    input: &EveryoneWriteOnlyInput<'_>,
+) -> Result<Vec<GroupKeyMutation>, AddMemberError> {
+    let previous = input.state.everyone_role();
+
+    // Early return: role unchanged (group.ts:586-588).
+    if previous == Some(Role::WriteOnly) {
+        return Ok(Vec::new());
+    }
+
+    let mut muts: Vec<GroupKeyMutation> = Vec::new();
+
+    // 1. set(everyone, "writeOnly") (group.ts:604) — consumes `start_tx_index`.
+    muts.push(GroupKeyMutation::Set(GroupKeyWrite {
+        field: EVERYONE.to_string(),
+        value: Role::WriteOnly.as_str().to_string(),
+    }));
+
+    // 2. rotateReadKey("everyone") when demoting a prior reader/writer everyone
+    //    (group.ts:612-615). Rotation writes follow the `set`, so they start at
+    //    `start_tx_index + 1`.
+    if matches!(previous, Some(Role::Reader) | Some(Role::Writer)) {
+        let new_read_key = input
+            .rotation_new_read_key
+            .ok_or(AddMemberError::MissingRotationReadKey)?;
+        let rotate_input = RotateReadKeyInput {
+            state: input.state,
+            group_id: input.group_id,
+            session_id: input.session_id,
+            start_tx_index: input.start_tx_index + 1,
+            trigger: RotationTrigger::RemoveEveryone,
+            from_sealer_secret: input.from_sealer_secret,
+            current_read_key: input.current_read_key.clone(),
+            new_read_key: new_read_key.clone(),
+            members: input.members,
+            write_only_fresh_keys: input.rotation_write_only_fresh_keys,
+            parents: input.parents,
+        };
+        match rotate_read_key(&rotate_input).map_err(AddMemberError::Rotation)? {
+            RotateOutcome::Rotated(w) => muts.extend(w.into_iter().map(GroupKeyMutation::Set)),
+            // RemoveEveryone bypasses the guard, so a real rotation never skips; keep
+            // this exhaustive rather than unreachable-panicking.
+            RotateOutcome::SkippedEveryoneCanRead => {}
+        }
+    }
+
+    // 3. delete(`${currentReadKey.id}_for_everyone`) (group.ts:617).
+    muts.push(GroupKeyMutation::Delete {
+        field: format!("{}_for_{}", input.current_read_key.id, EVERYONE),
+    });
+
+    Ok(muts)
 }
 
 /// Reproduce `RawGroup.removeMember` (group.ts:1468-1482): when the caller is an
@@ -410,6 +577,8 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: &[],
             fresh_write_only_key: None,
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &[],
             parents: &[],
         };
@@ -434,6 +603,8 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: &[],
             fresh_write_only_key: None,
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &[],
             parents: &[],
         };
@@ -485,6 +656,8 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: std::slice::from_ref(&wo),
             fresh_write_only_key: None,
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &[],
             parents: &[],
         };
@@ -522,6 +695,8 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: &[],
             fresh_write_only_key: Some(&fresh),
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &members,
             parents: &[],
         };
@@ -553,15 +728,30 @@ mod tests {
     }
 
     #[test]
-    fn write_only_demotion_of_reader_is_deferred() {
+    fn write_only_demotion_of_reader_rotates_then_grants() {
+        // A group with an admin (self) and a reader who is being demoted to
+        // writeOnly. TS first calls rotateReadKey(member) — which re-reveals the new
+        // read key to the admin ONLY (member excluded) then writes old_for_new /
+        // readKey / groupSealer — THEN set(member, writeOnly), writeKeyFor_, and
+        // reveals the fresh writeOnly key to self + admin.
         let state = GroupKeyState::from_snapshot(&json!({
-            "readKey": READ_KEY_ID,
+            "readKey": "key_zOLDreadkey1111",
+            "co_zAdmin1111111": "admin",
             "co_zMember111111": "reader",
         }));
+        let old_read_key = KeyPair {
+            id: "key_zOLDreadkey1111".to_string(),
+            secret: "keySecret_zk7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn".to_string(),
+        };
+        let new_read_key = KeyPair {
+            id: "key_zNEWreadkey1111".to_string(),
+            secret: READ_KEY_SECRET.to_string(),
+        };
         let fresh = KeyPair {
             id: "key_zFreshWO11111".to_string(),
             secret: READ_KEY_SECRET.to_string(),
         };
+        let members = vec![member("co_zAdmin1111111"), member("co_zMember111111")];
         let input = AddMemberInput {
             state: &state,
             group_id: GROUP_ID,
@@ -571,16 +761,50 @@ mod tests {
             member_agent_sealer_id: SEALER_ID,
             role: Role::WriteOnly,
             from_sealer_secret: FROM_SECRET,
-            current_read_key: read_key(),
+            current_read_key: old_read_key,
             existing_write_only_keys: &[],
             fresh_write_only_key: Some(&fresh),
-            members: &[],
+            rotation_new_read_key: Some(&new_read_key),
+            rotation_write_only_fresh_keys: &[],
+            members: &members,
             parents: &[],
         };
-        assert!(matches!(
-            add_member_internal(&input),
-            Err(AddMemberError::Deferred(_))
-        ));
+        let writes = add_member_internal(&input).unwrap();
+        // Rotation writes (member excluded) come FIRST, then the writeOnly grant.
+        assert_eq!(
+            fields(&writes),
+            vec![
+                // rotation: new read key to admin only, then the standard tail
+                "key_zNEWreadkey1111_for_co_zAdmin1111111".to_string(),
+                "key_zOLDreadkey1111_for_key_zNEWreadkey1111".to_string(),
+                "readKey".to_string(),
+                "groupSealer".to_string(),
+                // writeOnly grant
+                "co_zMember111111".to_string(),
+                "writeKeyFor_co_zMember111111".to_string(),
+                "key_zFreshWO11111_for_co_zMember111111".to_string(),
+                "key_zFreshWO11111_for_co_zAdmin1111111".to_string(),
+            ]
+        );
+        // The removed/demoted member is NOT re-revealed the new READ key.
+        assert!(!writes
+            .iter()
+            .any(|w| w.field == "key_zNEWreadkey1111_for_co_zMember111111"));
+        assert_eq!(writes[4].value, "writeOnly");
+        // The self-reveal of the fresh writeOnly key is emitted at tx=6: rotation
+        // consumed tx 0..=3 (4 writes), set(member)=4, writeKeyFor_=5, self-reveal=6.
+        let self_reveal = reveal_key_to_member(
+            "key_zFreshWO11111",
+            READ_KEY_SECRET,
+            "co_zMember111111",
+            FROM_SECRET,
+            SEALER_ID,
+            GROUP_ID,
+            SESSION_ID,
+            6,
+        )
+        .unwrap();
+        assert_eq!(writes[6].value, self_reveal.value);
     }
 
     #[test]
@@ -601,6 +825,8 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: &[],
             fresh_write_only_key: None,
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &[],
             parents: &[],
         };
@@ -635,13 +861,138 @@ mod tests {
             current_read_key: read_key(),
             existing_write_only_keys: &[],
             fresh_write_only_key: None,
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
             members: &[],
             parents: &[],
         };
+        // add_member_internal defers everyone->writeOnly to add_everyone_write_only.
         assert!(matches!(
             add_member_internal(&input),
             Err(AddMemberError::Deferred(_))
         ));
+    }
+
+    #[test]
+    fn everyone_write_only_fresh_sets_then_deletes_without_rotation() {
+        // everyone had no prior role → no rotation: just set(everyone,writeOnly)
+        // then delete the (possibly absent) plaintext reveal.
+        let state = GroupKeyState::from_snapshot(&json!({
+            "readKey": READ_KEY_ID,
+            "co_zAdmin1111111": "admin",
+        }));
+        let input = EveryoneWriteOnlyInput {
+            state: &state,
+            group_id: GROUP_ID,
+            session_id: SESSION_ID,
+            start_tx_index: 0,
+            from_sealer_secret: FROM_SECRET,
+            current_read_key: read_key(),
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
+            members: &[],
+            parents: &[],
+        };
+        let muts = add_everyone_write_only(&input).unwrap();
+        assert_eq!(
+            muts,
+            vec![
+                GroupKeyMutation::Set(GroupKeyWrite {
+                    field: "everyone".to_string(),
+                    value: "writeOnly".to_string(),
+                }),
+                GroupKeyMutation::Delete {
+                    field: format!("{READ_KEY_ID}_for_everyone"),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn everyone_write_only_from_reader_rotates_then_deletes() {
+        // everyone was a reader → set(everyone,writeOnly), THEN a full rotation
+        // (RemoveEveryone), THEN delete(oldReadKey_for_everyone).
+        let state = GroupKeyState::from_snapshot(&json!({
+            "readKey": "key_zOLDreadkey1111",
+            "co_zAdmin1111111": "admin",
+            "everyone": "reader",
+        }));
+        let old_read_key = KeyPair {
+            id: "key_zOLDreadkey1111".to_string(),
+            secret: "keySecret_zk7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn".to_string(),
+        };
+        let new_read_key = KeyPair {
+            id: "key_zNEWreadkey1111".to_string(),
+            secret: READ_KEY_SECRET.to_string(),
+        };
+        let members = vec![member("co_zAdmin1111111")];
+        let input = EveryoneWriteOnlyInput {
+            state: &state,
+            group_id: GROUP_ID,
+            session_id: SESSION_ID,
+            start_tx_index: 0,
+            from_sealer_secret: FROM_SECRET,
+            current_read_key: old_read_key,
+            rotation_new_read_key: Some(&new_read_key),
+            rotation_write_only_fresh_keys: &[],
+            members: &members,
+            parents: &[],
+        };
+        let muts = add_everyone_write_only(&input).unwrap();
+        let f: Vec<&str> = muts.iter().map(|m| m.field()).collect();
+        assert_eq!(
+            f,
+            vec![
+                "everyone",
+                "key_zNEWreadkey1111_for_co_zAdmin1111111",
+                "key_zOLDreadkey1111_for_key_zNEWreadkey1111",
+                "readKey",
+                "groupSealer",
+                "key_zOLDreadkey1111_for_everyone",
+            ]
+        );
+        // First mutation is the set; last is the delete.
+        assert!(matches!(&muts[0], GroupKeyMutation::Set(_)));
+        assert!(matches!(muts.last().unwrap(), GroupKeyMutation::Delete { .. }));
+        // The admin's re-reveal seal is at tx=1 (set(everyone) consumed tx=0, so the
+        // rotation begins at tx=1).
+        if let GroupKeyMutation::Set(w) = &muts[1] {
+            let expected = reveal_key_to_member(
+                "key_zNEWreadkey1111",
+                READ_KEY_SECRET,
+                "co_zAdmin1111111",
+                FROM_SECRET,
+                SEALER_ID,
+                GROUP_ID,
+                SESSION_ID,
+                1,
+            )
+            .unwrap();
+            assert_eq!(w.value, expected.value);
+        } else {
+            panic!("expected a set");
+        }
+    }
+
+    #[test]
+    fn everyone_write_only_noop_when_already_writeonly() {
+        let state = GroupKeyState::from_snapshot(&json!({
+            "readKey": READ_KEY_ID,
+            "everyone": "writeOnly",
+        }));
+        let input = EveryoneWriteOnlyInput {
+            state: &state,
+            group_id: GROUP_ID,
+            session_id: SESSION_ID,
+            start_tx_index: 0,
+            from_sealer_secret: FROM_SECRET,
+            current_read_key: read_key(),
+            rotation_new_read_key: None,
+            rotation_write_only_fresh_keys: &[],
+            members: &[],
+            parents: &[],
+        };
+        assert!(add_everyone_write_only(&input).unwrap().is_empty());
     }
 
     #[test]
@@ -808,6 +1159,11 @@ mod tests {
             existing_write_only_keys: Vec<KeyPairFx>,
             #[serde(rename = "freshWriteOnlyKey")]
             fresh_write_only_key: Option<KeyPairFx>,
+            // Only present on the writeOnly-demotion fixture; default elsewhere.
+            #[serde(rename = "rotationNewReadKey", default)]
+            rotation_new_read_key: Option<KeyPairFx>,
+            #[serde(rename = "rotationWriteOnlyFreshKeys", default)]
+            rotation_write_only_fresh_keys: Vec<KeyPairFx>,
             members: Vec<MemberFx>,
             parents: Vec<ParentFx>,
             #[serde(rename = "expectedWrites")]
@@ -831,6 +1187,11 @@ mod tests {
                 id: k.id.clone(),
                 secret: k.secret.clone(),
             });
+            let rotation_new_read_key = fx.rotation_new_read_key.as_ref().map(|k| KeyPair {
+                id: k.id.clone(),
+                secret: k.secret.clone(),
+            });
+            let rotation_wo = to_keys(&fx.rotation_write_only_fresh_keys);
             let role = Role::parse(&fx.role).unwrap_or_else(|| panic!("[{name}] bad role"));
 
             let input = AddMemberInput {
@@ -848,6 +1209,8 @@ mod tests {
                 },
                 existing_write_only_keys: &existing,
                 fresh_write_only_key: fresh.as_ref(),
+                rotation_new_read_key: rotation_new_read_key.as_ref(),
+                rotation_write_only_fresh_keys: &rotation_wo,
                 members: &members,
                 parents: &parents,
             };
@@ -875,6 +1238,111 @@ mod tests {
         #[test]
         fn everyone_reader() {
             replay_add("everyone_reader");
+        }
+        #[test]
+        fn write_only_demotion() {
+            replay_add("write_only_demotion");
+        }
+
+        // --- everyone -> writeOnly fixture (set + del mutations) ------------
+        fn default_op() -> String {
+            "set".to_string()
+        }
+        #[derive(Deserialize)]
+        struct MutFx {
+            field: String,
+            #[serde(default)]
+            value: Option<String>,
+            #[serde(default = "default_op")]
+            op: String,
+        }
+        #[derive(Deserialize)]
+        struct EveryoneWriteOnlyFx {
+            #[allow(dead_code)]
+            description: String,
+            #[serde(rename = "groupId")]
+            group_id: String,
+            #[serde(rename = "sessionId")]
+            session_id: String,
+            #[serde(rename = "startTxIndex")]
+            start_tx_index: u64,
+            #[serde(rename = "fromSealerSecret")]
+            from_sealer_secret: String,
+            #[serde(rename = "currentReadKey")]
+            current_read_key: KeyPairFx,
+            #[serde(rename = "rotationNewReadKey")]
+            rotation_new_read_key: Option<KeyPairFx>,
+            #[serde(rename = "rotationWriteOnlyFreshKeys")]
+            rotation_write_only_fresh_keys: Vec<KeyPairFx>,
+            members: Vec<MemberFx>,
+            parents: Vec<ParentFx>,
+            #[serde(rename = "expectedWrites")]
+            expected_writes: Vec<MutFx>,
+        }
+
+        #[test]
+        fn everyone_write_only() {
+            let path = "data/group_key_membership/everyone_write_only.json";
+            let text =
+                std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+            let fx: EveryoneWriteOnlyFx =
+                serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"));
+            let state = GroupKeyState::from_snapshot(
+                &serde_json::from_str::<serde_json::Value>(&text).unwrap()["snapshot"],
+            );
+            let members = to_members(&fx.members);
+            let parents = to_parents(&fx.parents);
+            let rotation_new_read_key = fx.rotation_new_read_key.as_ref().map(|k| KeyPair {
+                id: k.id.clone(),
+                secret: k.secret.clone(),
+            });
+            let rotation_wo = to_keys(&fx.rotation_write_only_fresh_keys);
+
+            let input = EveryoneWriteOnlyInput {
+                state: &state,
+                group_id: &fx.group_id,
+                session_id: &fx.session_id,
+                start_tx_index: fx.start_tx_index,
+                from_sealer_secret: &fx.from_sealer_secret,
+                current_read_key: KeyPair {
+                    id: fx.current_read_key.id.clone(),
+                    secret: fx.current_read_key.secret.clone(),
+                },
+                rotation_new_read_key: rotation_new_read_key.as_ref(),
+                rotation_write_only_fresh_keys: &rotation_wo,
+                members: &members,
+                parents: &parents,
+            };
+            let muts = add_everyone_write_only(&input)
+                .unwrap_or_else(|e| panic!("add_everyone_write_only failed: {e}"));
+
+            assert_eq!(
+                muts.len(),
+                fx.expected_writes.len(),
+                "mutation COUNT differs\n native: {:#?}\n TS:     {:#?}",
+                muts.iter().map(|m| m.field()).collect::<Vec<_>>(),
+                fx.expected_writes.iter().map(|w| &w.field).collect::<Vec<_>>(),
+            );
+            for (i, (got, want)) in muts.iter().zip(fx.expected_writes.iter()).enumerate() {
+                match (got, want.op.as_str()) {
+                    (GroupKeyMutation::Set(w), "set") => {
+                        assert_eq!(w.field, want.field, "mutation #{i} FIELD differs");
+                        assert_eq!(
+                            &w.value,
+                            want.value.as_ref().unwrap(),
+                            "mutation #{i} ({}) VALUE differs (byte mismatch vs TS)",
+                            want.field
+                        );
+                    }
+                    (GroupKeyMutation::Delete { field }, "del") => {
+                        assert_eq!(field, &want.field, "mutation #{i} DELETE field differs");
+                    }
+                    (g, op) => panic!(
+                        "mutation #{i} op mismatch: native {g:?} vs TS op={op:?} field={}",
+                        want.field
+                    ),
+                }
+            }
         }
 
         // --- removeMember fixture -------------------------------------------

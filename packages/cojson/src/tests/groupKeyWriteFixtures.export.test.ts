@@ -12,10 +12,11 @@
  * `crates/cojson-core/data/group_key_membership/` and `.../group_key_extend/`.
  * Regardless of export, the suite asserts internal consistency so it has CI value.
  *
- * Only the branches the native port handles are captured here (see the module scope
+ * The branches the native port handles are captured here (see the module scope
  * note in group_key_membership.rs): reader-class adds, fresh writeOnly adds, invite
- * adds, everyone->reader, standard-path extend, and admin removeMember. The deferred
- * branches (writeOnly demotion, everyone->writeOnly) are intentionally not exported.
+ * adds, everyone->reader, the writeOnly demotion of a reader (which rotates the read
+ * key first), the everyone->writeOnly path (which rotates then deletes the plaintext
+ * reveal), standard-path extend, and admin removeMember.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -37,6 +38,8 @@ type KeyPairFixture = { id: string; secret: string };
 type MemberFixture = { memberKey: string; agentSealerId: string };
 type ParentFixture = { readKeyId: string; readKeySecret: string };
 type WriteFixture = { field: string; value: string };
+/** A set OR delete op, in program order. `op` defaults to "set". */
+type MutationFixture = { field: string; value?: string; op?: "set" | "del" };
 
 /** Resolve every member key (getMemberKeys order) to its sealer id. */
 function resolveMembers(group: RawGroup): MemberFixture[] {
@@ -88,6 +91,10 @@ type AddFixture = {
   currentReadKey: KeyPairFixture;
   existingWriteOnlyKeys: KeyPairFixture[];
   freshWriteOnlyKey: KeyPairFixture | null;
+  /** Present only for a writeOnly demotion of a reader-class member (the preceding
+   * rotateReadKey's fresh read key + any rotation writeOnly keys). */
+  rotationNewReadKey?: KeyPairFixture | null;
+  rotationWriteOnlyFreshKeys?: KeyPairFixture[];
   members: MemberFixture[];
   parents: ParentFixture[];
   snapshot: Record<string, unknown>;
@@ -173,6 +180,248 @@ function writeAddFixture(name: string, fx: AddFixture) {
   // A non-no-op add always writes the member's role first.
   expect(fx.expectedWrites.length).toBeGreaterThan(0);
   expect(fx.expectedWrites[0]!.field).toBe(fx.memberKey);
+  if (EXPORT) {
+    mkdirSync(MEMBERSHIP_DIR, { recursive: true });
+    writeFileSync(
+      join(MEMBERSHIP_DIR, `${name}.json`),
+      JSON.stringify(fx, null, 2),
+    );
+  }
+}
+
+function writeDemotionFixture(name: string, fx: AddFixture) {
+  // A demotion rotates FIRST, so the member's own role set is NOT the first write;
+  // it appears later with value "writeOnly", and the first write is a rotation reveal.
+  expect(fx.expectedWrites[0]!.field).not.toBe(fx.memberKey);
+  expect(fx.expectedWrites[0]!.field).toContain("_for_");
+  expect(
+    fx.expectedWrites.some(
+      (w) => w.field === fx.memberKey && w.value === "writeOnly",
+    ),
+  ).toBe(true);
+  // Rotation must have produced the standard tail.
+  const fieldSet = new Set(fx.expectedWrites.map((w) => w.field));
+  expect(fieldSet.has("readKey")).toBe(true);
+  expect(fieldSet.has("groupSealer")).toBe(true);
+  if (EXPORT) {
+    mkdirSync(MEMBERSHIP_DIR, { recursive: true });
+    writeFileSync(
+      join(MEMBERSHIP_DIR, `${name}.json`),
+      JSON.stringify(fx, null, 2),
+    );
+  }
+}
+
+/**
+ * Capture the writeOnly *demotion of a reader-class member*: TS first calls
+ * `rotateReadKey(memberKey)` (excluding the member), THEN `set(memberKey,writeOnly)`
+ * + the writeOnly-grant. The injected keys are, in order,
+ * `[rotationNewReadKey, ...rotationWriteOnlyFreshKeys, demotedMemberFreshKey]`.
+ */
+function captureDemotion(
+  description: string,
+  group: RawGroup,
+  account: any,
+  memberKey: string,
+  memberAgentSealerId: string,
+): AddFixture {
+  const node = group.core.node;
+  const crypto = node.crypto;
+
+  const members = resolveMembers(group);
+  const parents = resolveParents(group);
+  const existingWriteOnlyKeys = resolveWriteOnlyKeys(group);
+  const cur = group.getCurrentReadKey();
+  if (!cur.secret) throw new Error("no current read key secret");
+  const currentReadKey = { id: cur.id, secret: cur.secret };
+
+  // The preceding rotation re-keys every OTHER writeOnly member.
+  const rotationWriteOnlyCount = group
+    .getMemberKeys()
+    .filter((mk) => mk !== memberKey && isWriteOnlyRole(group.get(mk))).length;
+
+  // injected = [newReadKey, ...rotationWriteOnlyKeys, demotedFreshKey]
+  const injected: { id: KeyID; secret: KeySecret }[] = [];
+  for (let i = 0; i < 1 + rotationWriteOnlyCount + 1; i++) {
+    injected.push(crypto.newRandomKeySecret());
+  }
+  const rotationNewReadKey = {
+    id: injected[0]!.id,
+    secret: injected[0]!.secret,
+  };
+  const rotationWriteOnlyFreshKeys = injected
+    .slice(1, 1 + rotationWriteOnlyCount)
+    .map((k) => ({ id: k.id, secret: k.secret }));
+  const demoted = injected[1 + rotationWriteOnlyCount]!;
+  const freshWriteOnlyKey = { id: demoted.id, secret: demoted.secret };
+
+  const snapshot = group.asObject() as Record<string, unknown>;
+  const fromSealerSecret = node.getCurrentAgent().currentSealerSecret();
+  const groupId = group.id;
+  const sessionId = node.currentSessionID;
+  const startTxIndex = group.core.nextTransactionID().txIndex;
+
+  let injIdx = 0;
+  const origNewRandomKeySecret = crypto.newRandomKeySecret.bind(crypto);
+  (crypto as any).newRandomKeySecret = () => {
+    const k = injected[injIdx++];
+    if (!k) throw new Error("more newRandomKeySecret calls than expected");
+    return k;
+  };
+
+  const expectedWrites: WriteFixture[] = [];
+  const origSet = group.set.bind(group);
+  (group as any).set = (key: string, value: unknown, privacy: unknown) => {
+    expectedWrites.push({ field: String(key), value: value as string });
+    return (origSet as any)(key, value, privacy);
+  };
+
+  try {
+    group.addMemberInternal(account as any, "writeOnly" as any);
+  } finally {
+    (crypto as any).newRandomKeySecret = origNewRandomKeySecret;
+    delete (group as any).set;
+  }
+
+  return {
+    description,
+    groupId,
+    sessionId,
+    startTxIndex,
+    memberKey,
+    memberAgentSealerId,
+    role: "writeOnly",
+    fromSealerSecret,
+    currentReadKey,
+    existingWriteOnlyKeys,
+    freshWriteOnlyKey,
+    rotationNewReadKey,
+    rotationWriteOnlyFreshKeys,
+    members,
+    parents,
+    snapshot,
+    expectedWrites,
+  };
+}
+
+// --------------------------------------------------------------------------
+// everyone -> writeOnly capture (rotate then delete; captures set AND del ops)
+// --------------------------------------------------------------------------
+
+type EveryoneWriteOnlyFixture = {
+  description: string;
+  groupId: string;
+  sessionId: string;
+  startTxIndex: number;
+  fromSealerSecret: string;
+  currentReadKey: KeyPairFixture;
+  rotationNewReadKey: KeyPairFixture | null;
+  rotationWriteOnlyFreshKeys: KeyPairFixture[];
+  members: MemberFixture[];
+  parents: ParentFixture[];
+  snapshot: Record<string, unknown>;
+  /** ordered set/del ops */
+  expectedWrites: MutationFixture[];
+};
+
+function captureEveryoneWriteOnly(
+  description: string,
+  group: RawGroup,
+): EveryoneWriteOnlyFixture {
+  const node = group.core.node;
+  const crypto = node.crypto;
+
+  const members = resolveMembers(group);
+  const parents = resolveParents(group);
+  const cur = group.getCurrentReadKey();
+  if (!cur.secret) throw new Error("no current read key secret");
+  const currentReadKey = { id: cur.id, secret: cur.secret };
+
+  // Demoting everyone (reader/writer) rotates: newReadKey + one key per writeOnly
+  // member. everyone->writeOnly does NOT mint a per-member writeOnly key.
+  const rotationWriteOnlyCount = group
+    .getMemberKeys()
+    .filter((mk) => isWriteOnlyRole(group.get(mk))).length;
+
+  const injected: { id: KeyID; secret: KeySecret }[] = [];
+  for (let i = 0; i < 1 + rotationWriteOnlyCount; i++) {
+    injected.push(crypto.newRandomKeySecret());
+  }
+  const rotationNewReadKey = {
+    id: injected[0]!.id,
+    secret: injected[0]!.secret,
+  };
+  const rotationWriteOnlyFreshKeys = injected
+    .slice(1)
+    .map((k) => ({ id: k.id, secret: k.secret }));
+
+  const snapshot = group.asObject() as Record<string, unknown>;
+  const fromSealerSecret = node.getCurrentAgent().currentSealerSecret();
+  const groupId = group.id;
+  const sessionId = node.currentSessionID;
+  const startTxIndex = group.core.nextTransactionID().txIndex;
+
+  let injIdx = 0;
+  const origNewRandomKeySecret = crypto.newRandomKeySecret.bind(crypto);
+  (crypto as any).newRandomKeySecret = () => {
+    const k = injected[injIdx++];
+    if (!k) throw new Error("more newRandomKeySecret calls than expected");
+    return k;
+  };
+
+  const expectedWrites: MutationFixture[] = [];
+  const origSet = group.set.bind(group);
+  (group as any).set = (key: string, value: unknown, privacy: unknown) => {
+    expectedWrites.push({
+      field: String(key),
+      value: value as string,
+      op: "set",
+    });
+    return (origSet as any)(key, value, privacy);
+  };
+  const origDelete = group.delete.bind(group);
+  (group as any).delete = (key: string, privacy: unknown) => {
+    expectedWrites.push({ field: String(key), op: "del" });
+    return (origDelete as any)(key, privacy);
+  };
+
+  try {
+    group.addMemberInternal("everyone" as any, "writeOnly" as any);
+  } finally {
+    (crypto as any).newRandomKeySecret = origNewRandomKeySecret;
+    delete (group as any).set;
+    delete (group as any).delete;
+  }
+
+  return {
+    description,
+    groupId,
+    sessionId,
+    startTxIndex,
+    fromSealerSecret,
+    currentReadKey,
+    rotationNewReadKey,
+    rotationWriteOnlyFreshKeys,
+    members,
+    parents,
+    snapshot,
+    expectedWrites,
+  };
+}
+
+function writeEveryoneWriteOnlyFixture(
+  name: string,
+  fx: EveryoneWriteOnlyFixture,
+) {
+  // set(everyone,writeOnly) is first; a del of `${readKey}_for_everyone` is last.
+  expect(fx.expectedWrites[0]).toEqual({
+    field: "everyone",
+    value: "writeOnly",
+    op: "set",
+  });
+  const last = fx.expectedWrites[fx.expectedWrites.length - 1]!;
+  expect(last.op).toBe("del");
+  expect(last.field).toBe(`${fx.currentReadKey.id}_for_everyone`);
   if (EXPORT) {
     mkdirSync(MEMBERSHIP_DIR, { recursive: true });
     writeFileSync(
@@ -449,6 +698,37 @@ describe("group key write fixtures", () => {
       0,
     );
     writeAddFixture("everyone_reader", fx);
+  });
+
+  test("write_only_demotion: reader demoted to writeOnly rotates then grants", () => {
+    const { node, group } = newGroupHighLevel();
+    const member = createAccountInNode(node);
+    group.addMember(member, "reader" as any);
+    const sealerId = node.crypto.getAgentSealerID(
+      node.resolveAccountAgent(member.id, "member").value!,
+    );
+    const fx = captureDemotion(
+      "Demote an existing reader to writeOnly: rotateReadKey(member) re-reveals the " +
+        "new read key to the remaining readers (member excluded), then set(member," +
+        "writeOnly) + writeKeyFor_ + reveal the fresh writeOnly key to self and readers.",
+      group,
+      member,
+      member.id,
+      sealerId,
+    );
+    writeDemotionFixture("write_only_demotion", fx);
+  });
+
+  test("everyone_write_only: demote everyone from reader rotates then deletes", () => {
+    const { group } = newGroupHighLevel();
+    group.addMember("everyone" as any, "reader" as any);
+    const fx = captureEveryoneWriteOnly(
+      "addMember(everyone,'writeOnly') after everyone was a reader: set everyone=" +
+        "writeOnly, rotateReadKey('everyone') (RemoveEveryone bypasses the guard), " +
+        "then delete `${readKey}_for_everyone` (the plaintext reveal).",
+      group,
+    );
+    writeEveryoneWriteOnlyFixture("everyone_write_only", fx);
   });
 
   test("extend_basic: child extended to a parent reveals its read key", () => {
