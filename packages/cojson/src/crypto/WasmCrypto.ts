@@ -19,6 +19,11 @@ import {
   unseal,
   unsealForGroup,
   verify,
+  groupRotateReadKey as nativeGroupRotateReadKey,
+  groupAddMemberInternal as nativeGroupAddMemberInternal,
+  groupAddEveryoneWriteOnly as nativeGroupAddEveryoneWriteOnly,
+  groupRemoveMember as nativeGroupRemoveMember,
+  groupExtend as nativeGroupExtend,
 } from "cojson-core-wasm";
 import { base64URLtoBytes, bytesToBase64url } from "../base64url.js";
 import { RawCoID, TransactionID } from "../ids.js";
@@ -871,6 +876,33 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
   }
 
   supportsNativeCoListMaterialization(): boolean {
+    return true;
+  }
+
+  // === group key-management write path (stage 2) ===
+  // The FFI wrappers are stateless module-level functions (pure JSON-in/out over
+  // the caller-supplied snapshot + inputs), not NodeCore methods.
+  groupRotateReadKey(inputJson: string): string {
+    return nativeGroupRotateReadKey(inputJson);
+  }
+
+  groupAddMemberInternal(inputJson: string): string {
+    return nativeGroupAddMemberInternal(inputJson);
+  }
+
+  groupAddEveryoneWriteOnly(inputJson: string): string {
+    return nativeGroupAddEveryoneWriteOnly(inputJson);
+  }
+
+  groupRemoveMember(inputJson: string): string {
+    return nativeGroupRemoveMember(inputJson);
+  }
+
+  groupExtend(inputJson: string): string {
+    return nativeGroupExtend(inputJson);
+  }
+
+  supportsNativeGroupKeyWrites(): boolean {
     return true;
   }
 }

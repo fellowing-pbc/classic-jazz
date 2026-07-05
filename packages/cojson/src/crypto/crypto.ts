@@ -781,4 +781,38 @@ export interface NodeCoreImpl {
    * TS RGA materializer.
    */
   supportsNativeCoListMaterialization(): boolean;
+
+  /**
+   * Native group key-management WRITE path (stage 2). Each function is a
+   * JSON-string-in / JSON-string-out wrapper over the pure, fixture-verified
+   * orchestration in `crates/cojson-core/src/core/group_key_{rotation,
+   * membership,extend}.rs`. Given the group's materialized CoMap `snapshot` plus
+   * the non-native inputs TS resolves at runtime (fresh random keys, resolved
+   * agent sealer ids, resolved read-key secrets, `startTxIndex`), they return the
+   * exact ordered `(field, value)` writes `group.ts`'s corresponding write path
+   * would emit — which the caller applies via `group.set` / `group.delete`.
+   *
+   * Optional so only the napi and wasm backends (which expose the FFI) implement
+   * them; the React Native uniffi binding does not yet, and returns `false` from
+   * {@link supportsNativeGroupKeyWrites}. Callers MUST gate on that before use.
+   *
+   * `groupRotateReadKey` returns `{ skipped: boolean, writes: [...] }`;
+   * `groupAddEveryoneWriteOnly` returns a mutation array
+   * `[{ op: "set" | "del", field, value? }, ...]`; the others return a write
+   * array `[{ field, value }, ...]`. A thrown error signals a deferred/unsupported
+   * branch (e.g. `everyone -> writeOnly` from `groupAddMemberInternal`), and the
+   * caller falls back to the TS write path.
+   */
+  groupRotateReadKey?(inputJson: string): string;
+  groupAddMemberInternal?(inputJson: string): string;
+  groupAddEveryoneWriteOnly?(inputJson: string): string;
+  groupRemoveMember?(inputJson: string): string;
+  groupExtend?(inputJson: string): string;
+  /**
+   * Whether this adapter's native binding exposes the group key-management write
+   * surface above. The napi and wasm bindings do; the React Native uniffi binding
+   * only will after an `ubrn` regeneration. When `false`, `group.ts` stays on the
+   * TS key-management write paths.
+   */
+  supportsNativeGroupKeyWrites(): boolean;
 }

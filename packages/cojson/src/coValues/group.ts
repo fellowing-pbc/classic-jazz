@@ -5,6 +5,7 @@ import type {
   CoValueCore,
   DecryptedTransaction,
 } from "../coValueCore/coValueCore.js";
+import { isNativeGroupKeyWritesEnabled } from "../coValueCore/coValueCore.js";
 import type { CoValueUniqueness } from "../coValueCore/verifiedState.js";
 import type {
   CryptoProvider,
@@ -587,6 +588,13 @@ export class RawGroup<
       return;
     }
 
+    if (
+      this.useNativeGroupKeyWrites() &&
+      this.tryAddMemberInternalNative(account, role, memberKey, previousRole)
+    ) {
+      return;
+    }
+
     if (memberKey === EVERYONE) {
       if (!(role === "reader" || role === "writer" || role === "writeOnly")) {
         throw new Error(
@@ -1089,8 +1097,661 @@ export class RawGroup<
     return validParentKeys;
   }
 
+  // =========================================================================
+  // Native group key-management write path (behind `nativeGroupKeyWrites`).
+  //
+  // Each `try*Native` gathers the non-native inputs TS already resolves (fresh
+  // random keys, resolved agent sealer ids, resolved read-key secrets,
+  // `startTxIndex`), calls the matching JSON FFI wrapper to get the exact
+  // ordered write list the corresponding TS write path would emit, and applies
+  // it via `group.set` / `group.delete`. It returns `true` when it fully handled
+  // the operation, or `false` to fall back to the TS body — for deferred branches
+  // (non-account-member parent group-sealer/legacy paths, unresolvable inputs)
+  // and, conservatively, any rotation of a group with loaded child groups (whose
+  // recursive `forEachChildGroup` rotation is TS-only).
+  //
+  // Transaction-index invariant: a member seal's nonce embeds
+  // `nextTransactionID().txIndex`, so `startTxIndex` is captured AFTER all
+  // incidental resolution (which itself never writes here) and immediately
+  // before applying, and each native write is applied as exactly one `group.set`
+  // (one transaction) with nothing interleaved — so write i lands at
+  // `startTxIndex + i`, matching the tx index its seal was built with.
+  // =========================================================================
+
+  /** Whether the native key-management write path is enabled AND the current
+   *  crypto backend exposes it. */
+  private useNativeGroupKeyWrites(): boolean {
+    return (
+      isNativeGroupKeyWritesEnabled() &&
+      this.core.node.nodeCore.supportsNativeGroupKeyWrites()
+    );
+  }
+
+  /** Materialize the current group CoMap as a `{field: value}` object of
+   *  string-valued fields — the `snapshot` `GroupKeyState::from_snapshot`
+   *  consumes (it keeps only string values, exactly as this does). */
+  private nativeGroupSnapshot(): Record<string, string> {
+    const snapshot: Record<string, string> = {};
+    for (const key of this.keys()) {
+      const value = this.get(key as keyof GroupShape & string);
+      if (typeof value === "string") {
+        snapshot[key] = value;
+      }
+    }
+    return snapshot;
+  }
+
+  /** Resolve a member key to the sealer id revelations are sealed *to*
+   *  (`getAgentSealerID(resolveAccountAgent(...))`), or undefined if the
+   *  member's agent can't be resolved. */
+  private tryResolveMemberSealerID(
+    memberKey: RawAccountID | AgentID,
+  ): SealerID | undefined {
+    try {
+      const agent = this.core.node.resolveAccountAgent(memberKey).value;
+      if (!agent) return undefined;
+      return this.crypto.getAgentSealerID(agent);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** getMemberKeys() order, each with its resolved agent sealer id (`""` when
+   *  unresolvable — only the members the native fn actually seals to require a
+   *  real id, which the caller checks separately). */
+  private nativeMembers(): { memberKey: string; agentSealerId: string }[] {
+    return this.getMemberKeys().map((memberKey) => ({
+      memberKey,
+      agentSealerId: this.tryResolveMemberSealerID(memberKey) ?? "",
+    }));
+  }
+
+  /** Whether a member (by its current direct role) is one the rotation
+   *  re-reveals a key to — a reader-class member, or a writeOnly member. */
+  private nativeSealsToMember(memberKey: string): boolean {
+    const key = memberKey as RawAccountID | AgentID;
+    const role = this.get(key);
+    return (
+      canRead(this, key) || role === "writeOnly" || role === "writeOnlyInvite"
+    );
+  }
+
+  /** Count of writeOnly members (getMemberKeys order) excluding `excluded`. */
+  private nativeWriteOnlyMemberCount(
+    members: { memberKey: string }[],
+    excluded?: string,
+  ): number {
+    return members.filter((m) => {
+      if (m.memberKey === excluded) return false;
+      const role = this.get(m.memberKey as RawAccountID | AgentID);
+      return role === "writeOnly" || role === "writeOnlyInvite";
+    }).length;
+  }
+
+  /** Resolve every parent group (getParentGroups() order) to its
+   *  `(readKeyId, readKeySecret)` for the STANDARD account-member reveal path.
+   *  Returns undefined (→ caller falls back to full TS) if any parent needs the
+   *  non-account-member group-sealer/legacy path or we lack its read key secret. */
+  private tryResolveStandardParents():
+    | { readKeyId: string; readKeySecret: string }[]
+    | undefined {
+    const resolved: { readKeyId: string; readKeySecret: string }[] = [];
+    for (const parent of this.getParentGroups()) {
+      if (!isAccountRole(parent.myRole())) {
+        return undefined; // group-sealer / legacy path is TS-only
+      }
+      const { id, secret } = parent.getCurrentReadKey();
+      if (!secret) {
+        return undefined; // TS warns+skips; defer to keep byte parity
+      }
+      resolved.push({ readKeyId: id, readKeySecret: secret });
+    }
+    return resolved;
+  }
+
+  /** Whether any loaded child group currently extends this group — rotations
+   *  recurse into them (forEachChildGroup), which the native functions do not
+   *  cover, so the caller conservatively falls back to TS when this is true. */
+  private hasLoadedChildGroup(): boolean {
+    let has = false;
+    this.forEachChildGroup(() => {
+      has = true;
+    });
+    return has;
+  }
+
+  private setTrusting(field: string, value: JsonValue) {
+    (this.set as unknown as (k: string, v: JsonValue, p: "trusting") => void)(
+      field,
+      value,
+      "trusting",
+    );
+  }
+
+  private deleteTrusting(field: string) {
+    (this.delete as unknown as (k: string, p: "trusting") => void)(
+      field,
+      "trusting",
+    );
+  }
+
+  /** Apply an ordered native write list as contiguous trusting sets (see the
+   *  transaction-index invariant above). */
+  private applyNativeWrites(writes: { field: string; value: string }[]) {
+    for (const w of writes) {
+      this.setTrusting(w.field, w.value);
+    }
+  }
+
+  /** Mirror `addMemberInternal`'s post-`set` role assertion (group.ts:606/658/674):
+   *  if the role write didn't land (e.g. the current account isn't authorized),
+   *  surface the same error TS does. */
+  private assertNativeMemberRole(
+    memberKey: RawAccountID | AgentID | Everyone,
+    role: Role,
+  ) {
+    if (this.get(memberKey as RawAccountID | AgentID) !== role) {
+      throw new Error(
+        `Failed to set role ${role} to ${memberKey} (role of current account is ${this.myRole()})`,
+      );
+    }
+  }
+
+  /** Reproduce `rotateReadKey` via the native FFI. Returns false to fall back. */
+  private tryRotateReadKeyNative(
+    removedMemberKey?: RawAccountID | AgentID | "everyone",
+  ): boolean {
+    // Top guard mirrors rotateReadKey's early return (and avoids any incidental
+    // getCurrentReadKey writes when rotation is a no-op).
+    if (removedMemberKey !== EVERYONE && canRead(this, EVERYONE)) {
+      return true; // nothing to do, exactly as TS
+    }
+
+    // Child groups recurse (forEachChildGroup) — TS-only; defer whole rotation.
+    if (this.hasLoadedChildGroup()) {
+      return false;
+    }
+
+    const parents = this.tryResolveStandardParents();
+    if (parents === undefined) {
+      return false;
+    }
+
+    const maybeCurrentReadKey = this.getCurrentReadKey();
+    if (!maybeCurrentReadKey.secret) {
+      throw new NoReadKeyAccessError(
+        "Can't rotate read key secret we don't have access to",
+      );
+    }
+    const currentReadKey = {
+      id: maybeCurrentReadKey.id,
+      secret: maybeCurrentReadKey.secret,
+    };
+
+    const members = this.nativeMembers();
+    // Every member the rotation actually seals to must have a resolvable sealer
+    // id; if not, defer to the (proven) TS path rather than emit a bad seal.
+    for (const m of members) {
+      if (m.memberKey === removedMemberKey) continue;
+      if (this.nativeSealsToMember(m.memberKey) && !m.agentSealerId) {
+        return false;
+      }
+    }
+
+    const writeOnlyFreshKeys = Array.from(
+      { length: this.nativeWriteOnlyMemberCount(members, removedMemberKey) },
+      () => this.crypto.newRandomKeySecret(),
+    );
+    const newReadKey = this.crypto.newRandomKeySecret();
+
+    const trigger =
+      removedMemberKey === EVERYONE
+        ? { kind: "removeEveryone" }
+        : removedMemberKey !== undefined
+          ? { kind: "removeMember", member: removedMemberKey }
+          : { kind: "rotate" };
+
+    // Capture start tx index AFTER all incidental resolution above.
+    const { sessionID, txIndex } = this.core.nextTransactionID();
+    const input = {
+      trigger,
+      groupId: this.id,
+      sessionId: sessionID,
+      startTxIndex: txIndex,
+      fromSealerSecret: this.core.node.getCurrentAgent().currentSealerSecret(),
+      currentReadKey,
+      newReadKey,
+      members,
+      writeOnlyFreshKeys,
+      parents,
+      snapshot: this.nativeGroupSnapshot(),
+    };
+
+    let out: { skipped: boolean; writes: { field: string; value: string }[] };
+    try {
+      out = JSON.parse(
+        this.core.node.nodeCore.groupRotateReadKey!(JSON.stringify(input)),
+      );
+    } catch {
+      return false;
+    }
+    if (out.skipped) {
+      return true;
+    }
+    this.applyNativeWrites(out.writes);
+    return true;
+  }
+
+  /** Invoke the native `add_member_internal` FFI; undefined on a deferred branch. */
+  private callAddMemberInternal(
+    input: unknown,
+  ): { field: string; value: string }[] | undefined {
+    try {
+      return JSON.parse(
+        this.core.node.nodeCore.groupAddMemberInternal!(JSON.stringify(input)),
+      );
+    } catch {
+      // Deferred/unsupported branch (e.g. everyone -> writeOnly) or any native
+      // error → fall back to the TS write path (nothing has been applied yet).
+      return undefined;
+    }
+  }
+
+  /** Reproduce `addMemberInternal` via the native FFI. Returns false to fall back. */
+  private tryAddMemberInternalNative(
+    account: RawAccount | ControlledAccountOrAgent | AgentID | Everyone,
+    role: Role,
+    memberKey: RawAccountID | AgentID | Everyone,
+    previousRole: Role | undefined,
+  ): boolean {
+    const fromSealerSecret = this.core.node
+      .getCurrentAgent()
+      .currentSealerSecret();
+
+    if (memberKey === EVERYONE) {
+      if (role !== "reader" && role !== "writer" && role !== "writeOnly") {
+        return false; // invalid everyone role → let TS throw
+      }
+      if (role === "writeOnly") {
+        return this.tryAddEveryoneWriteOnlyNative(
+          previousRole,
+          fromSealerSecret,
+        );
+      }
+      // everyone → reader/writer: plaintext read-key reveal, no rotation.
+      const maybeCurrentReadKey = this.getCurrentReadKey();
+      if (!maybeCurrentReadKey.secret) {
+        return false; // TS throws "Can't add member without read key secret"
+      }
+      const { sessionID, txIndex } = this.core.nextTransactionID();
+      const writes = this.callAddMemberInternal({
+        groupId: this.id,
+        sessionId: sessionID,
+        startTxIndex: txIndex,
+        memberKey: EVERYONE,
+        memberAgentSealerId: "",
+        role,
+        fromSealerSecret,
+        currentReadKey: {
+          id: maybeCurrentReadKey.id,
+          secret: maybeCurrentReadKey.secret,
+        },
+        existingWriteOnlyKeys: [],
+        members: [],
+        parents: [],
+        snapshot: this.nativeGroupSnapshot(),
+      });
+      if (writes === undefined) return false;
+      this.applyNativeWrites(writes);
+      this.assertNativeMemberRole(EVERYONE, role);
+      return true;
+    }
+
+    const agent =
+      typeof account === "string" ? account : account.currentAgentID();
+    if (agent === EVERYONE) {
+      return false; // TS throws "Agent should not be everyone"
+    }
+    let memberAgentSealerId: SealerID;
+    try {
+      memberAgentSealerId = this.crypto.getAgentSealerID(agent);
+    } catch {
+      return false;
+    }
+
+    if (role === "writeOnly" || role === "writeOnlyInvite") {
+      const isDemotion =
+        previousRole === "reader" ||
+        previousRole === "writer" ||
+        previousRole === "manager" ||
+        previousRole === "admin";
+      // A demotion first rotates the read key (recurses into child groups).
+      if (isDemotion && this.hasLoadedChildGroup()) {
+        return false;
+      }
+      const parents = this.tryResolveStandardParents();
+      if (parents === undefined) return false;
+
+      const members = this.nativeMembers();
+      // The fresh writeOnly key is revealed to every reader-class member (except
+      // the one being demoted); those recipients need resolvable sealer ids.
+      for (const m of members) {
+        if (m.memberKey === memberKey) continue;
+        if (
+          canRead(this, m.memberKey as RawAccountID | AgentID) &&
+          !m.agentSealerId
+        ) {
+          return false;
+        }
+      }
+
+      const maybeCurrentReadKey = this.getCurrentReadKey();
+      if (isDemotion && !maybeCurrentReadKey.secret) return false;
+      const currentReadKey = {
+        id: maybeCurrentReadKey.id,
+        secret: maybeCurrentReadKey.secret ?? "",
+      };
+
+      const freshWriteOnlyKey = this.crypto.newRandomKeySecret();
+      let rotationNewReadKey: { id: KeyID; secret: KeySecret } | undefined;
+      let rotationWriteOnlyFreshKeys: { id: KeyID; secret: KeySecret }[] = [];
+      if (isDemotion) {
+        rotationNewReadKey = this.crypto.newRandomKeySecret();
+        rotationWriteOnlyFreshKeys = Array.from(
+          { length: this.nativeWriteOnlyMemberCount(members, memberKey) },
+          () => this.crypto.newRandomKeySecret(),
+        );
+      }
+
+      const { sessionID, txIndex } = this.core.nextTransactionID();
+      const writes = this.callAddMemberInternal({
+        groupId: this.id,
+        sessionId: sessionID,
+        startTxIndex: txIndex,
+        memberKey,
+        memberAgentSealerId,
+        role,
+        fromSealerSecret,
+        currentReadKey,
+        existingWriteOnlyKeys: [],
+        freshWriteOnlyKey,
+        rotationNewReadKey,
+        rotationWriteOnlyFreshKeys,
+        members,
+        parents,
+        snapshot: this.nativeGroupSnapshot(),
+      });
+      if (writes === undefined) return false;
+      this.applyNativeWrites(writes);
+      this.assertNativeMemberRole(memberKey, role);
+      return true;
+    }
+
+    // reader-class branch (reader/writer/manager/admin + *Invite).
+    const maybeCurrentReadKey = this.getCurrentReadKey();
+    if (!maybeCurrentReadKey.secret) {
+      return false; // TS throws "Can't add member without read key secret"
+    }
+    const existingWriteOnlyKeys: { id: KeyID; secret: KeySecret }[] = [];
+    for (const keyID of this.getWriteOnlyKeys()) {
+      const secret = this.core.getReadKey(keyID);
+      if (!secret) return false; // TS logs+continues; defer to keep parity
+      existingWriteOnlyKeys.push({ id: keyID, secret });
+    }
+
+    const { sessionID, txIndex } = this.core.nextTransactionID();
+    const writes = this.callAddMemberInternal({
+      groupId: this.id,
+      sessionId: sessionID,
+      startTxIndex: txIndex,
+      memberKey,
+      memberAgentSealerId,
+      role,
+      fromSealerSecret,
+      currentReadKey: {
+        id: maybeCurrentReadKey.id,
+        secret: maybeCurrentReadKey.secret,
+      },
+      existingWriteOnlyKeys,
+      members: [],
+      parents: [],
+      snapshot: this.nativeGroupSnapshot(),
+    });
+    if (writes === undefined) return false;
+    this.applyNativeWrites(writes);
+    this.assertNativeMemberRole(memberKey, role);
+    return true;
+  }
+
+  /** Reproduce `addMember(everyone, "writeOnly")` via the native FFI. */
+  private tryAddEveryoneWriteOnlyNative(
+    previousRole: Role | undefined,
+    fromSealerSecret: SealerSecret,
+  ): boolean {
+    const willRotate = previousRole === "reader" || previousRole === "writer";
+    // The preceding rotateReadKey("everyone") recurses into child groups.
+    if (willRotate && this.hasLoadedChildGroup()) {
+      return false;
+    }
+    const maybeCurrentReadKey = this.getCurrentReadKey();
+    if (!maybeCurrentReadKey.secret) {
+      return false; // needed for the rotation and the deleted field name
+    }
+    const currentReadKey = {
+      id: maybeCurrentReadKey.id,
+      secret: maybeCurrentReadKey.secret,
+    };
+
+    let rotationNewReadKey: { id: KeyID; secret: KeySecret } | undefined;
+    let rotationWriteOnlyFreshKeys: { id: KeyID; secret: KeySecret }[] = [];
+    let members: { memberKey: string; agentSealerId: string }[] = [];
+    let parents: { readKeyId: string; readKeySecret: string }[] = [];
+    if (willRotate) {
+      const resolvedParents = this.tryResolveStandardParents();
+      if (resolvedParents === undefined) return false;
+      parents = resolvedParents;
+      members = this.nativeMembers();
+      for (const m of members) {
+        if (
+          canRead(this, m.memberKey as RawAccountID | AgentID) &&
+          !m.agentSealerId
+        ) {
+          return false;
+        }
+      }
+      rotationNewReadKey = this.crypto.newRandomKeySecret();
+      rotationWriteOnlyFreshKeys = Array.from(
+        { length: this.nativeWriteOnlyMemberCount(members) },
+        () => this.crypto.newRandomKeySecret(),
+      );
+    }
+
+    const { sessionID, txIndex } = this.core.nextTransactionID();
+    const input = {
+      groupId: this.id,
+      sessionId: sessionID,
+      startTxIndex: txIndex,
+      fromSealerSecret,
+      currentReadKey,
+      rotationNewReadKey,
+      rotationWriteOnlyFreshKeys,
+      members,
+      parents,
+      snapshot: this.nativeGroupSnapshot(),
+    };
+    let muts: { op: "set" | "del"; field: string; value?: string }[];
+    try {
+      muts = JSON.parse(
+        this.core.node.nodeCore.groupAddEveryoneWriteOnly!(
+          JSON.stringify(input),
+        ),
+      );
+    } catch {
+      return false;
+    }
+    for (const m of muts) {
+      if (m.op === "del") {
+        this.deleteTrusting(m.field);
+      } else {
+        this.setTrusting(m.field, m.value!);
+      }
+    }
+    this.assertNativeMemberRole(EVERYONE, "writeOnly");
+    return true;
+  }
+
+  /** Reproduce `removeMember` via the native FFI. Returns false to fall back. */
+  private tryRemoveMemberNative(
+    memberKey: RawAccountID | AgentID | Everyone,
+  ): boolean {
+    // removeMember(everyone) → rotateReadKey("everyone"), whose trigger semantics
+    // (RemoveEveryone, guard bypassed) differ from native remove_member's
+    // RemoveMember(everyone). Keep that on the TS path.
+    if (memberKey === EVERYONE) {
+      return false;
+    }
+
+    const myRole = this.myRole();
+    const callerIsAdminOrManager = myRole === "admin" || myRole === "manager";
+
+    let members: { memberKey: string; agentSealerId: string }[] = [];
+    let parents: { readKeyId: string; readKeySecret: string }[] = [];
+    let writeOnlyFreshKeys: { id: KeyID; secret: KeySecret }[] = [];
+    let currentReadKey = { id: "", secret: "" };
+    let newReadKey = { id: "", secret: "" };
+
+    if (callerIsAdminOrManager) {
+      // rotateReadKey(memberKey) runs first: it recurses into child groups and
+      // can take the group-sealer / legacy parent path — defer those to TS.
+      if (this.hasLoadedChildGroup()) return false;
+
+      const resolvedParents = this.tryResolveStandardParents();
+      if (resolvedParents === undefined) return false;
+      parents = resolvedParents;
+
+      const maybeCurrentReadKey = this.getCurrentReadKey();
+      // The internal rotation only runs (and thus only needs the read key) when
+      // everyone can't already read; otherwise it skips and only the revoked set
+      // is emitted.
+      if (!maybeCurrentReadKey.secret && !canRead(this, EVERYONE)) {
+        return false; // TS rotateReadKey would throw NoReadKeyAccessError
+      }
+      currentReadKey = {
+        id: maybeCurrentReadKey.id,
+        secret: maybeCurrentReadKey.secret ?? "",
+      };
+
+      members = this.nativeMembers();
+      for (const m of members) {
+        if (m.memberKey === memberKey) continue;
+        if (this.nativeSealsToMember(m.memberKey) && !m.agentSealerId) {
+          return false;
+        }
+      }
+      writeOnlyFreshKeys = Array.from(
+        { length: this.nativeWriteOnlyMemberCount(members, memberKey) },
+        () => this.crypto.newRandomKeySecret(),
+      );
+      newReadKey = this.crypto.newRandomKeySecret();
+    }
+
+    const { sessionID, txIndex } = this.core.nextTransactionID();
+    const input = {
+      memberKey,
+      callerIsAdminOrManager,
+      groupId: this.id,
+      sessionId: sessionID,
+      startTxIndex: txIndex,
+      fromSealerSecret: this.core.node.getCurrentAgent().currentSealerSecret(),
+      currentReadKey,
+      newReadKey,
+      members,
+      writeOnlyFreshKeys,
+      parents,
+      snapshot: this.nativeGroupSnapshot(),
+    };
+    let writes: { field: string; value: string }[];
+    try {
+      writes = JSON.parse(
+        this.core.node.nodeCore.groupRemoveMember!(JSON.stringify(input)),
+      );
+    } catch {
+      return false;
+    }
+    this.applyNativeWrites(writes);
+    // Mirror removeMember's post-write assertion (group.ts:1494-1498).
+    if (this.get(memberKey as RawAccountID | AgentID) !== "revoked") {
+      throw new Error(
+        `Failed to revoke role to ${memberKey} (role of current account is ${this.myRole()})`,
+      );
+    }
+    return true;
+  }
+
+  /** Reproduce `extend` (standard account-member parent) via the native FFI. */
+  private tryExtendNative(
+    parent: RawGroup,
+    role: "reader" | "writer" | "manager" | "admin" | "inherit",
+  ): boolean {
+    const value = role === "inherit" ? "extend" : role;
+
+    const { id: childReadKeyID, secret: childReadKeySecret } =
+      this.getCurrentReadKey();
+    if (childReadKeySecret === undefined) {
+      return false; // TS throws "Can't extend group without child read key secret"
+    }
+
+    // Only the standard account-member parent path is native; the group-sealer /
+    // legacy paths stay in TS (revealReadKeyToParentGroup).
+    if (!isAccountRole(parent.myRole())) {
+      return false;
+    }
+    const { id: parentReadKeyID, secret: parentReadKeySecret } =
+      parent.getCurrentReadKey();
+    if (!parentReadKeySecret) {
+      return false; // TS throws "Can't extend group without parent read key secret"
+    }
+
+    // extend reveals ALL writeOnly keys to the parent (revealAllWriteOnlyKeys: true).
+    const writeOnlyKeys: { id: KeyID; secret: KeySecret }[] = [];
+    for (const keyID of this.getWriteOnlyKeys()) {
+      const secret = this.core.getReadKey(keyID);
+      if (!secret) return false; // TS logs+continues; defer to keep parity
+      writeOnlyKeys.push({ id: keyID, secret });
+    }
+
+    let writes: { field: string; value: string }[];
+    try {
+      writes = JSON.parse(
+        this.core.node.nodeCore.groupExtend!(
+          JSON.stringify({
+            parentId: parent.id,
+            parentRefValue: value,
+            parent: {
+              readKeyId: parentReadKeyID,
+              readKeySecret: parentReadKeySecret,
+            },
+            childReadKey: { id: childReadKeyID, secret: childReadKeySecret },
+            writeOnlyKeys,
+          }),
+        ),
+      );
+    } catch {
+      return false;
+    }
+    this.applyNativeWrites(writes);
+    return true;
+  }
+
   /** @internal */
   rotateReadKey(removedMemberKey?: RawAccountID | AgentID | "everyone") {
+    if (
+      this.useNativeGroupKeyWrites() &&
+      this.tryRotateReadKeyNative(removedMemberKey)
+    ) {
+      return;
+    }
+
     if (removedMemberKey !== EVERYONE && canRead(this, EVERYONE)) {
       // When everyone has access to the group, rotating the key is useless
       // because it would be stored unencrypted and available to everyone
@@ -1320,6 +1981,10 @@ export class RawGroup<
       );
     }
 
+    if (this.useNativeGroupKeyWrites() && this.tryExtendNative(parent, role)) {
+      return;
+    }
+
     const value = role === "inherit" ? "extend" : role;
 
     this.set(`parent_${parent.id}`, value, "trusting");
@@ -1484,6 +2149,13 @@ export class RawGroup<
    */
   removeMember(account: RawAccount | ControlledAccountOrAgent | Everyone) {
     const memberKey = typeof account === "string" ? account : account.id;
+
+    if (
+      this.useNativeGroupKeyWrites() &&
+      this.tryRemoveMemberNative(memberKey)
+    ) {
+      return;
+    }
 
     if (this.myRole() === "admin" || this.myRole() === "manager") {
       this.rotateReadKey(memberKey);

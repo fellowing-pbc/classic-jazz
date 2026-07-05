@@ -186,6 +186,50 @@ export function disableNativeCoPlainTextMaterialization() {
   nativeCoPlainTextMaterializationEnabled = false;
 }
 
+// The native group key-management WRITE path (rotateReadKey / addMemberInternal /
+// createInvite / removeMember / extend), gated behind
+// `crypto`'s `supportsNativeGroupKeyWrites()`. Unlike the materialization flags
+// above this is a WRITE path over SECURITY-SENSITIVE key material (access
+// control, read-key revelations), so it defaults OFF: the byte-for-byte native
+// orchestration (crates/cojson-core/src/core/group_key_{rotation,membership,
+// extend}.rs) is fixture-verified against the TS write emitters, but it is only
+// exercised in production once explicitly enabled and re-verified. When ON,
+// `group.ts` gathers the non-native inputs TS already resolves (fresh random
+// keys, resolved agent sealer ids, resolved read-key secrets), calls the FFI
+// wrappers to get the ordered write list, and applies it via `group.set` /
+// `group.delete`. Deferred branches (non-account-member parent group-sealer /
+// legacy paths, and — conservatively — any rotation of a group with loaded
+// child groups) fall back to the full TS logic. Toggle via
+// `enableNativeGroupKeyWrites()` / `disableNativeGroupKeyWrites()`.
+//
+// STATUS: the native write path is CORRECT — with the flag forced on, the full
+// cojson suite (incl. every group.* / permissions / invite / rotation /
+// membership / extension file) passes byte-for-byte, three times, and a direct
+// native-vs-TS diff over a 300x rotation + `addMember(everyone,"reader")`
+// sequence yields identical transaction counts and an identical resolvable read
+// key. It stays OFF by default for a PERFORMANCE reason, not a correctness one:
+// each call rebuilds and JSON-serializes the group's whole materialized CoMap as
+// the FFI `snapshot`, so a group that has accumulated many key-management fields
+// (e.g. hundreds of rotations, each leaving a permanent `${old}_for_${new}` +
+// per-member reveal) pays an O(fields) cost per write, i.e. O(n^2) over a long
+// rotation run. That regresses the streaming-wait / upload-progress jazz-tools
+// tests (which do 300 rotations inside a 5s test budget) into timeouts. Flipping
+// the default on needs that snapshot cost addressed first (e.g. sourcing the
+// snapshot from the native materialized view instead of re-serializing in TS).
+let nativeGroupKeyWritesEnabled = false;
+
+export function enableNativeGroupKeyWrites() {
+  nativeGroupKeyWritesEnabled = true;
+}
+
+export function disableNativeGroupKeyWrites() {
+  nativeGroupKeyWritesEnabled = false;
+}
+
+export function isNativeGroupKeyWritesEnabled() {
+  return nativeGroupKeyWritesEnabled;
+}
+
 // Phase 3 (narrow cutover): use the native Rust `content_to_send` decision as
 // the REAL content computation in `sync.ts`'s `sendNewContent`, replacing the
 // TS `VerifiedState.newContentSince` recomputation at that one call site.

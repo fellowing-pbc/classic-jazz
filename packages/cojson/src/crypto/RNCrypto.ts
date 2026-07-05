@@ -907,4 +907,13 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
   supportsNativeCoListMaterialization(): boolean {
     return true;
   }
+
+  // The RN uniffi binding does not yet expose the group key-management write
+  // surface (group_rotate_read_key / group_add_member_internal /
+  // group_add_everyone_write_only / group_remove_member / group_extend), which
+  // is a build product of an `ubrn` regeneration. Until then RN stays on the TS
+  // key-management write paths in `group.ts`.
+  supportsNativeGroupKeyWrites(): boolean {
+    return false;
+  }
 }
