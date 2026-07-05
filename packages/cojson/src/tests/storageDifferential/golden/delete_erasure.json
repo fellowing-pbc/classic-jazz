@@ -1,0 +1,107 @@
+{
+  "scenario": "delete_erasure",
+  "trace": [
+    "client -> storage | CONTENT Group header: true new: After: 0 New: 4",
+    "client -> storage | CONTENT Map header: true new: After: 0 New: 1",
+    "client -> storage | CONTENT Map header: false new: After: 0 New: 1"
+  ],
+  "dbStates": {
+    "afterStore": {
+      "covalues": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 4,
+              "txCount": 4,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 1,
+              "txCount": 1,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        }
+      },
+      "otherCovalueCount": 0,
+      "deletedQueue": {},
+      "reconciliationLockCount": 0
+    },
+    "afterDelete": {
+      "covalues": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 4,
+              "txCount": 4,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "ext/0": {
+              "lastIdx": 1,
+              "txCount": 1,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            },
+            "self": {
+              "lastIdx": 1,
+              "txCount": 1,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        }
+      },
+      "otherCovalueCount": 0,
+      "deletedQueue": {
+        "Map": "pending"
+      },
+      "reconciliationLockCount": 0
+    },
+    "afterErasure": {
+      "covalues": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 4,
+              "txCount": 4,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "ext/0": {
+              "lastIdx": 1,
+              "txCount": 1,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        }
+      },
+      "otherCovalueCount": 0,
+      "deletedQueue": {
+        "Map": "done"
+      },
+      "reconciliationLockCount": 0
+    }
+  }
+}

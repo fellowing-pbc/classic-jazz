@@ -1,0 +1,56 @@
+{
+  "scenario": "reconciliation_lock",
+  "trace": [],
+  "dbStates": {},
+  "lockDecisions": [
+    {
+      "label": "no_row",
+      "result": {
+        "acquired": true,
+        "lastProcessedOffset": 0
+      },
+      "resultRow": {
+        "holderSessionId": "session_a",
+        "acquiredAt": 500,
+        "lastProcessedOffset": 0
+      }
+    },
+    {
+      "label": "not_due",
+      "result": {
+        "acquired": false,
+        "reason": "not_due"
+      },
+      "resultRow": {
+        "holderSessionId": "session_b",
+        "acquiredAt": 0,
+        "lastProcessedOffset": 5,
+        "releasedAt": 100
+      }
+    },
+    {
+      "label": "lock_held",
+      "result": {
+        "acquired": false,
+        "reason": "lock_held"
+      },
+      "resultRow": {
+        "holderSessionId": "session_b",
+        "acquiredAt": 200,
+        "lastProcessedOffset": 3
+      }
+    },
+    {
+      "label": "takeover_expired",
+      "result": {
+        "acquired": true,
+        "lastProcessedOffset": 3
+      },
+      "resultRow": {
+        "holderSessionId": "session_a",
+        "acquiredAt": 1201,
+        "lastProcessedOffset": 3
+      }
+    }
+  ]
+}

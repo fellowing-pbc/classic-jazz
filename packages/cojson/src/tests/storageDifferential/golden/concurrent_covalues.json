@@ -1,0 +1,52 @@
+{
+  "scenario": "concurrent_covalues",
+  "trace": [
+    "client -> storage | CONTENT Group header: true new: After: 0 New: 4",
+    "client -> storage | CONTENT MapA header: true new: ",
+    "client -> storage | CONTENT MapB header: true new: ",
+    "client -> storage | CONTENT MapA header: false new: After: 0 New: 1",
+    "client -> storage | CONTENT MapB header: false new: After: 0 New: 2"
+  ],
+  "dbStates": {
+    "afterStore": {
+      "covalues": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 4,
+              "txCount": 4,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        },
+        "MapA": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 1,
+              "txCount": 1,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        },
+        "MapB": {
+          "header": true,
+          "sessions": {
+            "self": {
+              "lastIdx": 2,
+              "txCount": 2,
+              "hasLastSignature": true,
+              "signatureCheckpoints": []
+            }
+          }
+        }
+      },
+      "otherCovalueCount": 0,
+      "deletedQueue": {},
+      "reconciliationLockCount": 0
+    }
+  }
+}
