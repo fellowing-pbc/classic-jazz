@@ -10,6 +10,7 @@ import {
   connectTwoPeers,
   createTestMetricReader,
   createTestNode,
+  createTwoConnectedNodes,
   loadCoValueOrFail,
   nodeWithRandomAgentAndSessionID,
   randomAgentAndSessionID,
@@ -1147,5 +1148,21 @@ describe("SyncManager.trackDirtyCoValues", () => {
 
     expect(Array.from(tracked1)).toEqual([map1.id, map2.id]);
     expect(Array.from(tracked2)).toEqual([map2.id, map3.id]);
+  });
+});
+
+describe("SyncManager.closeAllPeers", () => {
+  test("gracefully shuts down every peer and empties the peers map", async () => {
+    const { node1 } = await createTwoConnectedNodes("client", "server");
+
+    const peerStates = Object.values(node1.node.syncManager.peers);
+    expect(peerStates.length).toBeGreaterThan(0);
+
+    node1.node.syncManager.closeAllPeers();
+
+    for (const peerState of peerStates) {
+      expect(peerState.closed).toBe(true);
+    }
+    expect(Object.keys(node1.node.syncManager.peers)).toHaveLength(0);
   });
 });

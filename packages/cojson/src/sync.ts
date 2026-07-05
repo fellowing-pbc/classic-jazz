@@ -855,6 +855,12 @@ export class SyncManager {
     delete this.peers[peer.id];
   }
 
+  closeAllPeers(): void {
+    for (const peerId of Object.keys(this.peers) as PeerID[]) {
+      this.removePeer(peerId);
+    }
+  }
+
   trySendToPeer(peer: PeerState, msg: SyncMessage) {
     if (msg.action === "content") {
       // Content leaves the node from several paths (local-transaction sync,
