@@ -131,7 +131,7 @@ function captureRotation(
   const origSet = group.set.bind(group);
   (group as any).set = (key: string, value: unknown, privacy: unknown) => {
     expectedWrites.push({ field: String(key), value: value as string });
-    return origSet(key as any, value as any, privacy as any);
+    return (origSet as any)(key, value, privacy);
   };
 
   try {
