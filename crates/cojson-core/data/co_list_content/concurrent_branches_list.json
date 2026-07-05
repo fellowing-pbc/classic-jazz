@@ -1,0 +1,98 @@
+{
+  "description": "two concurrent branches merged into the same source",
+  "covalues": [
+    {
+      "coId": "co_zKDd3bCWSq5Y1TSvAeAUrNqGoLK",
+      "headerJson": "{\"createdAt\":\"2026-07-05T01:44:27.887Z\",\"meta\":null,\"ruleset\":{\"initialAdmin\":\"sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb\",\"type\":\"group\"},\"type\":\"comap\",\"uniqueness\":\"z56ybaTPfMixWvGrZ6\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+          "signerId": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb\\\",\\\"value\\\":\\\"admin\\\"}]\",\"madeAt\":1783215867887,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"key_z4PqE6JegmPWAv9iRx_for_sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb\\\",\\\"value\\\":\\\"sealed_UiYgrzgbpUi1-nofmowtVg7AjCbnXXUqNRMHf8YxgplNbdVUI3zQy-mJkr0_04hFvM2UZsaAIINe16mBpnxMrezg1hG3yD9ZUAg==\\\"}]\",\"madeAt\":1783215867888,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"readKey\\\",\\\"value\\\":\\\"key_z4PqE6JegmPWAv9iRx\\\"}]\",\"madeAt\":1783215867888,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"set\\\",\\\"key\\\":\\\"groupSealer\\\",\\\"value\\\":\\\"key_z4PqE6JegmPWAv9iRx@sealer_z534TQmZojB7HjUAzJmadh54yUXDW7H5fkgP71FdqFn3P\\\"}]\",\"madeAt\":1783215867888,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z2Lfb87xrLj2d78ZKPUi18AdcyFUQtZJKr4eRghjQ4ja1SRkRkr88bfpnmoycyXrXmc8tyrG9PbisJ4m779j6J7Jd"
+        }
+      ]
+    },
+    {
+      "coId": "co_z6NfCY2YZV8VHPJuwxpF6HZRRrk",
+      "headerJson": "{\"createdAt\":\"2026-07-05T01:44:27.888Z\",\"meta\":null,\"ruleset\":{\"group\":\"co_zKDd3bCWSq5Y1TSvAeAUrNqGoLK\",\"type\":\"ownedByGroup\"},\"type\":\"colist\",\"uniqueness\":\"z3kSRPuSDzECHe9GQ\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+          "signerId": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb",
+          "transactions": [
+            "{\"encryptedChanges\":\"encrypted_UxrWMvZ-Yo_ZDcn3Gtt4e9CIDbHgm6SUbENFDWX602P1AkGs10Q2WpmD_P80VmAcD9mMFBt7bvPstVDTQ2DrpaSxXNJZ1tRsJt4YywZPzkyYBFzHxSwvmRQq1Zy1G\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867888,\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UfYs=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867888,\"meta\":\"encrypted_UXfRkzgN2pUGN6dOs8nO4u4RVRUQddJ4htjaiAi9taKsUBEG1OsOmR_FlFohNnDRhtmgH-7FOqtueV8MlBYtR_K-tNss=\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UBdY=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867889,\"meta\":\"encrypted_UJam1U68qTdF1yh8P-zC2HPN9eE4M2SousqfGrG220d80teHQWLU0wG_-71s-73mgVhPBQ1J-MFp5kbkYE6moVBuY\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UJG0t6XFEldIDeN4qsj796NEahbbF4XrkIoVNCUEDE6rjmFwGF-fOgj9dUB9Ps_CAuZKqAN9IUCuJGipL3JLqlYIbiKavcP815xcG4s4VDBKvNiod8Kdw9hWgXTGkSNEr5p1xJy2LuNzh9vmyocqVvicCsflhqlAOSS8VoASaBB9IgRUq7PQHiBcWNqB4gdflfsqODjlwX42l5wXDyfdhkzgLanvt2o_ejWZEAtexOJLpY7c9xDGgdXUNzXFUC9K8Hw2uiLln_f4p43sXGbzxzkM=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867889,\"meta\":\"encrypted_UBDRi7yNcntxAfIwyrjCp-p9VwueaonftOblSE1pTVs_ynxEMFbWmqmxgfjkIv8e-uO_PVbx3DBzXBhRG3v_ilYMblrHdfslqxi0QwuAyZw2_LBJV0fpg0XzAFRGOfvE0wIB0OiextdX_sdChpJDEuQwNitoj4gVlYREc9CGwBwhjrTcr3tRW92cvL7lxnvC3AJ3WWSg7V5b10SPsweJJtixAQCXPxbbM7CAKYeOYXpSYPK13kUD2cA==\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UWkwRAiRDC2nHmkWy_em-ihNGxMjIe9AzE8YwGkNRO_oVb8Itfvu9hIyuBK3CNhbHA6FlMk3g8ZMw1pu9ROqaui93LDMHqhaDGrmMl0HBlMoKLrXHDc7GDid2yXvpx06RoZuKXmEjlC880E44ROGK20e4ZsPYPBDCSws0NaNFd5bgoUniRTOXDFbPOzYCp5TawuN_WY25libTV71hRI7G2IDwHweFMdRtTWaD9O7PVMOTjojgFsmo67w5iDnfdtAMz_ExkQb0GKd3RyV_yDF17NYZluBJQMgoJBY04THEZKIQzBXM0tabZYzrdTUA8GZtrGxXOcudpxN46gs=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867889,\"meta\":\"encrypted_UehVeBHZbAzY=\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UP-0=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867890,\"meta\":\"encrypted_UH5Ly_3mn3LaiV1q_T1QDpIyvi50hD2fueOCWTL0tJgcdmbCpiKpWC57FHAikdEiHxWCqgc7CAdxqyNVAC0o-X-prErA61kyTYyUVhZphv5my0Txhe5X4v4IG7ztp-OGYQx01k_AqtC8cG0cPA5zMcdRmnuFYE3mP5fYFsCHZcdoHgkrRAFmv1vkaACKz0XscHb8aupGND5cfp6psexDU4or1IIbiEqOUD6or7leoDImPe_q0sgzBVM8=\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_Ur-LXATOZ7xMEUrW8cE05h0yBPpd0Z235DFgxlpmyZotqBW9PASRSMo-oYBIYbIuKu49dM1niWyXXeT1WeKYBaJPTLFcjGUTknUZwZNelfmSyEKkSziHntZ-1YJqo__E5tmVxobziANVXpj562gmR8CJ7qnAvVKPdiUdKR9FowlHZasxP8TG_cYq6EQAc9DjE686K48VtXcJfd_gps2EPZ23K-PzKTPT0W6ffnpvZ84pk4WLopQw8vanC7ChulQRenAx8YZhGDsu2BJ0OWuTE\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867890,\"meta\":\"encrypted_Uj7uYB2GB5B1HVuekbUNtlQLOecYrJGPzHCozg9bibqpuASQCSy8iEpuVWC5DZ5qe0Yw4L33PDhaXXwszY44DXYv1e04YCFCYn2FcX4ayeU6yY54M6V-PiP36VpG2wcIOk01yjZPPAJJ8pwNu3U_6_x5EqWh7X8HvoCRpfOh__2fnbM57ygfMKuSDCgstpUnX1ZnVqJV2VLlFTf4xj3EofmTw1eSnXITyA5HdnbDU7p9opBy7sDpXrg==\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UgJmexR0U5_XrOcvR50_DMwGSmvVPpXWKVldG7k69NGj4I9wIvu2SQzUS9_dDoWl63t4qGqNEqPe6A8lcJrmVzA3X3bd_dtPDxtU4nIKshoIuN6VNW4EAASnb7YIrck77xrFKb0NozLsEb8_nOY28tB9W8_wn3xdiZDAD9Nr_J57C1LUKSKqoRIjZLis37w0ydHvQm45HI7If76eM9VnlYk-SgHLCoGb2Sn5M3UsnSqDsdMS7fZYPb1aKKXZRmdK3tzV-\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867890,\"meta\":\"encrypted_UoMDRw08M76o=\",\"privacy\":\"private\"}",
+            "{\"encryptedChanges\":\"encrypted_UogI=\",\"keyUsed\":\"key_z4PqE6JegmPWAv9iRx\",\"madeAt\":1783215867890,\"meta\":\"encrypted_Ugn3EcB1177W1V3zJ39MwPYao6RUIMD1Hs__uwd3z8p6IyZUmZHsGIJFWWyYvUfGivlVvKoi0-eEn18JFfEe93Ug-2gV75J8RFVPNLDac84Z93HeWuuS81u3tRW-eB48Jscu7Pn-nCutSYwnQ-3DpFdrV193sJEVw54JfUVm27CeGVKudsTewu6AqDtv7GkbErgkvDyq8dtatmT4WRO7BJ3Wp2ozG2Yw5WuWuwqQ3spcs_uQUcGFLZDs=\",\"privacy\":\"private\"}"
+          ],
+          "lastSignature": "signature_z25DW5hiwjvLm9ypxLaMiGjx6RBt5NuhztSmfGTw5To8m1H4hN4Ev2jJtX2cYZ1QYrwBUvPB3bUMJiWxnk1xgmm3o"
+        }
+      ]
+    }
+  ],
+  "listId": "co_z6NfCY2YZV8VHPJuwxpF6HZRRrk",
+  "provideKeys": [
+    {
+      "keyId": "key_z4PqE6JegmPWAv9iRx",
+      "keySecret": "keySecret_zDc8B2YK2DCZJPde7QpNEsjT1rwA88XGBAqiNDh1GKFPq"
+    }
+  ],
+  "snapshot": [
+    "root-1",
+    "bob-x",
+    "alice-x",
+    "alice-y"
+  ],
+  "entries": [
+    {
+      "value": "root-1",
+      "madeAt": 1783215867888,
+      "opID": {
+        "sessionID": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+        "txIndex": 0,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "bob-x",
+      "madeAt": 1783215867889,
+      "opID": {
+        "sessionID": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+        "txIndex": 1,
+        "branch": "co_zccBjzSBv2jE5ngCrxhXsFgRqaN",
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "alice-x",
+      "madeAt": 1783215867889,
+      "opID": {
+        "sessionID": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+        "txIndex": 1,
+        "branch": "co_zQwwVq8Y7MqfhTux2uX5c49PhyS",
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "alice-y",
+      "madeAt": 1783215867889,
+      "opID": {
+        "sessionID": "sealer_z7criGpa9oppRSqNKU4eXPH9GoAL9V2yLRxZkrhGnvKaF/signer_zHJpqf2QkP6zYfdXEMomZdLFhXhZzb44utusi293YyUYb_session_z536QAqSeEfJ",
+        "txIndex": 2,
+        "branch": "co_zQwwVq8Y7MqfhTux2uX5c49PhyS",
+        "changeIdx": 0
+      }
+    }
+  ]
+}

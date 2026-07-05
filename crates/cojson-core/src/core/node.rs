@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::core::co_list::{ensure_co_list, CoListView};
 use crate::core::co_map::{ensure_co_map, CoMapView};
 use crate::core::co_stream::{ensure_co_stream, CoStreamView};
 use crate::core::group_engine::engine::{
@@ -31,6 +32,10 @@ pub struct NodeCore {
     /// borrow `covalues`/`engines` while mutating this store, exactly like
     /// `co_maps`.
     co_streams: HashMap<String, CoStreamView>,
+    /// coList (RGA list) materialization: per-covalue materialized ordered entry
+    /// view. A separate field so a build can borrow `covalues`/`engines` while
+    /// mutating this store, exactly like `co_maps`/`co_streams`.
+    co_lists: HashMap<String, CoListView>,
     /// R1 key store: `KeyID -> KeySecret`, GLOBAL (not per-covalue). TS unseals
     /// read-key secrets (via account sealer keys + revelation chains — that
     /// stays in TS) and feeds each one here as it learns it; native private-tx
@@ -86,6 +91,7 @@ impl NodeCore {
             engines: HashMap::new(),
             co_maps: HashMap::new(),
             co_streams: HashMap::new(),
+            co_lists: HashMap::new(),
             keys: HashMap::new(),
             keys_version: 0,
         }
@@ -140,6 +146,7 @@ impl NodeCore {
         self.engines.remove(co_id);
         self.co_maps.remove(co_id);
         self.co_streams.remove(co_id);
+        self.co_lists.remove(co_id);
         Ok(())
     }
 
@@ -152,6 +159,7 @@ impl NodeCore {
         self.engines.remove(co_id);
         self.co_maps.remove(co_id);
         self.co_streams.remove(co_id);
+        self.co_lists.remove(co_id);
         self.covalues.remove(co_id).is_some()
     }
 
@@ -178,6 +186,7 @@ impl NodeCore {
             engines,
             co_maps: _,
             co_streams: _,
+            co_lists: _,
             keys,
             keys_version,
         } = self;
@@ -206,6 +215,7 @@ impl NodeCore {
             engines,
             co_maps: _,
             co_streams: _,
+            co_lists: _,
             keys,
             keys_version,
         } = self;
@@ -244,6 +254,7 @@ impl NodeCore {
         // reset flips validity (coValueCore.ts:1349-1358).
         self.co_maps.remove(co_id);
         self.co_streams.remove(co_id);
+        self.co_lists.remove(co_id);
     }
 
     // === R0 coMap materialization (experimental) ===
@@ -269,6 +280,7 @@ impl NodeCore {
             engines,
             co_maps,
             co_streams: _,
+            co_lists: _,
             keys,
             keys_version,
         } = self;
@@ -303,6 +315,7 @@ impl NodeCore {
             engines,
             co_maps: _,
             co_streams,
+            co_lists: _,
             keys,
             keys_version,
         } = self;
@@ -400,6 +413,89 @@ impl NodeCore {
     /// yet materialized.
     pub fn stream_missing_key_ids(&self, co_id: &str) -> Vec<String> {
         self.co_streams
+            .get(co_id)
+            .map(|v| v.missing_key_ids())
+            .unwrap_or_default()
+    }
+
+    // === coList (RGA list) materialization ===
+    // Mirrors the coMap/coStream surface: `list_materialize` is the only mutating
+    // path (validate + full rebuild); the read methods are `&self` over the
+    // cached view. An unregistered primary coId is `UnknownCoValue`.
+
+    /// Materialize (or refresh) `co_id`'s coList view, returning its current
+    /// monotonic version. Call after each ingest batch.
+    pub fn list_materialize(
+        &mut self,
+        co_id: &str,
+        pending: &[PendingTxIn],
+    ) -> Result<u64, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        let Self {
+            covalues,
+            engines,
+            co_maps: _,
+            co_streams: _,
+            co_lists,
+            keys,
+            keys_version,
+        } = self;
+        ensure_co_list(
+            covalues,
+            engines,
+            co_lists,
+            keys,
+            *keys_version,
+            co_id,
+            pending,
+        )
+    }
+
+    /// The whole materialized list as a JSON array of VALUES (empty array if not
+    /// yet materialized). Matches `RawCoList.asArray()` / `toJSON()`.
+    pub fn list_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_lists
+            .get(co_id)
+            .map(|v| v.snapshot())
+            .unwrap_or_else(|| "[]".to_string()))
+    }
+
+    /// The whole ordered entry list `[{value, madeAt, opID}, ...]` — the payload
+    /// a TS `RawCoList` rebuilds its `entries()` from.
+    pub fn list_entries(&self, co_id: &str) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_lists
+            .get(co_id)
+            .map(|v| v.entries_json())
+            .unwrap_or_else(|| "[]".to_string()))
+    }
+
+    /// RICH delta `{version, reset, entries}` since `since_version`. See
+    /// [`crate::core::co_list::CoListView::delta`].
+    pub fn list_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
+        if !self.covalues.contains_key(co_id) {
+            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
+        }
+        Ok(self
+            .co_lists
+            .get(co_id)
+            .map(|v| v.delta(since_version))
+            .unwrap_or_else(|| r#"{"version":0,"reset":true,"entries":[]}"#.to_string()))
+    }
+
+    /// The `KeyID`s `co_id`'s materialized coList view still needs a secret for.
+    /// Empty if fully decrypted or not yet materialized.
+    pub fn list_missing_key_ids(&self, co_id: &str) -> Vec<String> {
+        self.co_lists
             .get(co_id)
             .map(|v| v.missing_key_ids())
             .unwrap_or_default()
@@ -637,6 +733,7 @@ impl NodeCore {
             engines,
             co_maps: _,
             co_streams: _,
+            co_lists: _,
             keys,
             keys_version,
         } = self;

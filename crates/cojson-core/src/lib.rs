@@ -29,6 +29,8 @@ pub mod core {
     pub use co_map::*;
     pub mod co_stream;
     pub use co_stream::*;
+    pub mod co_list;
+    pub use co_list::*;
 }
 
 pub mod hash {
