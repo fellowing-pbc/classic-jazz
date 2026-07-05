@@ -34,6 +34,9 @@ pub mod core {
     pub use group_key_extend::*;
     pub mod group_key_membership;
     pub use group_key_membership::*;
+    // Leaf helpers shared by the materialized content views below. Internal
+    // (`pub(crate)`), so no glob re-export.
+    pub mod co_content;
     pub mod co_map;
     pub use co_map::*;
     pub mod co_stream;

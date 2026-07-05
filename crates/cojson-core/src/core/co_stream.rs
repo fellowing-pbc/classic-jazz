@@ -60,6 +60,10 @@ use std::collections::{HashMap, HashSet};
 use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 
+use crate::core::co_content::{
+    decrypt_private_changes, fww_key, session_counts_of, tx_id_of, valid_set,
+    write_json_escaped_str,
+};
 use crate::core::group_engine::engine::{
     ensure as engine_ensure, generation_of, verdicts_of, GroupEngineState, Verdict,
 };
@@ -125,14 +129,6 @@ impl StreamEntry {
     fn in_frontier(&self, session_id: &str, frontier: &HashMap<String, i64>) -> bool {
         (self.tx_index as i64) < frontier.get(session_id).copied().unwrap_or(-1)
     }
-}
-
-/// Write `s` as a JSON string literal (quotes + escaping) directly into `out`,
-/// via `Value::String`'s `Display` impl (streams through serde_json's compact
-/// serializer). Used for arbitrary (id-shaped) session ids.
-fn write_json_escaped_str(s: &str, out: &mut String) {
-    use std::fmt::Write as _;
-    let _ = write!(out, "{}", JsonValue::String(s.to_string()));
 }
 
 /// A cached, materialized coStream view for one covalue.
@@ -458,35 +454,6 @@ fn write_json_blob(value: &JsonValue, out: &mut Vec<u8>) {
     out.extend_from_slice(b);
 }
 
-/// `(session_id, tx_count)` in session-insertion order — the freshness key.
-fn session_counts_of(sm: &SessionMapImpl) -> Vec<(String, u32)> {
-    sm.get_session_ids()
-        .into_iter()
-        .map(|sid| {
-            let count = sm.get_transaction_count(&sid).unwrap_or(0);
-            (sid, count)
-        })
-        .collect()
-}
-
-/// The `meta.fww` key of a tx, if any (`coValueCore.ts:1515`).
-fn fww_key(tx: &GroupTxView) -> Option<&str> {
-    tx.meta.as_ref()?.get("fww")?.as_str()
-}
-
-/// The (source-adjusted) effective identity of a transaction: its SOURCE
-/// `(sessionID, txIndex)` when merged (`sourceTxID ?? currentTxID`,
-/// `coValueCore.ts:157`), else its stored `(session_id, tx_index)`. This is the
-/// bucket key and the entry `tx` a coStream records.
-fn tx_id_of(tx: &GroupTxView) -> (String, u32) {
-    (
-        tx.source_session_id
-            .clone()
-            .unwrap_or_else(|| tx.session_id.clone()),
-        tx.source_tx_index.unwrap_or(tx.tx_index),
-    )
-}
-
 /// Append every change of `changes` as an entry under the tx's effective
 /// session bucket, returning the session id it touched (so the caller can bump
 /// its version). The change value IS the item (no `{op,key,value}` envelope).
@@ -514,21 +481,6 @@ fn append_entries(
         );
     }
     Some(session_id)
-}
-
-/// Decrypt a PRIVATE tx's changes into a parsed item array, reusing the session
-/// map's decrypt primitive. Returns `None` when the tx does not decrypt to a
-/// usable array (wrong/garbage key, or missing session) — the caller SKIPS it,
-/// as TS drops an undecryptable tx from its views.
-fn decrypt_private_changes(
-    sm: &SessionMapImpl,
-    tx: &GroupTxView,
-    key_secret: &str,
-) -> Option<Vec<JsonValue>> {
-    match sm.decrypt_transaction(&tx.session_id, tx.tx_index, key_secret) {
-        Ok(Some(json)) => serde_json::from_str::<Vec<JsonValue>>(&json).ok(),
-        _ => None,
-    }
 }
 
 /// Index one valid tx's entries into the per-session buckets, decrypting a
@@ -574,15 +526,6 @@ fn index_tx(
             }
         }
     }
-}
-
-/// The valid `(session_id, tx_index)` set of a verdict list.
-fn valid_set(verdicts: &[Verdict]) -> HashSet<(String, u32)> {
-    verdicts
-        .iter()
-        .filter(|v| v.valid)
-        .map(|v| (v.session_id.clone(), v.tx_index))
-        .collect()
 }
 
 /// fww winner selection over sorted txs (see the module doc + `co_map`'s

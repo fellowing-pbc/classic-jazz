@@ -68,6 +68,9 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::Value as JsonValue;
 
+use crate::core::co_content::{
+    decrypt_private_changes, fww_key, session_counts_of, valid_set, write_json_escaped_str,
+};
 use crate::core::group_engine::engine::{
     ensure as engine_ensure, generation_of, verdicts_of, GroupEngineState, Verdict,
 };
@@ -172,13 +175,6 @@ impl ListEntry {
     }
 }
 
-/// Write `s` as a JSON string literal (quotes + escaping) via `Value::String`'s
-/// `Display` (serde_json's compact serializer).
-fn write_json_escaped_str(s: &str, out: &mut String) {
-    use std::fmt::Write as _;
-    let _ = write!(out, "{}", JsonValue::String(s.to_string()));
-}
-
 /// A cached, materialized coList view for one covalue.
 pub struct CoListView {
     /// `(session_id, tx_count)` snapshot — the cache-validity key.
@@ -268,22 +264,6 @@ impl CoListView {
         out.push('}');
         out
     }
-}
-
-/// `(session_id, tx_count)` in session-insertion order — the freshness key.
-fn session_counts_of(sm: &SessionMapImpl) -> Vec<(String, u32)> {
-    sm.get_session_ids()
-        .into_iter()
-        .map(|sid| {
-            let count = sm.get_transaction_count(&sid).unwrap_or(0);
-            (sid, count)
-        })
-        .collect()
-}
-
-/// The `meta.fww` key of a tx, if any (`coValueCore.ts` fww overlay).
-fn fww_key(tx: &GroupTxView) -> Option<&str> {
-    tx.meta.as_ref()?.get("fww")?.as_str()
 }
 
 /// Reproduce the TS `previousTransaction` fallback for a merged transaction's
@@ -596,16 +576,6 @@ impl RgaBuild {
     }
 }
 
-/// The valid `(session_id, tx_index)` set of a verdict list (permission-valid
-/// AND not meta-invalidated).
-fn valid_set(verdicts: &[Verdict]) -> HashSet<(String, u32)> {
-    verdicts
-        .iter()
-        .filter(|v| v.valid)
-        .map(|v| (v.session_id.clone(), v.tx_index))
-        .collect()
-}
-
 /// The PROCESSABLE `(session_id, tx_index)` set: valid OR invalid solely for the
 /// merge-meta anti-tamper reason (`includeInvalidMetaTransactions: true`).
 /// Permission-invalid txs (any other reason) are excluded.
@@ -615,20 +585,6 @@ fn processable_set(verdicts: &[Verdict]) -> HashSet<(String, u32)> {
         .filter(|v| v.valid || v.reason.as_deref() == Some(SOURCE_AFTER_CURRENT_REASON))
         .map(|v| (v.session_id.clone(), v.tx_index))
         .collect()
-}
-
-/// Decrypt a PRIVATE tx's changes into a parsed change array (`None` when the
-/// key/session is unavailable — the caller SKIPS it, as TS drops an
-/// undecryptable tx).
-fn decrypt_private_changes(
-    sm: &SessionMapImpl,
-    tx: &GroupTxView,
-    key_secret: &str,
-) -> Option<Vec<JsonValue>> {
-    match sm.decrypt_transaction(&tx.session_id, tx.tx_index, key_secret) {
-        Ok(Some(json)) => serde_json::from_str::<Vec<JsonValue>>(&json).ok(),
-        _ => None,
-    }
 }
 
 /// Full recompute of a covalue's coList view.
