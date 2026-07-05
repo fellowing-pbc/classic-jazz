@@ -4,6 +4,7 @@
 //! for a single CoValue, including the header, sessions, and known state tracking.
 
 use crate::core::keys::{CoID, KeyID, KeySecret, Signature, SignerID, SignerSecret};
+use crate::core::priority::get_priority_from_header;
 use crate::core::session_log::{SessionID, SessionLogInternal, Transaction, TransactionMode};
 use crate::core::CoJsonCoreError;
 use indexmap::IndexMap;
@@ -860,6 +861,287 @@ impl SessionMapImpl {
         Ok(session_log
             .decrypt_next_transaction_meta_json(tx_index, KeySecret(key_secret.to_string()))?)
     }
+
+    // === Content decision (SHADOW-ONLY native port of `newContentSince`) ===
+
+    /// Native reproduction of TS `VerifiedState.newContentSince`
+    /// (`packages/cojson/src/coValueCore/verifiedState.ts`): given the peer's
+    /// (optimistic) known state, decide exactly what content SHOULD be sent —
+    /// piece chunking, size-budgeting via the recommended-tx-size threshold,
+    /// streaming piece-splitting on in-between signatures, and the
+    /// `expectContentUntil` marker.
+    ///
+    /// Returns a JSON string encoding the resulting `NewContentMessage[]`, or
+    /// `None` when there is nothing to send (TS `undefined`). This is a pure
+    /// read over resident session-log state; it mutates nothing. It exists ONLY
+    /// to be run alongside the live TS path for observation/comparison and never
+    /// drives what is actually sent — see the shadow hook in `sync.ts`.
+    ///
+    /// Semantics are matched exactly to the TS source, including:
+    ///   * transaction size = UTF-16 code-unit length of `encryptedChanges`
+    ///     (private) / `changes` (trusting), mirroring JS `String.length`;
+    ///   * `exceedsRecommendedSize` against `max_tx_size`;
+    ///   * `signatureAfter`-driven standalone pieces;
+    ///   * `expectContentUntil` set on `pieces[0]` when there is more than one
+    ///     content piece OR the CoValue is still streaming.
+    pub fn content_to_send(
+        &self,
+        known_state: Option<&KnownState>,
+    ) -> Result<Option<String>, SessionMapError> {
+        // A piece under construction. `include_header` mirrors `header` on the TS
+        // content message (only ever set on pieces[0]); `new` preserves session
+        // insertion order like the TS object.
+        struct BuildSession {
+            after: u32,
+            new_transactions: Vec<serde_json::Value>,
+            last_signature: Option<String>,
+        }
+        struct BuildPiece {
+            include_header: bool,
+            new: IndexMap<String, BuildSession>,
+            expect_content_until: Option<KnownStateSessions>,
+        }
+        impl BuildPiece {
+            fn empty() -> Self {
+                BuildPiece {
+                    include_header: false,
+                    new: IndexMap::new(),
+                    expect_content_until: None,
+                }
+            }
+            fn has_content(&self) -> bool {
+                self.include_header || !self.new.is_empty()
+            }
+        }
+
+        // getTransactionSize: private -> encryptedChanges.length, trusting ->
+        // changes.length; JS `.length` is a UTF-16 code-unit count.
+        fn transaction_size(tx: &serde_json::Value) -> u64 {
+            let field = if tx.get("privacy").and_then(|v| v.as_str()) == Some("private") {
+                "encryptedChanges"
+            } else {
+                "changes"
+            };
+            tx.get(field)
+                .and_then(|v| v.as_str())
+                .map(|s| s.encode_utf16().count() as u64)
+                .unwrap_or(0)
+        }
+
+        // addTransactionToContentMessage: append to an existing session content
+        // (updating its lastSignature) or create a fresh one anchored at `after`.
+        fn add_transaction(
+            piece: &mut BuildPiece,
+            tx: serde_json::Value,
+            session_id: &str,
+            signature: Option<String>,
+            tx_idx: u32,
+        ) {
+            if let Some(sc) = piece.new.get_mut(session_id) {
+                sc.new_transactions.push(tx);
+                sc.last_signature = signature;
+            } else {
+                piece.new.insert(
+                    session_id.to_string(),
+                    BuildSession {
+                        after: tx_idx,
+                        new_transactions: vec![tx],
+                        last_signature: signature,
+                    },
+                );
+            }
+        }
+
+        // moveSessionContentToNewPiece: pull `session_id`'s content out of the
+        // current (last) piece into its own dedicated piece inserted directly
+        // before the current one, preserving transaction order.
+        fn move_session_content_to_new_piece(
+            pieces: &mut Vec<BuildPiece>,
+            session_id: &str,
+        ) -> Result<(), SessionMapError> {
+            let current = pieces
+                .last_mut()
+                .expect("pieces is never empty during build");
+            let sc = current.new.shift_remove(session_id).ok_or_else(|| {
+                SessionMapError::InvalidTransaction("Session content not found".to_string())
+            })?;
+            let mut new_piece = BuildPiece::empty();
+            new_piece.new.insert(session_id.to_string(), sc);
+            let insert_at = pieces.len() - 1;
+            pieces.insert(insert_at, new_piece);
+            Ok(())
+        }
+
+        // assertLastSignature: a session content that made it into a piece must
+        // carry a real lastSignature.
+        fn assert_last_signature(
+            piece: &BuildPiece,
+            session_id: &str,
+        ) -> Result<(), SessionMapError> {
+            if let Some(sc) = piece.new.get(session_id) {
+                if sc.last_signature.is_none() {
+                    return Err(SessionMapError::InvalidTransaction(
+                        "The SessionContent sent must have a lastSignature".to_string(),
+                    ));
+                }
+            }
+            Ok(())
+        }
+
+        let max = self.max_tx_size as u64;
+        let session_sent = known_state.map(|ks| &ks.sessions);
+
+        let mut pieces: Vec<BuildPiece> = vec![BuildPiece::empty()];
+        let mut piece_size: u64 = 0;
+
+        for session_id in self.get_session_ids() {
+            if self.is_deleted && !is_delete_session_id(&session_id) {
+                continue;
+            }
+
+            let start_from = session_sent
+                .and_then(|s| s.get(&session_id).copied())
+                .unwrap_or(0);
+
+            let txs_raw = self
+                .get_session_transactions(&session_id, 0)
+                .unwrap_or_default();
+            let tx_len = txs_raw.len() as u32;
+            let last_signature = self.get_last_signature(&session_id);
+
+            let mut current_session_size: u64 = 0;
+
+            for tx_idx in start_from..tx_len {
+                let is_last_item = tx_idx == tx_len - 1;
+                let tx: serde_json::Value = serde_json::from_str(&txs_raw[tx_idx as usize])?;
+
+                current_session_size += transaction_size(&tx);
+
+                let signature_after = self.get_signature_after(&session_id, tx_idx);
+
+                if let Some(sig_after) = signature_after {
+                    add_transaction(
+                        pieces.last_mut().unwrap(),
+                        tx,
+                        &session_id,
+                        Some(sig_after),
+                        tx_idx,
+                    );
+                    // An in-between signature means the log crossed the
+                    // recommended size, so this session content must ship in a
+                    // standalone piece.
+                    move_session_content_to_new_piece(&mut pieces, &session_id)?;
+                    current_session_size = 0;
+                } else if is_last_item {
+                    let ls = last_signature.clone().ok_or_else(|| {
+                        SessionMapError::InvalidTransaction(
+                            "All the SessionLogs sent must have a lastSignature".to_string(),
+                        )
+                    })?;
+                    add_transaction(
+                        pieces.last_mut().unwrap(),
+                        tx,
+                        &session_id,
+                        Some(ls),
+                        tx_idx,
+                    );
+
+                    if current_session_size > max {
+                        // exceedsRecommendedSize(currentSessionSize)
+                        assert_last_signature(pieces.last().unwrap(), &session_id)?;
+                        move_session_content_to_new_piece(&mut pieces, &session_id)?;
+                    } else if piece_size + current_session_size > max {
+                        // exceedsRecommendedSize(pieceSize, currentSessionSize)
+                        assert_last_signature(pieces.last().unwrap(), &session_id)?;
+                        pieces.push(BuildPiece::empty());
+                        piece_size = 0;
+                    } else {
+                        piece_size += current_session_size;
+                    }
+                } else {
+                    // Unsafely add without a signature (none exists yet for this
+                    // tx); a real signature is guaranteed to land by the last item.
+                    add_transaction(pieces.last_mut().unwrap(), tx, &session_id, None, tx_idx);
+                }
+            }
+
+            assert_last_signature(pieces.last().unwrap(), &session_id)?;
+        }
+
+        // includeHeader = !knownState?.header
+        let include_header = match known_state {
+            None => true,
+            Some(ks) => !ks.header,
+        };
+        if include_header {
+            pieces[0].include_header = true;
+        }
+
+        let pieces_with_content = pieces.iter().filter(|p| p.has_content()).count();
+
+        // expectContentUntil lives on pieces[0] whenever there is more than one
+        // content piece or the CoValue is still streaming.
+        if pieces_with_content > 1 || self.is_streaming() {
+            let kss = self
+                .known_state_with_streaming
+                .as_ref()
+                .map(|k| &k.sessions)
+                .unwrap_or(&self.known_state.sessions);
+            let ecu = match known_state {
+                Some(ks) => get_known_state_to_send(kss, &ks.sessions),
+                None => kss.clone(),
+            };
+            pieces[0].expect_content_until = Some(ecu);
+        }
+
+        if pieces_with_content == 0 {
+            return Ok(None);
+        }
+
+        // Serialize the content-bearing pieces into `NewContentMessage[]`.
+        let header_value: serde_json::Value = serde_json::from_str(&self.get_header())?;
+        let priority = get_priority_from_header(&self.header).as_u8();
+        let id = self.co_id.0.clone();
+
+        let mut messages: Vec<serde_json::Value> = Vec::new();
+        for piece in pieces.into_iter().filter(|p| p.has_content()) {
+            let mut new_obj = serde_json::Map::new();
+            for (session_id, sc) in piece.new {
+                let mut session_obj = serde_json::Map::new();
+                session_obj.insert("after".to_string(), serde_json::json!(sc.after));
+                session_obj.insert(
+                    "newTransactions".to_string(),
+                    serde_json::Value::Array(sc.new_transactions),
+                );
+                session_obj.insert(
+                    "lastSignature".to_string(),
+                    match sc.last_signature {
+                        Some(s) => serde_json::Value::String(s),
+                        None => serde_json::Value::Null,
+                    },
+                );
+                new_obj.insert(session_id, serde_json::Value::Object(session_obj));
+            }
+
+            let mut msg = serde_json::Map::new();
+            msg.insert("action".to_string(), serde_json::json!("content"));
+            msg.insert("id".to_string(), serde_json::json!(id));
+            if piece.include_header {
+                msg.insert("header".to_string(), header_value.clone());
+            }
+            msg.insert("priority".to_string(), serde_json::json!(priority));
+            msg.insert("new".to_string(), serde_json::Value::Object(new_obj));
+            if let Some(ecu) = piece.expect_content_until {
+                msg.insert(
+                    "expectContentUntil".to_string(),
+                    serde_json::to_value(&ecu)?,
+                );
+            }
+            messages.push(serde_json::Value::Object(msg));
+        }
+
+        Ok(Some(serde_json::to_string(&messages)?))
+    }
 }
 
 // ============================================================================
@@ -1410,5 +1692,55 @@ mod tests {
             stable_stringify(r#"{"s":"\"q\" and \\b\\ and \n nl"}"#),
             r#"{"s":"\"q\" and \\b\\ and \n nl"}"#
         );
+    }
+
+    #[test]
+    fn content_to_send_basic_and_known_state() {
+        let mut sm = create_test_session_map("co_test", TEST_HEADER);
+        let session = "co_test_session_zAAA";
+        let txs = r#"[{"privacy":"trusting","madeAt":1700000000000,"changes":"[{\"op\":\"set\",\"key\":\"a\",\"value\":1}]"}]"#;
+        sm.add_transactions(session, None, txs, "sig_dummy", true)
+            .unwrap();
+
+        // No known state: full content, header included.
+        let out = sm.content_to_send(None).unwrap().unwrap();
+        let msgs: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let arr = msgs.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        let m = &arr[0];
+        assert_eq!(m["action"], "content");
+        assert_eq!(m["id"], "co_test");
+        assert!(m.get("header").is_some(), "header included when peer has none");
+        assert_eq!(m["new"][session]["after"], 0);
+        assert_eq!(
+            m["new"][session]["newTransactions"].as_array().unwrap().len(),
+            1
+        );
+        assert!(m["new"][session]["lastSignature"].is_string());
+        // Single piece, not streaming -> no expectContentUntil.
+        assert!(m.get("expectContentUntil").is_none());
+
+        // Peer already has header + this tx: nothing to send.
+        let ks = KnownState {
+            header: true,
+            id: "co_test".to_string(),
+            sessions: [(session.to_string(), 1u32)].into_iter().collect(),
+        };
+        assert!(sm.content_to_send(Some(&ks)).unwrap().is_none());
+
+        // Peer has header but 0 txs: content sent WITHOUT header.
+        let ks2 = KnownState {
+            header: true,
+            id: "co_test".to_string(),
+            sessions: IndexMap::new(),
+        };
+        let out2 = sm.content_to_send(Some(&ks2)).unwrap().unwrap();
+        let msgs2: serde_json::Value = serde_json::from_str(&out2).unwrap();
+        let m2 = &msgs2.as_array().unwrap()[0];
+        assert!(
+            m2.get("header").is_none(),
+            "header omitted when peer already has it"
+        );
+        assert_eq!(m2["new"][session]["after"], 0);
     }
 }

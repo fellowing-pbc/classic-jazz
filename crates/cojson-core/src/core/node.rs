@@ -733,6 +733,26 @@ impl NodeCore {
         Ok(GroupKeyState::from_snapshot(&snapshot))
     }
 
+    /// SHADOW-ONLY native content decision. Delegates to
+    /// [`SessionMapImpl::content_to_send`] for `co_id`, parsing the optional
+    /// peer known-state JSON (`{id, header, sessions}`) the TS sync layer would
+    /// pass to `newContentSince`. Returns the resulting `NewContentMessage[]`
+    /// encoded as a JSON string, or `None` when nothing should be sent.
+    ///
+    /// Pure read — nothing is mutated and no live sync behavior depends on the
+    /// result; it exists only to be compared against the TS path.
+    pub fn content_to_send(
+        &self,
+        co_id: &str,
+        known_state_json: Option<&str>,
+    ) -> Result<Option<String>, SessionMapError> {
+        let known_state = match known_state_json {
+            Some(json) => Some(serde_json::from_str::<crate::core::KnownState>(json)?),
+            None => None,
+        };
+        self.get(co_id)?.content_to_send(known_state.as_ref())
+    }
+
     pub fn co_value_count(&self) -> usize {
         self.covalues.len()
     }
