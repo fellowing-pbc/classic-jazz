@@ -765,6 +765,25 @@ impl NodeCore {
     )
   }
 
+  /// SHADOW-ONLY native content decision (native port of TS
+  /// `VerifiedState.newContentSince`). Given the peer's optimistic known state
+  /// as JSON (`{id, header, sessions}`, or omitted for `undefined`), returns
+  /// the `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string,
+  /// or `null` when there is nothing to send. Read-only: mutates no state and
+  /// drives no live sync behavior — it exists purely to be compared against the
+  /// TS path.
+  #[napi]
+  pub fn content_to_send(
+    &self,
+    co_id: String,
+    known_state_json: Option<String>,
+  ) -> napi::Result<Option<String>> {
+    self
+      .internal
+      .content_to_send(&co_id, known_state_json.as_deref())
+      .map_err(to_napi_err)
+  }
+
   /// Set streaming known state
   #[napi]
   pub fn set_streaming_known_state(

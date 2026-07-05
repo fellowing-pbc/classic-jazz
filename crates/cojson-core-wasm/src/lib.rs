@@ -803,6 +803,27 @@ impl NodeCore {
             .is_streaming())
     }
 
+    /// SHADOW-ONLY native content decision (native port of TS
+    /// `VerifiedState.newContentSince`). Given the peer's optimistic known state
+    /// as JSON (`{id, header, sessions}`, or `undefined`), returns the
+    /// `NewContentMessage[]` that SHOULD be sent, encoded as a JSON string, or
+    /// `undefined` when there is nothing to send. Read-only: mutates no state and
+    /// drives no live sync behavior — it exists purely to be compared against the
+    /// TS path.
+    #[wasm_bindgen(js_name = contentToSend)]
+    pub fn content_to_send(
+        &self,
+        co_id: String,
+        known_state_json: Option<String>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .internal
+            .content_to_send(&co_id, known_state_json.as_deref())
+            .map_err(to_wasm_err)?
+            .map(JsValue::from)
+            .unwrap_or_else(JsValue::undefined))
+    }
+
     /// Set streaming known state
     #[wasm_bindgen(js_name = setStreamingKnownState)]
     pub fn set_streaming_known_state(
