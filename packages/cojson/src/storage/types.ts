@@ -2,7 +2,7 @@ import type {
   CoValueHeader,
   Transaction,
 } from "../coValueCore/verifiedState.js";
-import { Signature } from "../crypto/crypto.js";
+import { NodeCoreImpl, Signature } from "../crypto/crypto.js";
 import type { CoValueCore, RawCoID, SessionID } from "../exports.js";
 import { NewContentMessage } from "../sync.js";
 import type { PeerID } from "../sync.js";
@@ -41,6 +41,14 @@ export interface StorageAPI {
    * When the delete tx is stored, the storage will mark the coValue as deleted.
    */
   markDeleteAsValid(id: RawCoID): void;
+
+  /**
+   * Provide the node's NodeCore (native backend adapter) so the storage write
+   * path can use the native `plan_session_write` decision when enabled. Called by
+   * `LocalNode.setStorage`. Optional: storage created without a node (e.g. tests
+   * driving storage directly) stays on the TS write-decision path.
+   */
+  setNodeCore?(nodeCore: NodeCoreImpl): void;
 
   /**
    * Enable the background erasure scheduler that drains the `deletedCoValues` work queue.

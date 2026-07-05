@@ -916,4 +916,11 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
   supportsNativeGroupKeyWrites(): boolean {
     return false;
   }
+
+  // The RN uniffi binding does not yet expose the storage write-decision surface
+  // (`plan_session_write`), which is a build product of an `ubrn` regeneration.
+  // Until then RN stays on the TS write-decision path in storageSync/storageAsync.
+  supportsNativeStorageWritePlan(): boolean {
+    return false;
+  }
 }

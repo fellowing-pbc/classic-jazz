@@ -131,6 +131,7 @@ export class LocalNode {
 
   setStorage(storage: StorageAPI) {
     this.storage = storage;
+    storage.setNodeCore?.(this.nodeCore);
     this.syncManager.setStorage(storage);
   }
 

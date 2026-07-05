@@ -815,4 +815,28 @@ export interface NodeCoreImpl {
    * TS key-management write paths.
    */
   supportsNativeGroupKeyWrites(): boolean;
+
+  /**
+   * Native storage per-session WRITE-DECISION path (storage phase). A pure,
+   * fixture-verified JSON-string-in / JSON-string-out wrapper over
+   * `crates/cojson-core/src/core/storage_write_plan.rs`'s `plan_session_write`.
+   * Given one session's stored row-state (`lastIdx`, `bytesSinceLastSignature`)
+   * plus the incoming content message's `after` and per-transaction sizes, it
+   * returns the exact `SessionWritePlan` decision `storeSingle`/`putNewTxs` would
+   * compute inline (gap guard, dedup offset/count, new `lastIdx`, intermediate
+   * signature checkpoint, rolling bytes). The caller performs the SAME DB reads
+   * and writes; only the decision values come from here.
+   *
+   * Optional so only the napi and wasm backends (which expose the FFI) implement
+   * it; the React Native uniffi binding does not yet, and returns `false` from
+   * {@link supportsNativeStorageWritePlan}. Callers MUST gate on that before use.
+   */
+  planSessionWrite?(inputJson: string): string;
+  /**
+   * Whether this adapter's native binding exposes {@link planSessionWrite}. The
+   * napi and wasm bindings do; the React Native uniffi binding only will after an
+   * `ubrn` regeneration. When `false`, storage stays on the TS write-decision
+   * path in `storageSync.ts` / `storageAsync.ts`.
+   */
+  supportsNativeStorageWritePlan(): boolean;
 }

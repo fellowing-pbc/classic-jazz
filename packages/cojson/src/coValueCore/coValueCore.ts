@@ -260,6 +260,49 @@ export function isNativeSyncContentDecisionEnabled(): boolean {
   return nativeSyncContentDecisionEnabled;
 }
 
+// Storage phase: use the native Rust `plan_session_write` decision as the REAL
+// per-session write decision inside storage's `storeSingle` / `putNewTxs`
+// (in BOTH storageSync.ts and storageAsync.ts), replacing the inline TS
+// computation of the gap guard, dedup offset/count, new `lastIdx`, intermediate
+// signature checkpoint, and rolling `bytesSinceLastSignature`. The DB reads and
+// the actual `addSessionUpdate` / `addSignatureAfter` / `addTransaction` writes
+// are UNCHANGED — only the decision values come from native.
+//
+// The storage write path is the single most data-loss-sensitive path in the
+// system (a wrong decision is unrecoverable — a local-only store has no peer to
+// resync from), so the bar for defaulting this ON was deliberately higher than
+// for other ports. It is now ON by default, having cleared that bar:
+//   * pure and byte-for-byte fixture-verified against the real TS `store()`
+//     (25/25 round-trip fixtures on both napi and wasm);
+//   * a 200k-case differential of the native decision vs the inline TS logic
+//     across all output fields with zero mismatches;
+//   * the full cojson suite forced ON, three times, identical to the TS-path
+//     baseline (incl. every StorageApiSync/Async, sync.storage*, deletion, and
+//     the sync.localStoreDurability crash-window test run repeatedly);
+//   * jazz-tools forced ON, identical to its TS-path baseline.
+// Even when enabled it only takes effect where the backend advertises the
+// capability (`NodeCoreImpl.supportsNativeStorageWritePlan()` — napi and wasm;
+// not yet React Native), otherwise it transparently falls back to the TS path.
+// The TS inline decision stays in place as the fallback/reference. Force OFF for
+// debugging via `disableNativeStorageWritePlan()` or by setting
+// `COJSON_STORAGE_NATIVE_WRITE_PLAN=0` (read once at module load).
+let nativeStorageWritePlanEnabled =
+  typeof process === "undefined" ||
+  process.env?.COJSON_STORAGE_NATIVE_WRITE_PLAN !== "0";
+
+export function enableNativeStorageWritePlan() {
+  nativeStorageWritePlanEnabled = true;
+}
+
+export function disableNativeStorageWritePlan() {
+  nativeStorageWritePlanEnabled = false;
+}
+
+/** Read the current state of the native storage write-decision flag. */
+export function isNativeStorageWritePlanEnabled(): boolean {
+  return nativeStorageWritePlanEnabled;
+}
+
 export class VerifiedTransaction {
   // The ID of the CoValue that the transaction belongs to
   coValueId: RawCoID;

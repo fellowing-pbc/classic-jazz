@@ -24,6 +24,7 @@ import {
   groupAddEveryoneWriteOnly as nativeGroupAddEveryoneWriteOnly,
   groupRemoveMember as nativeGroupRemoveMember,
   groupExtend as nativeGroupExtend,
+  planSessionWrite as nativePlanSessionWrite,
 } from "cojson-core-wasm";
 import { base64URLtoBytes, bytesToBase64url } from "../base64url.js";
 import { RawCoID, TransactionID } from "../ids.js";
@@ -903,6 +904,15 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
   }
 
   supportsNativeGroupKeyWrites(): boolean {
+    return true;
+  }
+
+  // === storage per-session write-decision path (storage phase) ===
+  planSessionWrite(inputJson: string): string {
+    return nativePlanSessionWrite(inputJson);
+  }
+
+  supportsNativeStorageWritePlan(): boolean {
     return true;
   }
 }

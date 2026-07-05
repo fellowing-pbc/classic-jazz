@@ -22,6 +22,12 @@ import {
   getDependedOnCoValues,
   getNewTransactionsSize,
 } from "./syncUtils.js";
+import {
+  type SessionWritePlan,
+  planSessionWriteNative,
+  useNativeStorageWritePlan,
+} from "./storageWritePlan.js";
+import type { NodeCoreImpl } from "../crypto/crypto.js";
 import type {
   CorrectionCallback,
   DBClientInterfaceSync,
@@ -58,9 +64,15 @@ export class StorageApiSync implements StorageAPI {
    */
   readonly streamingQueue: StorageStreamingQueue;
 
+  private nodeCore: NodeCoreImpl | undefined;
+
   constructor(dbClient: DBClientInterfaceSync) {
     this.dbClient = dbClient;
     this.streamingQueue = new StorageStreamingQueue();
+  }
+
+  setNodeCore(nodeCore: NodeCoreImpl): void {
+    this.nodeCore = nodeCore;
   }
 
   knownStates = new StorageKnownState();
@@ -387,7 +399,20 @@ export class StorageApiSync implements StorageAPI {
           );
         }
 
-        if ((sessionRow?.lastIdx || 0) < (msg.new[sessionID]?.after || 0)) {
+        // When enabled and supported, the per-session write decision (gap guard
+        // + the values `putNewTxs` uses) comes from the native `plan_session_write`
+        // instead of the inline TS computation. The DB reads/writes are unchanged.
+        const plan: SessionWritePlan | undefined = useNativeStorageWritePlan(
+          this.nodeCore,
+        )
+          ? planSessionWriteNative(this.nodeCore, msg, sessionID, sessionRow)
+          : undefined;
+
+        const invalidGap = plan
+          ? plan.invalidGap
+          : (sessionRow?.lastIdx || 0) < (msg.new[sessionID]?.after || 0);
+
+        if (invalidGap) {
           invalidAssumptions = true;
         } else {
           const newLastIdx = this.putNewTxs(
@@ -396,6 +421,7 @@ export class StorageApiSync implements StorageAPI {
             sessionID,
             sessionRow,
             storedCoValueRowID,
+            plan,
           );
           setSessionCounter(knownState.sessions, sessionID, newLastIdx);
         }
@@ -419,34 +445,56 @@ export class StorageApiSync implements StorageAPI {
     sessionID: SessionID,
     sessionRow: StoredSessionRow | undefined,
     storedCoValueRowID: number,
+    plan?: SessionWritePlan,
   ) {
     const newTransactions = msg.new[sessionID]?.newTransactions || [];
     const lastIdx = sessionRow?.lastIdx || 0;
 
-    const actuallyNewOffset = lastIdx - (msg.new[sessionID]?.after || 0);
+    // The write decision (dedup offset, new lastIdx, signature checkpoint,
+    // rolling bytes) comes either from the native plan or the inline TS
+    // computation. Both produce the same locals; the DB writes below are shared.
+    let actuallyNewOffset: number;
+    let newLastIdx: number;
+    let shouldWriteSignature: boolean;
+    let bytesSinceLastSignature: number;
+
+    if (plan) {
+      if (plan.noOp) {
+        return lastIdx;
+      }
+      actuallyNewOffset = plan.actuallyNewOffset;
+      newLastIdx = plan.newLastIdx;
+      shouldWriteSignature = plan.shouldWriteSignature;
+      bytesSinceLastSignature = plan.newBytesSinceLastSignature;
+    } else {
+      actuallyNewOffset = lastIdx - (msg.new[sessionID]?.after || 0);
+
+      const actuallyNew = newTransactions.slice(actuallyNewOffset);
+
+      if (actuallyNew.length === 0) {
+        return lastIdx;
+      }
+
+      let bytes = sessionRow?.bytesSinceLastSignature || 0;
+      const newTransactionsSize = getNewTransactionsSize(actuallyNew);
+
+      newLastIdx = lastIdx + actuallyNew.length;
+
+      shouldWriteSignature = false;
+
+      if (exceedsRecommendedSize(bytes, newTransactionsSize)) {
+        shouldWriteSignature = true;
+        bytes = 0;
+      } else {
+        bytes += newTransactionsSize;
+      }
+
+      bytesSinceLastSignature = bytes;
+    }
 
     const actuallyNewTransactions = newTransactions.slice(actuallyNewOffset);
 
-    if (actuallyNewTransactions.length === 0) {
-      return lastIdx;
-    }
-
-    let bytesSinceLastSignature = sessionRow?.bytesSinceLastSignature || 0;
-    const newTransactionsSize = getNewTransactionsSize(actuallyNewTransactions);
-
-    const newLastIdx =
-      (sessionRow?.lastIdx || 0) + actuallyNewTransactions.length;
-
-    let shouldWriteSignature = false;
-
-    if (exceedsRecommendedSize(bytesSinceLastSignature, newTransactionsSize)) {
-      shouldWriteSignature = true;
-      bytesSinceLastSignature = 0;
-    } else {
-      bytesSinceLastSignature += newTransactionsSize;
-    }
-
-    const nextIdx = sessionRow?.lastIdx || 0;
+    const nextIdx = lastIdx;
 
     if (!msg.new[sessionID]) throw new Error("Session ID not found");
 

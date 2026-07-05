@@ -23,6 +23,12 @@ import {
   getDependedOnCoValues,
   getNewTransactionsSize,
 } from "./syncUtils.js";
+import {
+  type SessionWritePlan,
+  planSessionWriteNative,
+  useNativeStorageWritePlan,
+} from "./storageWritePlan.js";
+import type { NodeCoreImpl } from "../crypto/crypto.js";
 import type {
   CorrectionCallback,
   DBClientInterfaceAsync,
@@ -53,8 +59,14 @@ export class StorageApiAsync implements StorageAPI {
     Promise<CoValueKnownState | undefined>
   >();
 
+  private nodeCore: NodeCoreImpl | undefined;
+
   constructor(dbClient: DBClientInterfaceAsync) {
     this.dbClient = dbClient;
+  }
+
+  setNodeCore(nodeCore: NodeCoreImpl): void {
+    this.nodeCore = nodeCore;
   }
 
   knownStates = new StorageKnownState();
@@ -401,7 +413,18 @@ export class StorageApiAsync implements StorageAPI {
         const lastIdx = sessionRow?.lastIdx || 0;
         const after = msg.new[sessionID]?.after || 0;
 
-        if (lastIdx < after) {
+        // When enabled and supported, the per-session write decision (gap guard
+        // + the values `putNewTxs` uses) comes from the native `plan_session_write`
+        // instead of the inline TS computation. The DB reads/writes are unchanged.
+        const plan: SessionWritePlan | undefined = useNativeStorageWritePlan(
+          this.nodeCore,
+        )
+          ? planSessionWriteNative(this.nodeCore, msg, sessionID, sessionRow)
+          : undefined;
+
+        const invalidGap = plan ? plan.invalidGap : lastIdx < after;
+
+        if (invalidGap) {
           invalidAssumptions = true;
         } else {
           const newLastIdx = await this.putNewTxs(
@@ -410,6 +433,7 @@ export class StorageApiAsync implements StorageAPI {
             sessionID,
             sessionRow,
             storedCoValueRowID,
+            plan,
           );
           setSessionCounter(knownState.sessions, sessionID, newLastIdx);
         }
@@ -433,31 +457,54 @@ export class StorageApiAsync implements StorageAPI {
     sessionID: SessionID,
     sessionRow: StoredSessionRow | undefined,
     storedCoValueRowID: number,
+    plan?: SessionWritePlan,
   ) {
     const newTransactions = msg.new[sessionID]?.newTransactions || [];
     const lastIdx = sessionRow?.lastIdx || 0;
 
-    const actuallyNewOffset = lastIdx - (msg.new[sessionID]?.after || 0);
+    // The write decision (dedup offset, new lastIdx, signature checkpoint,
+    // rolling bytes) comes either from the native plan or the inline TS
+    // computation. Both produce the same locals; the DB writes below are shared.
+    let actuallyNewOffset: number;
+    let newLastIdx: number;
+    let shouldWriteSignature: boolean;
+    let bytesSinceLastSignature: number;
+
+    if (plan) {
+      if (plan.noOp) {
+        return lastIdx;
+      }
+      actuallyNewOffset = plan.actuallyNewOffset;
+      newLastIdx = plan.newLastIdx;
+      shouldWriteSignature = plan.shouldWriteSignature;
+      bytesSinceLastSignature = plan.newBytesSinceLastSignature;
+    } else {
+      actuallyNewOffset = lastIdx - (msg.new[sessionID]?.after || 0);
+
+      const actuallyNew = newTransactions.slice(actuallyNewOffset);
+
+      if (actuallyNew.length === 0) {
+        return lastIdx;
+      }
+
+      let bytes = sessionRow?.bytesSinceLastSignature || 0;
+      const newTransactionsSize = getNewTransactionsSize(actuallyNew);
+
+      newLastIdx = lastIdx + actuallyNew.length;
+
+      shouldWriteSignature = false;
+
+      if (exceedsRecommendedSize(bytes, newTransactionsSize)) {
+        shouldWriteSignature = true;
+        bytes = 0;
+      } else {
+        bytes += newTransactionsSize;
+      }
+
+      bytesSinceLastSignature = bytes;
+    }
 
     const actuallyNewTransactions = newTransactions.slice(actuallyNewOffset);
-
-    if (actuallyNewTransactions.length === 0) {
-      return lastIdx;
-    }
-
-    let bytesSinceLastSignature = sessionRow?.bytesSinceLastSignature || 0;
-    const newTransactionsSize = getNewTransactionsSize(actuallyNewTransactions);
-
-    const newLastIdx = lastIdx + actuallyNewTransactions.length;
-
-    let shouldWriteSignature = false;
-
-    if (exceedsRecommendedSize(bytesSinceLastSignature, newTransactionsSize)) {
-      shouldWriteSignature = true;
-      bytesSinceLastSignature = 0;
-    } else {
-      bytesSinceLastSignature += newTransactionsSize;
-    }
 
     const nextIdx = lastIdx;
 
