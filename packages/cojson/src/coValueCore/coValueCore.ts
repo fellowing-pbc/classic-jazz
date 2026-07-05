@@ -2884,6 +2884,20 @@ export class CoValueCore {
     return this.verified.header.createdAt;
   }
 
+  decryptTransaction(
+    sessionID: SessionID,
+    txIndex: number,
+    keySecret: KeySecret,
+  ): JsonValue[] | undefined {
+    if (!this.verified) {
+      throw new Error(
+        "CoValueCore: decryptTransaction called on coValue without verified state",
+      );
+    }
+
+    return this.verified.decryptTransaction(sessionID, txIndex, keySecret);
+  }
+
   readKeyCache = new Map<KeyID, KeySecret>();
   getReadKey(keyID: KeyID): KeySecret | undefined {
     // We want to check the cache here, to skip re-computing the group content

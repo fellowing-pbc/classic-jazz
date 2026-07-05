@@ -959,3 +959,29 @@ describe("CoValueCore.getHeaderCreatedAt", () => {
     );
   });
 });
+
+describe("CoValueCore.decryptTransaction", () => {
+  test("delegates to verified.decryptTransaction", () => {
+    const node = createTestNode();
+    const group = node.createGroup();
+    const map = group.createMap();
+    map.set("key1", "value1", "private");
+
+    const readKey = map.core.getCurrentReadKey();
+    const tx = map.core.getValidSortedTransactions()[0]!;
+
+    expect(
+      map.core.decryptTransaction(
+        tx.txID.sessionID,
+        tx.txID.txIndex,
+        readKey.secret!,
+      ),
+    ).toEqual(
+      map.core.verified.decryptTransaction(
+        tx.txID.sessionID,
+        tx.txID.txIndex,
+        readKey.secret!,
+      ),
+    );
+  });
+});
