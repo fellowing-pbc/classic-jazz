@@ -1,0 +1,64 @@
+{
+  "description": "with an optimistic overlay present, combineWith advances BOTH confirmed and optimistic",
+  "id": "co_zPeerKnownStateFixture",
+  "peerId": "peer_zFixture",
+  "ops": [
+    {
+      "op": "combineOptimisticWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      }
+    },
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s2": 1
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {}
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "hasOptimistic": true
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s2": 1
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s2": 1
+        }
+      },
+      "hasOptimistic": true
+    }
+  ]
+}

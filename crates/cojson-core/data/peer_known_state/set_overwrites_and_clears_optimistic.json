@@ -1,0 +1,96 @@
+{
+  "description": "set is an OVERWRITE not a combine: prior confirmed sessions vanish and the optimistic overlay is dropped",
+  "id": "co_zPeerKnownStateFixture",
+  "peerId": "peer_zFixture",
+  "ops": [
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 3
+        }
+      }
+    },
+    {
+      "op": "combineOptimisticWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s3": 4
+        }
+      }
+    },
+    {
+      "op": "set",
+      "payload": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s4": 1
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 3
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 3
+        }
+      },
+      "hasOptimistic": false
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 3
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 3,
+          "s3": 4
+        }
+      },
+      "hasOptimistic": true
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s4": 1
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s4": 1
+        }
+      },
+      "hasOptimistic": false
+    }
+  ]
+}

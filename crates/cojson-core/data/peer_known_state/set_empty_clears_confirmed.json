@@ -1,0 +1,80 @@
+{
+  "description": "set(\"empty\") drops header + all sessions and clears the optimistic overlay, keeping the id",
+  "id": "co_zPeerKnownStateFixture",
+  "peerId": "peer_zFixture",
+  "ops": [
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9
+        }
+      }
+    },
+    {
+      "op": "combineOptimisticWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s2": 2
+        }
+      }
+    },
+    {
+      "op": "setEmpty"
+    }
+  ],
+  "steps": [
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9
+        }
+      },
+      "hasOptimistic": false
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 9,
+          "s2": 2
+        }
+      },
+      "hasOptimistic": true
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {}
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {}
+      },
+      "hasOptimistic": false
+    }
+  ]
+}

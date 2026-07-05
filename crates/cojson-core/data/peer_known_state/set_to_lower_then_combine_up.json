@@ -1,0 +1,96 @@
+{
+  "description": "set can move confirmed BACKWARD (overwrite), after which combineWith moves it forward again",
+  "id": "co_zPeerKnownStateFixture",
+  "peerId": "peer_zFixture",
+  "ops": [
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 10,
+          "s2": 4
+        }
+      }
+    },
+    {
+      "op": "set",
+      "payload": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      }
+    },
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s3": 1
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 10,
+          "s2": 4
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 10,
+          "s2": 4
+        }
+      },
+      "hasOptimistic": false
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "hasOptimistic": false
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s3": 1
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 5,
+          "s3": 1
+        }
+      },
+      "hasOptimistic": false
+    }
+  ]
+}

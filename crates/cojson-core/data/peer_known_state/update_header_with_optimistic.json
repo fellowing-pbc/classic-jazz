@@ -1,0 +1,86 @@
+{
+  "description": "updateHeader flips the header on BOTH confirmed and optimistic layers when an overlay exists",
+  "id": "co_zPeerKnownStateFixture",
+  "peerId": "peer_zFixture",
+  "ops": [
+    {
+      "op": "combineWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s1": 2
+        }
+      }
+    },
+    {
+      "op": "combineOptimisticWith",
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s2": 3
+        }
+      }
+    },
+    {
+      "op": "updateHeader",
+      "header": true
+    }
+  ],
+  "steps": [
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "hasOptimistic": false
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": false,
+        "sessions": {
+          "s1": 2,
+          "s2": 3
+        }
+      },
+      "hasOptimistic": true
+    },
+    {
+      "value": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2
+        }
+      },
+      "optimisticValue": {
+        "id": "co_zPeerKnownStateFixture",
+        "header": true,
+        "sessions": {
+          "s1": 2,
+          "s2": 3
+        }
+      },
+      "hasOptimistic": true
+    }
+  ]
+}
