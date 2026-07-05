@@ -223,6 +223,59 @@ pub fn plan_session_write(
     }
 }
 
+// ---------------------------------------------------------------------------
+// JSON wire wrapper (FFI surface)
+// ---------------------------------------------------------------------------
+//
+// Same JSON-string-in / JSON-string-out convention `group_key_ffi` and
+// `co_map`'s complex-payload plumbing already use. A single wrapper is cleanest
+// here given the scalar+array inputs. Crucially, routing the decision over a
+// JSON string means the `i64` inputs/outputs (`bytesSinceLastSignature`, the
+// per-tx sizes, the rolling total) NEVER cross the napi/wasm ABI as native
+// numbers — they are serialized as JSON number literals inside the string and
+// parsed by the caller. This sidesteps the i64-vs-JS-safe-integer /
+// BigInt-marshalling boundary that a scalar `#[napi] (a: i64, …)` signature
+// would introduce (the stage-1 report's open item): the wire is text, and the
+// values in play (transaction byte sizes, tx counts) are far inside JS's
+// `Number.MAX_SAFE_INTEGER`, so JSON round-trips them exactly.
+//
+// The input field names mirror the golden-fixture step JSON (camelCase), so a
+// fixture *step* object can be fed straight through — serde ignores the
+// fixture-only `label`/`expected` keys. The output is the full
+// [`SessionWritePlan`] (camelCase); the fixture's `expected` is a subset of its
+// fields, so a round-trip test asserts field-by-field against `expected`.
+
+/// Wire input for [`plan_session_write_json`]: one session's stored row-state
+/// plus the incoming content message's `after` and per-transaction sizes.
+/// Mirrors a storage-write-plan fixture *step* (extra `label`/`expected` keys
+/// are ignored by serde).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlanSessionWriteInputWire {
+    last_idx: i64,
+    after: i64,
+    bytes_since_last_signature: i64,
+    new_tx_sizes: Vec<i64>,
+    max_recommended_tx_size: i64,
+}
+
+/// JSON-string-in / JSON-string-out wrapper for [`plan_session_write`]. Returns
+/// the serialized [`SessionWritePlan`] (camelCase). This is the FFI-facing
+/// surface consumed by the napi/wasm binding crates; nothing in production TS
+/// calls it yet (wiring is a later, separately gated phase).
+pub fn plan_session_write_json(input_json: &str) -> Result<String, String> {
+    let inp: PlanSessionWriteInputWire =
+        serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+    let plan = plan_session_write(
+        inp.last_idx,
+        inp.after,
+        inp.bytes_since_last_signature,
+        &inp.new_tx_sizes,
+        inp.max_recommended_tx_size,
+    );
+    serde_json::to_string(&plan).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,6 +497,41 @@ mod tests {
                     "new_bytes_since_last_signature mismatch in {name} [{}]",
                     step.label
                 );
+            }
+        }
+    }
+
+    // ---------------- JSON wire round-trip ----------------
+    //
+    // Feed each fixture step's raw JSON straight through the wire wrapper (serde
+    // ignores `label`/`expected`) and assert every field of the deserialized
+    // output equals the fixture's `expected`. Combined with the pure-Rust replay
+    // above (which pins `pure(step) == expected`), this proves
+    // `wire(step) == pure(step)` — the JSON wire layer is byte-lossless. The
+    // napi/wasm `__test__` suites reproduce this exact assertion against the REAL
+    // compiled addons, proving the ABI boundary itself preserves precision.
+
+    #[test]
+    fn wire_roundtrip_matches_fixture_expected() {
+        for (name, raw) in read_fixtures("data/storage_write_plan") {
+            let f: WritePlanFixture =
+                serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {name}: {e}"));
+            // Re-read the raw steps as generic JSON so we can hand each step's
+            // exact bytes to the wire wrapper (the fixture-only keys ride along).
+            let raw_val: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            let raw_steps = raw_val["steps"].as_array().unwrap();
+            for (step, raw_step) in f.steps.iter().zip(raw_steps) {
+                let out_json = plan_session_write_json(&raw_step.to_string())
+                    .unwrap_or_else(|e| panic!("wire {name} [{}]: {e}", step.label));
+                let out: serde_json::Value = serde_json::from_str(&out_json).unwrap();
+                let e = &step.expected;
+                assert_eq!(out["invalidGap"], serde_json::json!(e.invalid_gap), "invalidGap {name} [{}]", step.label);
+                assert_eq!(out["noOp"], serde_json::json!(e.no_op), "noOp {name} [{}]", step.label);
+                assert_eq!(out["actuallyNewCount"], serde_json::json!(e.actually_new_count), "actuallyNewCount {name} [{}]", step.label);
+                assert_eq!(out["newLastIdx"], serde_json::json!(e.new_last_idx), "newLastIdx {name} [{}]", step.label);
+                assert_eq!(out["shouldWriteSignature"], serde_json::json!(e.should_write_signature), "shouldWriteSignature {name} [{}]", step.label);
+                assert_eq!(out["signatureIdx"], serde_json::json!(e.signature_idx), "signatureIdx {name} [{}]", step.label);
+                assert_eq!(out["newBytesSinceLastSignature"], serde_json::json!(e.new_bytes_since_last_signature), "newBytesSinceLastSignature {name} [{}]", step.label);
             }
         }
     }
