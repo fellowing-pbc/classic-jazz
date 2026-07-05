@@ -9,11 +9,13 @@ pub mod core {
     pub mod known_state;
     pub mod nonce;
     pub mod peer_known_state;
+    pub mod priority;
     pub mod session_log;
     pub mod session_map;
     pub mod storage_reconciliation;
     pub use keys::*;
     pub use nonce::*;
+    pub use priority::*;
     pub use session_log::*;
     pub use session_map::*;
     pub mod node;
