@@ -169,6 +169,14 @@ export class RawBinaryCoStreamView<
         this.start = change;
       } else if (change.type === "end") {
         this.ended = true;
+        // Freeze at the first `end`, exactly like the TS
+        // {@link processNewTransactions} path (`if (this.ended) return`): once a
+        // binary stream has ended, any later `start`/`chunk`/`end` items (e.g. a
+        // second start/chunk/end sequence pushed onto the same CoValue) are
+        // ignored rather than accumulated. Without this break the native rebuild
+        // walks EVERY item and appends every chunk, retaining stale chunks from
+        // before the mutation (4 chunks where 2 are expected).
+        break;
       }
     }
   }
