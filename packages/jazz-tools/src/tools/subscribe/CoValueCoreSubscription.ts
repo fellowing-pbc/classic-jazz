@@ -3,6 +3,7 @@ import {
   CoValueCore,
   CoValueFrontier,
   isRawCoID,
+  type JsonObject,
   LocalNode,
   RawCoID,
   RawCoValue,
@@ -228,7 +229,7 @@ export class CoValueCoreSubscription {
 function isCompletelyDownloaded(value: CoValueCore) {
   return (
     value.isDeleted ||
-    value.verified?.header.meta?.type === "binary" ||
+    (value.meta as JsonObject | null)?.type === "binary" ||
     value.isCompletelyDownloaded()
   );
 }

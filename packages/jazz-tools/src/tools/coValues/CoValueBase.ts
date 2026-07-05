@@ -106,7 +106,7 @@ export abstract class CoValueJazzApi<V extends CoValue> {
    * @category Content
    */
   get createdAt(): number {
-    const createdAt = this.raw.core.verified.header.createdAt;
+    const createdAt = this.raw.core.getHeaderCreatedAt();
 
     if (typeof createdAt === "string") {
       return new Date(createdAt).getTime();

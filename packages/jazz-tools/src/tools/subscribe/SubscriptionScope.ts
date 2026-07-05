@@ -1257,7 +1257,7 @@ export class SubscriptionScope<D extends CoValue> {
 }
 
 function hasAccessToCoValue(rawCoValue: RawCoValue): boolean {
-  const ruleset = rawCoValue.core.verified.header.ruleset;
+  const ruleset = rawCoValue.core.getRuleset();
 
   // Groups and accounts are accessible by everyone, for the other coValues we use the role to check access
   return (

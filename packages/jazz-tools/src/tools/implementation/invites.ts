@@ -1,4 +1,9 @@
-import { AccountRole, type InviteSecret, cojsonInternals } from "cojson";
+import {
+  AccountRole,
+  type InviteSecret,
+  type JsonObject,
+  cojsonInternals,
+} from "cojson";
 import { Account } from "../coValues/account.js";
 import type { CoValue, CoValueClassOrSchema } from "../internal.js";
 
@@ -36,11 +41,12 @@ export function createInviteLink<C extends CoValue>(
   const coValueCore = value.$jazz.raw.core;
   let currentCoValue = coValueCore;
 
-  while (currentCoValue.verified.header.ruleset.type === "ownedByGroup") {
+  while (currentCoValue.getRuleset().type === "ownedByGroup") {
     currentCoValue = currentCoValue.getGroup().core;
   }
 
-  const { ruleset, meta } = currentCoValue.verified.header;
+  const ruleset = currentCoValue.getRuleset();
+  const meta = currentCoValue.meta as JsonObject | null;
 
   if (ruleset.type !== "group" || meta?.type === "account") {
     throw new Error("Can't create invite link for object without group");
