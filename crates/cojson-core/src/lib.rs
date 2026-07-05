@@ -25,6 +25,8 @@ pub mod core {
     pub use config::*;
     pub mod group_engine;
     pub use group_engine::*;
+    pub mod group_key_state;
+    pub use group_key_state::*;
     pub mod co_map;
     pub use co_map::*;
     pub mod co_stream;

@@ -11,6 +11,7 @@ use crate::core::group_engine::engine::{
 };
 use crate::core::group_engine::tx_view::PendingTxIn;
 use crate::core::group_engine::types::Role;
+use crate::core::group_key_state::GroupKeyState;
 use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
 /// Node-level registry owning one SessionMapImpl per CoValue, keyed by CoID.
@@ -746,6 +747,31 @@ impl NodeCore {
             member,
             at_time,
         )
+    }
+
+    /// Build a read-only [`GroupKeyState`] for `group_id`: (re)materialize its
+    /// group CoMap (which permission-gates every field write through the group
+    /// engine's verdicts) and lens the resulting snapshot into the typed
+    /// key-management query surface the group.ts write paths read. `&mut` because
+    /// it refreshes the CoMap view; the returned state is an owned snapshot.
+    ///
+    /// An unregistered primary coId is `UnknownCoValue`, matching the other
+    /// per-coValue APIs.
+    pub fn group_key_state(
+        &mut self,
+        group_id: &str,
+        pending: &[PendingTxIn],
+    ) -> Result<GroupKeyState, SessionMapError> {
+        if !self.covalues.contains_key(group_id) {
+            return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
+        }
+        self.map_materialize(group_id, pending)?;
+        let snapshot = self
+            .co_maps
+            .get(group_id)
+            .map(|v| v.snapshot())
+            .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+        Ok(GroupKeyState::from_snapshot(&snapshot))
     }
 
     pub fn co_value_count(&self) -> usize {
