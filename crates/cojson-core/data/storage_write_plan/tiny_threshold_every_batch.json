@@ -1,0 +1,62 @@
+{
+  "description": "threshold=1: every stored batch crosses it → a checkpoint at each batch's last index",
+  "steps": [
+    {
+      "label": "k0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        5
+      ],
+      "maxRecommendedTxSize": 1,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 1,
+        "shouldWriteSignature": true,
+        "signatureIdx": 0,
+        "newBytesSinceLastSignature": 0
+      }
+    },
+    {
+      "label": "k1",
+      "lastIdx": 1,
+      "after": 1,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        5
+      ],
+      "maxRecommendedTxSize": 1,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 2,
+        "shouldWriteSignature": true,
+        "signatureIdx": 1,
+        "newBytesSinceLastSignature": 0
+      }
+    },
+    {
+      "label": "k2",
+      "lastIdx": 2,
+      "after": 2,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        5
+      ],
+      "maxRecommendedTxSize": 1,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 3,
+        "shouldWriteSignature": true,
+        "signatureIdx": 2,
+        "newBytesSinceLastSignature": 0
+      }
+    }
+  ]
+}

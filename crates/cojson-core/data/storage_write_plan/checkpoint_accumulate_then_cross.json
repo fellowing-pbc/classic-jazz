@@ -1,0 +1,100 @@
+{
+  "description": "sub-threshold stores accumulate bytes; the store that crosses writes a checkpoint and resets",
+  "steps": [
+    {
+      "label": "b0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        30
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 1,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 30
+      }
+    },
+    {
+      "label": "b1",
+      "lastIdx": 1,
+      "after": 1,
+      "bytesSinceLastSignature": 30,
+      "newTxSizes": [
+        30
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 2,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 60
+      }
+    },
+    {
+      "label": "b2",
+      "lastIdx": 2,
+      "after": 2,
+      "bytesSinceLastSignature": 60,
+      "newTxSizes": [
+        30
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 90
+      }
+    },
+    {
+      "label": "b3_cross",
+      "lastIdx": 3,
+      "after": 3,
+      "bytesSinceLastSignature": 90,
+      "newTxSizes": [
+        30
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 4,
+        "shouldWriteSignature": true,
+        "signatureIdx": 3,
+        "newBytesSinceLastSignature": 0
+      }
+    },
+    {
+      "label": "b4_after_reset",
+      "lastIdx": 4,
+      "after": 4,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        30
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 5,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 30
+      }
+    }
+  ]
+}

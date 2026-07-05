@@ -13,6 +13,7 @@ pub mod core {
     pub mod session_log;
     pub mod session_map;
     pub mod storage_reconciliation;
+    pub mod storage_write_plan;
     pub use keys::*;
     pub use nonce::*;
     pub use priority::*;

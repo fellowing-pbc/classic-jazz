@@ -1,0 +1,47 @@
+{
+  "description": "re-store identical content (after=0) → nothing new, no DB write",
+  "steps": [
+    {
+      "label": "store0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        10,
+        20,
+        30
+      ],
+      "maxRecommendedTxSize": 102400,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 3,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 60
+      }
+    },
+    {
+      "label": "store1_identical",
+      "lastIdx": 3,
+      "after": 0,
+      "bytesSinceLastSignature": 60,
+      "newTxSizes": [
+        10,
+        20,
+        30
+      ],
+      "maxRecommendedTxSize": 102400,
+      "expected": {
+        "invalidGap": false,
+        "noOp": true,
+        "actuallyNewCount": 0,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "description": "one store of several txs whose combined size crosses threshold → single checkpoint at the batch's last index",
+  "steps": [
+    {
+      "label": "batch",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        40,
+        40,
+        40
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 3,
+        "newLastIdx": 3,
+        "shouldWriteSignature": true,
+        "signatureIdx": 2,
+        "newBytesSinceLastSignature": 0
+      }
+    }
+  ]
+}

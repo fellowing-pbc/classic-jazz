@@ -1,0 +1,44 @@
+{
+  "description": "empty-changes txs contribute 0 bytes → running total unchanged, no checkpoint",
+  "steps": [
+    {
+      "label": "z0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        0,
+        0
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 2,
+        "newLastIdx": 2,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 0
+      }
+    },
+    {
+      "label": "z1",
+      "lastIdx": 2,
+      "after": 2,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        0
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 0
+      }
+    }
+  ]
+}

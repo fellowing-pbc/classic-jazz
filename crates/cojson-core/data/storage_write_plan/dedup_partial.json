@@ -1,0 +1,49 @@
+{
+  "description": "second store re-sends 3 known + 2 new txs (after=0) → slice writes only the 2 new",
+  "steps": [
+    {
+      "label": "store0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        10,
+        20,
+        30
+      ],
+      "maxRecommendedTxSize": 102400,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 3,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 60
+      }
+    },
+    {
+      "label": "store1_redelivery",
+      "lastIdx": 3,
+      "after": 0,
+      "bytesSinceLastSignature": 60,
+      "newTxSizes": [
+        10,
+        20,
+        30,
+        40,
+        50
+      ],
+      "maxRecommendedTxSize": 102400,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 2,
+        "newLastIdx": 5,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 150
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "first store already exceeds threshold → checkpoint at idx0",
+  "steps": [
+    {
+      "label": "over",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        150
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 1,
+        "shouldWriteSignature": true,
+        "signatureIdx": 0,
+        "newBytesSinceLastSignature": 0
+      }
+    }
+  ]
+}

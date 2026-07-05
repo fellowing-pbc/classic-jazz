@@ -1,0 +1,26 @@
+{
+  "description": "first store of 3 sub-threshold txs → no checkpoint",
+  "steps": [
+    {
+      "label": "store0",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        10,
+        20,
+        30
+      ],
+      "maxRecommendedTxSize": 102400,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 3,
+        "newLastIdx": 3,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 60
+      }
+    }
+  ]
+}

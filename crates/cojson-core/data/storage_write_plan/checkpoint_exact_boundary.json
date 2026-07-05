@@ -1,0 +1,43 @@
+{
+  "description": "base+size == MAX is NOT over threshold; one byte over on the next store crosses it",
+  "steps": [
+    {
+      "label": "at_boundary",
+      "lastIdx": 0,
+      "after": 0,
+      "bytesSinceLastSignature": 0,
+      "newTxSizes": [
+        100
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 1,
+        "shouldWriteSignature": false,
+        "signatureIdx": null,
+        "newBytesSinceLastSignature": 100
+      }
+    },
+    {
+      "label": "one_over",
+      "lastIdx": 1,
+      "after": 1,
+      "bytesSinceLastSignature": 100,
+      "newTxSizes": [
+        1
+      ],
+      "maxRecommendedTxSize": 100,
+      "expected": {
+        "invalidGap": false,
+        "noOp": false,
+        "actuallyNewCount": 1,
+        "newLastIdx": 2,
+        "shouldWriteSignature": true,
+        "signatureIdx": 1,
+        "newBytesSinceLastSignature": 0
+      }
+    }
+  ]
+}
