@@ -10,6 +10,21 @@ use salsa20::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value as JsonValue};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Process-global monotonic counter stamped onto every transaction at the moment
+/// it is COMMITTED into a session log (whether received via `add_transactions` or
+/// authored locally). It records the ORDER transactions became known to this
+/// node — the native equivalent of the position a `VerifiedTransaction` takes in
+/// TS's incrementally-accumulated `toProcessTransactions` array. Only the
+/// RELATIVE order within one covalue is ever consulted (by the coList RGA
+/// tie-break, see `sort_for_colist`); a single global counter preserves that for
+/// every covalue at once. Non-`coList` materializers never read it.
+static NEXT_ARRIVAL_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn next_arrival_seq() -> u64 {
+    NEXT_ARRIVAL_SEQ.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionID(pub String);
@@ -150,6 +165,10 @@ pub struct SessionLogInternal {
     public_key: Option<VerifyingKey>,
     hasher: blake3::Hasher,
     transactions_json: Vec<String>,
+    /// Parallel to `transactions_json`: the process-global arrival stamp assigned
+    /// to each committed transaction (see `NEXT_ARRIVAL_SEQ`). Same length and
+    /// index as `transactions_json`.
+    arrival_seq: Vec<u64>,
     last_signature: Option<Signature>,
     nonce_generator: NonceGenerator,
     crypto_cache: CryptoCache,
@@ -196,6 +215,7 @@ impl SessionLogInternal {
             public_key,
             hasher,
             transactions_json: Vec::new(),
+            arrival_seq: Vec::new(),
             last_signature: None,
             nonce_generator: NonceGenerator::new(co_id, session_id),
             crypto_cache: CryptoCache::new(),
@@ -208,6 +228,13 @@ impl SessionLogInternal {
     /// Get a reference to the list of serialized transaction JSON strings.
     pub fn transactions_json(&self) -> &Vec<String> {
         &self.transactions_json
+    }
+
+    /// Per-transaction arrival stamps (parallel to `transactions_json`). Used by
+    /// the coList RGA tie-break to reproduce TS `toProcessTransactions` arrival
+    /// order for transactions that tie on every time/identity key.
+    pub fn arrival_seq(&self) -> &[u64] {
+        &self.arrival_seq
     }
 
     /// Get the last signature, if any.
@@ -295,6 +322,7 @@ impl SessionLogInternal {
         let tx_json = serde_json::to_string(&new_tx).unwrap();
         self.hasher.update(tx_json.as_bytes());
         self.transactions_json.push(tx_json);
+        self.arrival_seq.push(next_arrival_seq());
 
         // Compute the new hash and sign it.
         let new_hash = self.hasher.finalize();
@@ -448,9 +476,14 @@ impl SessionLogInternal {
             self.hasher = hasher;
         }
 
-        // Add new transactions to the session log.
+        // Add new transactions to the session log, stamping each with a
+        // process-global arrival sequence in commit order.
+        let committed = self.pending_transactions.len();
         self.transactions_json
             .extend(self.pending_transactions.drain(..));
+        for _ in 0..committed {
+            self.arrival_seq.push(next_arrival_seq());
+        }
 
         // Update the last signature.
         self.last_signature = Some(new_signature.clone());

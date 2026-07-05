@@ -125,6 +125,12 @@ pub struct GroupTxView {
     /// among the newly-ingested set as a re-identification risk and falls back
     /// to a full recompute (it may re-time/re-order into history).
     pub is_merge: bool,
+    /// Process-global arrival stamp: the order this transaction was COMMITTED
+    /// into the session log (the order it became known to this node). The coList
+    /// RGA tie-break uses it to reproduce TS's incrementally-accumulated
+    /// `toProcessTransactions` arrival order for transactions that tie on every
+    /// time/identity key; other materializers ignore it. `u64::MAX` when unknown.
+    pub arrival_seq: u64,
 }
 
 /// Parse one stored transaction JSON into a [`GroupTxView`], applying any
@@ -228,6 +234,8 @@ fn build_tx_view(
         },
     };
 
+    let arrival_seq = sm.arrival_seq_of(session_id, tx_index).unwrap_or(u64::MAX);
+
     GroupTxView {
         session_id: session_id.to_string(),
         tx_index,
@@ -242,6 +250,7 @@ fn build_tx_view(
         key_used,
         source_after_current,
         is_merge,
+        arrival_seq,
     }
 }
 
@@ -673,6 +682,7 @@ mod tests {
                 key_used: None,
                 source_after_current: false,
                 is_merge: false,
+                arrival_seq: 0,
             }
         }
 
@@ -769,6 +779,7 @@ mod tests {
                 key_used: None,
                 source_after_current: false,
                 is_merge: false,
+                arrival_seq: 0,
             }
         }
 

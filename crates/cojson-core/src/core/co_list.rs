@@ -8,7 +8,7 @@
 //! (or the `start`/`end` roots) and deletions are tombstones keyed by the
 //! inserted opID. There is NO per-anchor tie-break comparator — determinism is
 //! delegated ENTIRELY to the core's global sorted-transaction order
-//! ([`sort_for_validation`], the port of `compareTransactions`): concurrent
+//! (`sort_for_validation`, the port of `compareTransactions`): concurrent
 //! inserts at the same anchor land in a `successors`/`predecessors` array in the
 //! order the sorted-tx pass yields them, and the DFS emits them in that array
 //! order.
@@ -72,7 +72,7 @@ use crate::core::group_engine::engine::{
     ensure as engine_ensure, generation_of, verdicts_of, GroupEngineState, Verdict,
 };
 use crate::core::group_engine::tx_view::{
-    collect_group_txs_keyed, sort_for_validation, GroupTxView, PendingTxIn, Privacy,
+    collect_group_txs_keyed, GroupTxView, PendingTxIn, Privacy,
 };
 use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
@@ -291,7 +291,7 @@ fn fww_key(tx: &GroupTxView) -> Option<&str> {
 /// `s`/`b`/`t` compression relies on. Operates on the collected views IN
 /// session-insertion order (the order `collect_group_txs_keyed` yields, which is
 /// per-session, `tx_index` ascending — exactly the `previous` chain), BEFORE
-/// [`sort_for_validation`], mutating `source_session_id` / `source_tx_index` /
+/// `sort_for_validation`, mutating `source_session_id` / `source_tx_index` /
 /// `effective_made_at` in place and returning `branch_by_current[(session,
 /// tx_index)]` for the branch component (which no `GroupTxView` field carries).
 ///
@@ -419,6 +419,57 @@ fn parse_opid(v: &JsonValue) -> Option<OpId> {
         branch: obj.get("branch").and_then(|b| b.as_str()).map(String::from),
         change_idx: obj.get("changeIdx")?.as_u64()? as u32,
     })
+}
+
+/// coList-local transaction ordering. Starts from the shared
+/// `sort_for_validation` rule — `effective_made_at` ascending, then EFFECTIVE
+/// `(source_session, source_tx_index)` — but adds a FINAL tie-break on
+/// `arrival_seq` (the order the transaction became known to this node).
+///
+/// ## Why coList needs the extra key
+///
+/// TS's `compareTransactions` returns `0` for two transactions that tie on
+/// effective made-at AND effective identity, and `Array.prototype.sort` is
+/// stable, so TS's result is decided by the PRE-SORT order — which is
+/// `toProcessTransactions`, built INCREMENTALLY in transaction ARRIVAL order
+/// (`loadVerifiedTransactionsFromLogs` appends each newly-seen transaction as it
+/// is parsed). Native's `collect_group_txs_keyed` instead re-scans the session
+/// map GROUPED BY SESSION, so a late-arriving transaction in an early session
+/// (e.g. a `bob-branch` merge written into the list's original session at a high
+/// tx-index) is emitted BEFORE an earlier-arriving transaction that happens to
+/// live in a later session (an `alice-branch` merge under the merger's own
+/// session at tx 0). When those two merged inserts share an anchor and tie on
+/// effective (source) made-at AND effective identity — i.e. two branch merges of
+/// the SAME source `(session, txIndex)`, differing only by branch — that
+/// grouped-rescan reordering flips their RGA order versus TS.
+///
+/// `arrival_seq` (a process-global counter stamped at commit time, see
+/// `session_log`) records exactly the order transactions became known — the same
+/// order TS accumulates them into `toProcessTransactions`. Using it as the final
+/// tie-break reproduces TS's stable-sort-of-arrival-order result deterministically
+/// and convergently for whatever a given node actually saw (matching the
+/// scenario's own intent: "make the second merge happen later than the previous
+/// one, so the ordering is not based on the random sessionIDs", `coList.test.ts`
+/// — the LATER-committed merge is the LATER-arriving one). It only ever
+/// discriminates transactions the earlier keys leave `Equal`, so no
+/// previously-defined order changes.
+fn sort_for_colist(txs: &mut [GroupTxView]) {
+    txs.sort_by(|a, b| {
+        a.effective_made_at
+            .cmp(&b.effective_made_at)
+            .then_with(|| {
+                let a_session = a.source_session_id.as_deref().unwrap_or(&a.session_id);
+                let b_session = b.source_session_id.as_deref().unwrap_or(&b.session_id);
+                if a_session == b_session {
+                    let a_index = a.source_tx_index.unwrap_or(a.tx_index);
+                    let b_index = b.source_tx_index.unwrap_or(b.tx_index);
+                    a_index.cmp(&b_index)
+                } else {
+                    core::cmp::Ordering::Equal
+                }
+            })
+            .then_with(|| a.arrival_seq.cmp(&b.arrival_seq))
+    });
 }
 
 /// The mutable RGA accumulator built during the sorted-tx pass.
@@ -595,7 +646,7 @@ fn build_full_view(
     // Fill compressed merge source identities (session/branch/made-at) BEFORE
     // sorting — the sort tie-break reads effective `(made_at, session, index)`.
     let branch_by_current = apply_merge_source_fallback(&mut txs);
-    sort_for_validation(&mut txs);
+    sort_for_colist(&mut txs);
 
     let valid = valid_set(verdicts);
     let processable = processable_set(verdicts);

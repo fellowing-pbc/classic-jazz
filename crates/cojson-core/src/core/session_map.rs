@@ -706,6 +706,15 @@ impl SessionMapImpl {
             .map(|(sid, log)| (sid.as_str(), log.transactions_json().as_slice()))
     }
 
+    /// The process-global arrival stamp of a committed transaction (the order it
+    /// became known to this node). Used by the coList RGA tie-break; `None` when
+    /// the session/index is unknown.
+    pub(crate) fn arrival_seq_of(&self, session_id: &str, tx_index: u32) -> Option<u64> {
+        self.sessions
+            .get(session_id)
+            .and_then(|sl| sl.arrival_seq().get(tx_index as usize).copied())
+    }
+
     /// Get last signature for a session
     pub fn get_last_signature(&self, session_id: &str) -> Option<String> {
         self.sessions
