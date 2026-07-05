@@ -479,7 +479,7 @@ export class HttpRoute<
       loadAs: as,
     });
 
-    const tracking = node.syncManager.trackDirtyCoValues();
+    const tracking = node.trackDirtyCoValues();
 
     const responseValue = await callback(
       data.value as Loaded<CoMapSchema<RequestShape>, RequestResolve>,
@@ -502,7 +502,7 @@ export class HttpRoute<
 
     // TODO: Detect the defer support from the environment
     await Promise.all(
-      Array.from(tracking.done(), (id) => node.syncManager.waitForSync(id)),
+      Array.from(tracking.done(), (id) => node.waitForPeerSync(id)),
     );
 
     return new Response(responseBody, {

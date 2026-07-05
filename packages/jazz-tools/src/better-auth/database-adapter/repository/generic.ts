@@ -36,8 +36,7 @@ export class JazzRepository {
     this.betterAuthSchema = betterAuthSchema;
 
     if (ensureSync)
-      this.coValuesTracker =
-        worker.$jazz.raw.core.node.syncManager.trackDirtyCoValues();
+      this.coValuesTracker = worker.$jazz.raw.core.node.trackDirtyCoValues();
   }
 
   ensureSync() {
@@ -46,7 +45,7 @@ export class JazzRepository {
 
     return Promise.all(
       Array.from(this.coValuesTracker.done(), (id) =>
-        this.worker.$jazz.raw.core.node.syncManager.waitForSync(id),
+        this.worker.$jazz.raw.core.node.waitForPeerSync(id),
       ),
     );
   }
