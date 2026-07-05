@@ -6,12 +6,12 @@ pub mod core {
     pub mod group_keys;
     pub use group_keys::*;
     pub mod keys;
-    pub mod nonce;
     pub mod known_state;
+    pub mod nonce;
     pub mod peer_known_state;
-    pub mod storage_reconciliation;
     pub mod session_log;
     pub mod session_map;
+    pub mod storage_reconciliation;
     pub use keys::*;
     pub use nonce::*;
     pub use session_log::*;
@@ -30,12 +30,19 @@ pub mod core {
     pub use group_key_state::*;
     pub mod group_key_rotation;
     pub use group_key_rotation::*;
+    pub mod group_key_extend;
+    pub use group_key_extend::*;
+    pub mod group_key_membership;
+    pub use group_key_membership::*;
     pub mod co_map;
     pub use co_map::*;
     pub mod co_stream;
     pub use co_stream::*;
     pub mod co_list;
     pub use co_list::*;
+    // Native, read-only reproduction of LocalNode's pure identity-resolution
+    // slice. Test-only oracle: no glob re-export, zero production call sites.
+    pub mod identity_resolution;
 }
 
 pub mod hash {
