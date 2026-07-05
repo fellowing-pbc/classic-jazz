@@ -639,6 +639,39 @@ export class VerifiedState {
     return piecesWithContent;
   }
 
+  /**
+   * SHADOW-ONLY: native reproduction of {@link newContentSince}. Calls the Rust
+   * `content_to_send` with the SAME known state and returns the parsed content
+   * messages (or `undefined` when nothing is to be sent, mirroring
+   * `newContentSince`).
+   *
+   * This exists purely so the sync layer can run the native content decision
+   * ALONGSIDE the real one for observation/comparison. It performs no mutation
+   * and its result is never used to drive what is actually sent. `contentToSend`
+   * is optional on {@link NodeCoreImpl}; when a backend lacks it this returns
+   * `undefined` and the caller records the comparison as skipped.
+   */
+  /** Whether the native backend implements the SHADOW-ONLY `contentToSend`. */
+  supportsNativeContentDecision(): boolean {
+    return typeof this.nodeCore.contentToSend === "function";
+  }
+
+  newContentSinceNative(
+    knownState: CoValueKnownState | undefined,
+  ): NewContentMessage[] | undefined {
+    if (!this.nodeCore.contentToSend) {
+      return undefined;
+    }
+    const json = this.nodeCore.contentToSend(
+      this.id,
+      knownState ? JSON.stringify(knownState) : undefined,
+    );
+    if (json === undefined || json === null) {
+      return undefined;
+    }
+    return JSON.parse(json) as NewContentMessage[];
+  }
+
   knownState(): CoValueKnownState {
     if (!this.cachedKnownState) {
       this.cachedKnownState = this.nodeCore.getKnownState(

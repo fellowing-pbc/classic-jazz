@@ -550,6 +550,21 @@ export interface NodeCoreImpl {
   isStreaming(coId: string): boolean;
   setStreamingKnownState(coId: string, streamingJson: string): void;
 
+  /**
+   * SHADOW-ONLY native port of `VerifiedState.newContentSince`. Given the
+   * peer's optimistic known state as JSON (`{id, header, sessions}`, or omitted
+   * for `undefined`), returns the `NewContentMessage[]` that SHOULD be sent,
+   * encoded as a JSON string, or `null`/`undefined` when there is nothing to
+   * send. Read-only: mutates no native state and drives no live sync behavior.
+   *
+   * Optional so that only the napi backend (where the sync shadow comparison
+   * runs) need implement it; other backends satisfy the interface without it.
+   */
+  contentToSend?(
+    coId: string,
+    knownStateJson?: string,
+  ): string | null | undefined;
+
   // === Deletion ===
   markAsDeleted(coId: string): void;
   isDeleted(coId: string): boolean;

@@ -667,6 +667,17 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
     this.nodeCore.setStreamingKnownState(coId, streamingJson);
   }
 
+  // SHADOW-ONLY: forwards the native content decision (see NodeCoreImpl).
+  contentToSend(
+    coId: string,
+    knownStateJson?: string,
+  ): string | null | undefined {
+    return this.nodeCore.contentToSend(coId, knownStateJson) as
+      | string
+      | null
+      | undefined;
+  }
+
   // === Deletion ===
   markAsDeleted(coId: string): void {
     this.nodeCore.markAsDeleted(coId);

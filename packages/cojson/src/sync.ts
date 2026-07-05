@@ -17,6 +17,7 @@ import {
 } from "./coValueContentMessage.js";
 import { CoValueCore } from "./coValueCore/coValueCore.js";
 import { CoValueHeader, Transaction } from "./coValueCore/verifiedState.js";
+import { maybeRunShadowContentCompare } from "./syncShadowCompare.js";
 import { Signature } from "./crypto/crypto.js";
 import { isDeleteSessionID, RawCoID, SessionID, isRawCoID } from "./ids.js";
 import { LocalNode } from "./localNode.js";
@@ -323,8 +324,20 @@ export class SyncManager {
       }
     }
 
-    const newContentPieces = coValue.newContentSince(
-      peer.getOptimisticKnownState(id),
+    const optimisticKnownState = peer.getOptimisticKnownState(id);
+
+    const newContentPieces = coValue.newContentSince(optimisticKnownState);
+
+    // SHADOW-MODE ONLY (Phase 2): run the native content decision alongside the
+    // real one and record whether they agree. Provably inert by default — the
+    // helper returns immediately unless COJSON_SYNC_SHADOW_COMPARE=1, and even
+    // when enabled it only reads state and records into `shadowStats`. It never
+    // mutates anything and cannot alter `newContentPieces` (the real value used
+    // below, unconditionally).
+    maybeRunShadowContentCompare(
+      coValue,
+      optimisticKnownState,
+      newContentPieces,
     );
 
     if (newContentPieces) {
