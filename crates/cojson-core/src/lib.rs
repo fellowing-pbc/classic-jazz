@@ -41,6 +41,11 @@ pub mod core {
     pub use group_key_extend::*;
     pub mod group_key_membership;
     pub use group_key_membership::*;
+    // JSON wire wrappers (FFI surface) over the three group-key write modules
+    // above. Native-only; consumed by the napi/wasm binding crates, not by
+    // production `group.ts` (stage 2).
+    pub mod group_key_ffi;
+    pub use group_key_ffi::*;
     // Leaf helpers shared by the materialized content views below. Internal
     // (`pub(crate)`), so no glob re-export.
     pub mod co_content;
