@@ -63,7 +63,6 @@ const { localNode } = useJazz();
 ```
 */
 export class LocalNode {
-  /** @internal */
   crypto: CryptoProvider;
   /** @internal */
   readonly nodeCore: NodeCoreImpl;
@@ -669,7 +668,6 @@ export class LocalNode {
     return coValue;
   }
 
-  /** @internal */
   async loadCoValueCore(
     id: RawCoID,
     skipLoadingFromPeer?: PeerID,
@@ -946,7 +944,6 @@ export class LocalNode {
     }
   }
 
-  /** @internal */
   expectCoValueLoaded(id: RawCoID, expectation?: string): AvailableCoValueCore {
     const coValue = this.getCoValue(id);
 
