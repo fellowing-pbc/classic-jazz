@@ -5,6 +5,10 @@ pub use lzy;
 pub mod core {
     pub mod group_keys;
     pub use group_keys::*;
+    // Shared serialization for the unified native-decision result envelope
+    // (`{"ok":true,"value":…}` / `{"ok":false,"kind":"error","message":…}`) that
+    // the content-decision, storage write-plan and group-key write FFI all emit.
+    pub mod native_result;
     pub mod keys;
     pub mod known_state;
     pub mod nonce;
