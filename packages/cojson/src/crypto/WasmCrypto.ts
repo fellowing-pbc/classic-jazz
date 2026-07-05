@@ -19,10 +19,6 @@ import {
   unseal,
   unsealForGroup,
   verify,
-  groupRotateReadKey as nativeGroupRotateReadKey,
-  groupAddMemberInternal as nativeGroupAddMemberInternal,
-  groupAddEveryoneWriteOnly as nativeGroupAddEveryoneWriteOnly,
-  groupRemoveMember as nativeGroupRemoveMember,
   groupExtend as nativeGroupExtend,
   planSessionWrite as nativePlanSessionWrite,
 } from "cojson-core-wasm";
@@ -885,22 +881,26 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
   }
 
   // === group key-management write path (stage 2) ===
-  // The FFI wrappers are stateless module-level functions (pure JSON-in/out over
-  // the caller-supplied snapshot + inputs), not NodeCore methods.
+  // The snapshot-consuming writes (rotate / addMember / addEveryoneWriteOnly /
+  // removeMember) route through NodeCore methods: when the input omits `snapshot`
+  // the native side sources the group's key state from its OWN already-
+  // materialized coMap view, so `group.ts` need not re-serialize the whole group
+  // CoMap and marshal it across the FFI boundary on every write. `extend` takes no
+  // snapshot, so it stays a stateless module-level function.
   groupRotateReadKey(inputJson: string): string {
-    return nativeGroupRotateReadKey(inputJson);
+    return this.nodeCore.groupRotateReadKey(inputJson);
   }
 
   groupAddMemberInternal(inputJson: string): string {
-    return nativeGroupAddMemberInternal(inputJson);
+    return this.nodeCore.groupAddMemberInternal(inputJson);
   }
 
   groupAddEveryoneWriteOnly(inputJson: string): string {
-    return nativeGroupAddEveryoneWriteOnly(inputJson);
+    return this.nodeCore.groupAddEveryoneWriteOnly(inputJson);
   }
 
   groupRemoveMember(inputJson: string): string {
-    return nativeGroupRemoveMember(inputJson);
+    return this.nodeCore.groupRemoveMember(inputJson);
   }
 
   groupExtend(inputJson: string): string {

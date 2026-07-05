@@ -94,6 +94,10 @@ export function disableNativeCoMapMaterialization() {
   nativeCoMapMaterializationEnabled = false;
 }
 
+export function isNativeCoMapMaterializationEnabled() {
+  return nativeCoMapMaterializationEnabled;
+}
+
 // The native coStream/coFeed materialization path (rich per-session delta pulled
 // on every ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
 // materialization should live in the Rust core, not TS. Same trade-off framing
@@ -188,35 +192,37 @@ export function disableNativeCoPlainTextMaterialization() {
 
 // The native group key-management WRITE path (rotateReadKey / addMemberInternal /
 // createInvite / removeMember / extend), gated behind
-// `crypto`'s `supportsNativeGroupKeyWrites()`. Unlike the materialization flags
-// above this is a WRITE path over SECURITY-SENSITIVE key material (access
-// control, read-key revelations), so it defaults OFF: the byte-for-byte native
-// orchestration (crates/cojson-core/src/core/group_key_{rotation,membership,
-// extend}.rs) is fixture-verified against the TS write emitters, but it is only
-// exercised in production once explicitly enabled and re-verified. When ON,
-// `group.ts` gathers the non-native inputs TS already resolves (fresh random
-// keys, resolved agent sealer ids, resolved read-key secrets), calls the FFI
-// wrappers to get the ordered write list, and applies it via `group.set` /
-// `group.delete`. Deferred branches (non-account-member parent group-sealer /
-// legacy paths, and — conservatively — any rotation of a group with loaded
-// child groups) fall back to the full TS logic. Toggle via
+// `crypto`'s `supportsNativeGroupKeyWrites()`. This is a WRITE path over
+// SECURITY-SENSITIVE key material (access control, read-key revelations); the
+// byte-for-byte native orchestration (crates/cojson-core/src/core/
+// group_key_{rotation,membership,extend}.rs) is fixture-verified against the TS
+// write emitters. When ON, `group.ts` gathers the non-native inputs TS already
+// resolves (fresh random keys, resolved agent sealer ids, resolved read-key
+// secrets), calls the FFI wrappers to get the ordered write list, and applies it
+// via `group.set` / `group.delete`. Deferred branches (non-account-member parent
+// group-sealer / legacy paths, and — conservatively — any rotation of a group
+// with loaded child groups) fall back to the full TS logic. Toggle via
 // `enableNativeGroupKeyWrites()` / `disableNativeGroupKeyWrites()`.
 //
-// STATUS: the native write path is CORRECT — with the flag forced on, the full
-// cojson suite (incl. every group.* / permissions / invite / rotation /
-// membership / extension file) passes byte-for-byte, three times, and a direct
-// native-vs-TS diff over a 300x rotation + `addMember(everyone,"reader")`
-// sequence yields identical transaction counts and an identical resolvable read
-// key. It stays OFF by default for a PERFORMANCE reason, not a correctness one:
-// each call rebuilds and JSON-serializes the group's whole materialized CoMap as
-// the FFI `snapshot`, so a group that has accumulated many key-management fields
-// (e.g. hundreds of rotations, each leaving a permanent `${old}_for_${new}` +
-// per-member reveal) pays an O(fields) cost per write, i.e. O(n^2) over a long
-// rotation run. That regresses the streaming-wait / upload-progress jazz-tools
-// tests (which do 300 rotations inside a 5s test budget) into timeouts. Flipping
-// the default on needs that snapshot cost addressed first (e.g. sourcing the
-// snapshot from the native materialized view instead of re-serializing in TS).
-let nativeGroupKeyWritesEnabled = false;
+// STATUS: ON by default. The native write path is CORRECT — the full cojson suite
+// (incl. every group.* / permissions / invite / rotation / membership / extension
+// file) passes byte-for-byte, and a direct native-vs-TS diff over a 300x rotation
+// + `addMember(everyone,"reader")` sequence yields identical transaction counts
+// and an identical resolvable read key.
+//
+// The earlier PERFORMANCE blocker is resolved: the FFI no longer takes the
+// group's whole materialized CoMap as a re-serialized `snapshot` on every call
+// (an O(fields) build + JSON.stringify + boundary marshal per write, O(n^2) over
+// a long rotation run, which timed out the streaming-wait jazz-tools tests). The
+// snapshot-consuming writes now route through NodeCore methods
+// (`crypto.groupRotateReadKey` etc. -> `NodeCore::group_rotate_read_key`), which
+// source the group's key state from the node's OWN materialized coMap view (built
+// from the native session log the group's trusting writes already populate) when
+// `group.ts` omits `snapshot`. That keeps the per-write FFI input bounded by the
+// call's own inputs (members/parents), not the group's accumulated history. When
+// native coMap materialization is disabled, `group.ts` still embeds the
+// TS-materialized snapshot and the native side honors it, preserving correctness.
+let nativeGroupKeyWritesEnabled = true;
 
 export function enableNativeGroupKeyWrites() {
   nativeGroupKeyWritesEnabled = true;
