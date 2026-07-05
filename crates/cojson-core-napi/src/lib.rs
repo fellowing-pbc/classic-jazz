@@ -1317,6 +1317,27 @@ pub fn group_extend(input_json: String) -> napi::Result<String> {
 }
 
 // ============================================================================
+// Storage per-session write decision (JSON wire; native-only, stage-1 FFI surface)
+// ============================================================================
+//
+// Thin napi wrapper over `cojson_core::core::storage_write_plan`. Takes one
+// session's stored row-state plus the incoming content message's `after`/tx
+// sizes as a single JSON string and returns the `SessionWritePlan` JSON (the
+// dedup/checkpoint/gap decision `storeSingle`+`putNewTxs` compute inline today).
+// Routing over JSON keeps every `i64` (byte sizes, rolling totals) off the ABI
+// as a native number, avoiding BigInt marshalling. NOTHING in cojson production
+// TS calls this yet — storage wiring is deliberately gated behind a later,
+// default-false flag given the write path is the most data-loss-sensitive in the
+// system (a wrong decision is unrecoverable — there is no peer to resync from).
+
+/// Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
+/// `SessionWritePlan` JSON.
+#[napi(js_name = "planSessionWrite")]
+pub fn plan_session_write(input_json: String) -> napi::Result<String> {
+  cojson_core::core::storage_write_plan::plan_session_write_json(&input_json).map_err(to_napi_err)
+}
+
+// ============================================================================
 // Hash Functions
 // ============================================================================
 

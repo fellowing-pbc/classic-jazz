@@ -1243,3 +1243,21 @@ pub fn group_remove_member(input_json: String) -> Result<String, JsValue> {
 pub fn group_extend(input_json: String) -> Result<String, JsValue> {
     cojson_core::core::group_key_ffi::extend_json(&input_json).map_err(to_wasm_err)
 }
+
+// ============================================================================
+// Storage per-session write decision (JSON wire; native-only, stage-1 FFI surface)
+// ============================================================================
+//
+// Thin wasm wrapper over `cojson_core::core::storage_write_plan`, byte-identical
+// in behaviour to its napi twin. Takes one session's stored row-state plus the
+// incoming content message's `after`/tx sizes as a single JSON string and
+// returns the `SessionWritePlan` JSON. Routing over JSON keeps every `i64` off
+// the ABI as a native number. NOTHING in cojson production TS calls this yet —
+// storage wiring is deliberately gated behind a later, default-false flag.
+
+/// Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
+/// `SessionWritePlan` JSON.
+#[wasm_bindgen(js_name = planSessionWrite)]
+pub fn plan_session_write(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::storage_write_plan::plan_session_write_json(&input_json).map_err(to_wasm_err)
+}
