@@ -2,5 +2,7 @@
   "scenario": "crash_window_durability",
   "trace": [],
   "dbStates": {},
-  "durabilityWindow": [true]
+  "durabilityWindow": [
+    true
+  ]
 }

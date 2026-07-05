@@ -15,7 +15,11 @@
               "lastIdx": 3,
               "txCount": 3,
               "hasLastSignature": true,
-              "signatureCheckpoints": [0, 1, 2]
+              "signatureCheckpoints": [
+                0,
+                1,
+                2
+              ]
             }
           }
         }

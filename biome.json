@@ -12,6 +12,7 @@
       "crates/cojson-core-napi/__test__/**",
       "crates/cojson-core-napi/index.js",
       "!crates/**",
+      "!**/storageDifferential/golden/**",
       "!**/jazz-tools.json",
       "!**/ios/**",
       "!**/android/**",
