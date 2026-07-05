@@ -1099,45 +1099,73 @@ impl SessionMapImpl {
         }
 
         // Serialize the content-bearing pieces into `NewContentMessage[]`.
+        //
+        // Session order inside `new` MUST match the piece's insertion order to
+        // mirror the TS `newContentSince`, which uses a plain object (insertion
+        // order). Routing through `serde_json::Value::Object` would re-sort the
+        // session keys because cojson-core builds serde_json without the
+        // `preserve_order` feature (its `Map` is a `BTreeMap`). Serializing an
+        // `IndexMap` directly preserves insertion order regardless of that
+        // feature. Every other key is emitted in alphabetical order to stay
+        // byte-identical to the previous serialization.
+        #[derive(Serialize)]
+        struct SessionOut {
+            after: u32,
+            #[serde(rename = "lastSignature")]
+            last_signature: Option<String>,
+            #[serde(rename = "newTransactions")]
+            new_transactions: Vec<serde_json::Value>,
+        }
+        #[derive(Serialize)]
+        struct MessageOut {
+            action: &'static str,
+            #[serde(
+                rename = "expectContentUntil",
+                skip_serializing_if = "Option::is_none"
+            )]
+            expect_content_until: Option<BTreeMap<String, u32>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            header: Option<serde_json::Value>,
+            id: String,
+            new: IndexMap<String, SessionOut>,
+            priority: u8,
+        }
+
         let header_value: serde_json::Value = serde_json::from_str(&self.get_header())?;
         let priority = get_priority_from_header(&self.header).as_u8();
         let id = self.co_id.0.clone();
 
-        let mut messages: Vec<serde_json::Value> = Vec::new();
+        let mut messages: Vec<MessageOut> = Vec::new();
         for piece in pieces.into_iter().filter(|p| p.has_content()) {
-            let mut new_obj = serde_json::Map::new();
+            let mut new_map: IndexMap<String, SessionOut> = IndexMap::new();
             for (session_id, sc) in piece.new {
-                let mut session_obj = serde_json::Map::new();
-                session_obj.insert("after".to_string(), serde_json::json!(sc.after));
-                session_obj.insert(
-                    "newTransactions".to_string(),
-                    serde_json::Value::Array(sc.new_transactions),
-                );
-                session_obj.insert(
-                    "lastSignature".to_string(),
-                    match sc.last_signature {
-                        Some(s) => serde_json::Value::String(s),
-                        None => serde_json::Value::Null,
+                new_map.insert(
+                    session_id,
+                    SessionOut {
+                        after: sc.after,
+                        last_signature: sc.last_signature,
+                        new_transactions: sc.new_transactions,
                     },
                 );
-                new_obj.insert(session_id, serde_json::Value::Object(session_obj));
             }
 
-            let mut msg = serde_json::Map::new();
-            msg.insert("action".to_string(), serde_json::json!("content"));
-            msg.insert("id".to_string(), serde_json::json!(id));
-            if piece.include_header {
-                msg.insert("header".to_string(), header_value.clone());
-            }
-            msg.insert("priority".to_string(), serde_json::json!(priority));
-            msg.insert("new".to_string(), serde_json::Value::Object(new_obj));
-            if let Some(ecu) = piece.expect_content_until {
-                msg.insert(
-                    "expectContentUntil".to_string(),
-                    serde_json::to_value(&ecu)?,
-                );
-            }
-            messages.push(serde_json::Value::Object(msg));
+            let header = if piece.include_header {
+                Some(header_value.clone())
+            } else {
+                None
+            };
+            let expect_content_until = piece
+                .expect_content_until
+                .map(|m| m.into_iter().collect::<BTreeMap<String, u32>>());
+
+            messages.push(MessageOut {
+                action: "content",
+                expect_content_until,
+                header,
+                id: id.clone(),
+                new: new_map,
+                priority,
+            });
         }
 
         Ok(Some(serde_json::to_string(&messages)?))
