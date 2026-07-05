@@ -136,27 +136,25 @@ export function disableNativeBinaryStreamMaterialization() {
   nativeBinaryStreamMaterializationEnabled = false;
 }
 
-// The native coList (RGA list) materialization path. Kept OFF by default: the
-// Rust view is fixture-verified byte-for-byte against the current TS `RawCoList`
-// for single-node scenarios (sequential edits, private/native-decrypt,
-// branch/merge, and concurrent branches — see
-// crates/cojson-core/src/core/co_list.rs `content_fixture_tests`), and the full
-// coList.test.ts suite passes in isolation with this flag ON. BUT one
-// multi-session, timing-dependent scenario still diverges:
-// `coList.test.ts` › "should handle multiple branches from different sessions
-// with complex operations" fails under full-suite load — native resolves the
-// concurrent inserts `["milk","bread","butter","eggs"]` where TS resolves
-// `["milk","eggs","bread","butter"]`. The two elements ("eggs" vs "bread") are
-// concurrent inserts at the SAME anchor ("milk") from DIFFERENT sessions/branches
-// with a tied `madeAt`; the residual divergence is in the merged-transaction
-// effective made-at / stable-sort tie-break reconstruction across a multi-session
-// merge (branching.ts now also never `t`-compresses for a native coList target,
-// as it does for coMap/coStream, which fixes the isolated run but not this
-// full-suite-timing case). Until that is root-caused and the fresh, forced
-// jazz-tools + cojson runs are genuinely clean with it ON, this stays OFF and
-// coLists use the TS RGA materializer. Enable via
-// `enableNativeCoListMaterialization()` to A/B / continue the investigation.
-let nativeCoListMaterializationEnabled = false;
+// The native coList (RGA list) materialization path. ON by default per the
+// 100%-Rust scope goal (same trade-off framing as the coMap/coStream flags): the
+// Rust view is fixture-verified byte-for-byte against the TS `RawCoList` (see
+// crates/cojson-core/src/core/co_list.rs `content_fixture_tests`) and the full
+// coList.test.ts suite passes repeatedly, both isolated and under full-suite load.
+// The earlier multi-session regression — `coList.test.ts` › "should handle
+// multiple branches from different sessions with complex operations" resolving the
+// concurrent inserts as `["milk","bread","butter","eggs"]` instead of TS's
+// `["milk","eggs","bread","butter"]` — was an RGA tie-break bug. Two branch
+// merges of the SAME source `(session, txIndex)` (differing only by branch),
+// anchored at the same element and appended within one millisecond, tie on EVERY
+// time/identity key; TS's stable sort then preserves the transaction ARRIVAL order
+// it accumulates in `toProcessTransactions`, whereas the native from-scratch
+// rebuild re-scanned the session map GROUPED BY SESSION and flipped them. Fixed in
+// the Rust core by stamping every committed transaction with a process-global
+// `arrival_seq` (session_log.rs) and using it as the coList sort's final tie-break
+// (`sort_for_colist`, co_list.rs), reproducing TS's arrival order deterministically.
+// Toggle off via `disableNativeCoListMaterialization()`.
+let nativeCoListMaterializationEnabled = true;
 
 export function enableNativeCoListMaterialization() {
   nativeCoListMaterializationEnabled = true;
@@ -1060,6 +1058,15 @@ export class CoValueCore {
           this.#markAsDeleted();
         }
 
+        // A native coList re-materializes its Rust view in `processNewTransactions`
+        // and returns early, so — like a native coMap — it never runs
+        // `loadVerifiedTransactionsFromLogs`, where the TS path advances
+        // `latestTxMadeAt`/`earliestTxMadeAt` (read by `createdAt`/`lastUpdatedAt`).
+        // Track them here from the raw wire transactions so those getters stay live.
+        if (this.isNativeCoList()) {
+          this.#trackNativeTxMadeAt(newTransactions);
+        }
+
         this.processNewTransactions();
       }
       this.scheduleNotifyUpdate();
@@ -1814,6 +1821,16 @@ export class CoValueCore {
     }
 
     const { transaction } = result;
+
+    // A native coList re-materializes its Rust view in `processNewTransactions`
+    // (below) and returns early, so it never runs
+    // `loadVerifiedTransactionsFromLogs`, where the TS path advances
+    // `latestTxMadeAt`/`earliestTxMadeAt` (read by `createdAt`/`lastUpdatedAt`).
+    // Track them here for this locally-authored transaction so those getters stay
+    // live without a `verifiedTransactions` self-heal.
+    if (this.isNativeCoList()) {
+      this.#trackNativeTxMadeAt([transaction]);
+    }
 
     // Assign pre-parsed meta and changes to skip the parse/decrypt operation when loading
     // this transaction in the current content
