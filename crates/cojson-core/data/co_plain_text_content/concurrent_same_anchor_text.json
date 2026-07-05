@@ -1,0 +1,136 @@
+{
+  "description": "genuine two-session concurrent same-anchor inserts, global sort order",
+  "covalues": [
+    {
+      "coId": "co_zYX73TQ2Kk3iAyvX3biU1wcTVb5",
+      "headerJson": "{\"createdAt\":\"2026-07-05T04:16:13.789Z\",\"meta\":null,\"ruleset\":{\"type\":\"unsafeAllowAll\"},\"type\":\"coplaintext\",\"uniqueness\":\"z4fuU312yk8RRsZbww\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+          "signerId": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"r\\\",\\\"after\\\":\\\"start\\\"},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"o\\\",\\\"after\\\":\\\"start\\\"},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"o\\\",\\\"after\\\":\\\"start\\\"},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"t\\\",\\\"after\\\":\\\"start\\\"}]\",\"madeAt\":1783224973789,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"A\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":3}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"-\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":3}}]\",\"madeAt\":1783224973791,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"C\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":1,\\\"changeIdx\\\":1}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"-\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":1,\\\"changeIdx\\\":1}}]\",\"madeAt\":1783224973834,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z5HBVm9ngSpTHx6XcHsh7JgzGHv7CmMhHvyrcUSbCuR3wYkLwfAdkU6Eq1b5CUms5ikLDuECicGnhCSgiCuZQTkJX"
+        },
+        {
+          "sessionId": "sealer_zGXVG7ZqEELnZ6L1XqkFRhuoZ5qPDzLPMAuf5iGbPPRCP/signer_z9NYzMUTfUAfCpFfTWfpeL2XBACmgMYdDitMgUTUKSwSS_session_zJnpvnCzigE9",
+          "signerId": "signer_z9NYzMUTfUAfCpFfTWfpeL2XBACmgMYdDitMgUTUKSwSS",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"B\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":3}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"-\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":3}}]\",\"madeAt\":1783224973813,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z4nq8jeo7wTkTrCW9ZkEzLPRREDLyrQxwB1rjAvpi8uZuA3sqKK8fiZYwGoeL1npo33i784i4S5WLFXAWDZrrcRRD"
+        }
+      ]
+    }
+  ],
+  "listId": "co_zYX73TQ2Kk3iAyvX3biU1wcTVb5",
+  "provideKeys": [],
+  "snapshot": [
+    "r",
+    "o",
+    "o",
+    "t",
+    "-",
+    "B",
+    "-",
+    "-",
+    "C",
+    "A"
+  ],
+  "entries": [
+    {
+      "value": "r",
+      "madeAt": 1783224973789,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 0,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "o",
+      "madeAt": 1783224973789,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 0,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "o",
+      "madeAt": 1783224973789,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 0,
+        "changeIdx": 2
+      }
+    },
+    {
+      "value": "t",
+      "madeAt": 1783224973789,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 0,
+        "changeIdx": 3
+      }
+    },
+    {
+      "value": "-",
+      "madeAt": 1783224973813,
+      "opID": {
+        "sessionID": "sealer_zGXVG7ZqEELnZ6L1XqkFRhuoZ5qPDzLPMAuf5iGbPPRCP/signer_z9NYzMUTfUAfCpFfTWfpeL2XBACmgMYdDitMgUTUKSwSS_session_zJnpvnCzigE9",
+        "txIndex": 0,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "B",
+      "madeAt": 1783224973813,
+      "opID": {
+        "sessionID": "sealer_zGXVG7ZqEELnZ6L1XqkFRhuoZ5qPDzLPMAuf5iGbPPRCP/signer_z9NYzMUTfUAfCpFfTWfpeL2XBACmgMYdDitMgUTUKSwSS_session_zJnpvnCzigE9",
+        "txIndex": 0,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "-",
+      "madeAt": 1783224973791,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 1,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "-",
+      "madeAt": 1783224973834,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 2,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "C",
+      "madeAt": 1783224973834,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 2,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "A",
+      "madeAt": 1783224973791,
+      "opID": {
+        "sessionID": "sealer_z3PVNDLwgfJfv1MwkyPgPBk3rT5tDzoMxwWJd8SkMcuwq/signer_z7m31jsaaMHrrjBoHee1JPTMJuvBc4GFhLTCfjE1aVTnt_session_zGP7a36oLXM5",
+        "txIndex": 1,
+        "changeIdx": 0
+      }
+    }
+  ],
+  "text": "root-B--CA"
+}

@@ -1034,3 +1034,108 @@ mod content_fixture_tests {
         run("concurrent_branches_list");
     }
 }
+
+// =====================================================================
+// coPlainText CONTENT fixtures — `RawCoPlainText extends RawCoList`, so its
+// grapheme entries flow through the SAME native RGA materializer (the Rust core
+// never inspects header.type). These replay fixtures captured from the CURRENT
+// TS `RawCoPlainText` (exported by
+// `packages/cojson/src/tests/coPlainTextContentFixtures.export.test.ts`) and
+// assert the native materialization reproduces `asArray()` (snapshot) + the
+// ordered `entries()` byte-for-byte, PLUS the coPlainText-specific grapheme-join
+// contract `snapshot.join("") == toString()`. One test per
+// `data/co_plain_text_content/*.json`. No coPlainText-specific Rust code exists;
+// these prove the header-agnostic coList path already produces correct text.
+// =====================================================================
+#[cfg(test)]
+mod coplaintext_content_fixture_tests {
+    use crate::core::group_engine::tx_view::fixtures::FixtureCovalue;
+    use crate::core::node::NodeCore;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct ProvideKey {
+        #[serde(rename = "keyId")]
+        key_id: String,
+        #[serde(rename = "keySecret")]
+        key_secret: String,
+    }
+    #[derive(Deserialize)]
+    struct ContentFixture {
+        covalues: Vec<FixtureCovalue>,
+        #[serde(rename = "listId")]
+        list_id: String,
+        #[serde(rename = "provideKeys")]
+        provide_keys: Vec<ProvideKey>,
+        snapshot: serde_json::Value,
+        entries: serde_json::Value,
+        text: String,
+    }
+
+    fn load(name: &str) -> ContentFixture {
+        let path = format!("data/co_plain_text_content/{name}.json");
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"))
+    }
+
+    fn run(name: &str) {
+        let fix = load(name);
+        let mut node = NodeCore::new();
+        // Ingest every covalue's raw sessions (owning group first, then text).
+        for cov in &fix.covalues {
+            node.create_co_value(&cov.co_id, &cov.header_json, None, true)
+                .unwrap_or_else(|e| panic!("[{name}] create {}: {e}", cov.co_id));
+            for s in &cov.sessions {
+                let txs_json = format!("[{}]", s.transactions.join(","));
+                node.get_mut(&cov.co_id)
+                    .unwrap()
+                    .add_transactions(&s.session_id, None, &txs_json, &s.last_signature, true)
+                    .unwrap_or_else(|e| panic!("[{name}] add txs {}: {e}", s.session_id));
+            }
+        }
+        for k in &fix.provide_keys {
+            node.provide_key_secret(&k.key_id, &k.key_secret);
+        }
+        node.list_materialize(&fix.list_id, &[])
+            .unwrap_or_else(|e| panic!("[{name}] materialize: {e}"));
+
+        // (1) snapshot == asArray() (ordered grapheme values).
+        let snap: serde_json::Value =
+            serde_json::from_str(&node.list_snapshot(&fix.list_id).unwrap()).unwrap();
+        assert_eq!(snap, fix.snapshot, "[{name}] snapshot mismatch");
+
+        // (2) ordered entries == entries() (value + madeAt + opID, incl. branch).
+        let entries: serde_json::Value =
+            serde_json::from_str(&node.list_entries(&fix.list_id).unwrap()).unwrap();
+        assert_eq!(entries, fix.entries, "[{name}] entries mismatch");
+
+        // (3) coPlainText-specific: joined graphemes == TS `toString()`.
+        let joined: String = snap
+            .as_array()
+            .unwrap_or_else(|| panic!("[{name}] snapshot not an array"))
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .unwrap_or_else(|| panic!("[{name}] grapheme not a string: {v}"))
+            })
+            .collect();
+        assert_eq!(joined, fix.text, "[{name}] toString() (joined graphemes) mismatch");
+    }
+
+    #[test]
+    fn sequential_text() {
+        run("sequential_text");
+    }
+    #[test]
+    fn unicode_text() {
+        run("unicode_text");
+    }
+    #[test]
+    fn concurrent_same_anchor_text() {
+        run("concurrent_same_anchor_text");
+    }
+    #[test]
+    fn branch_merge_text() {
+        run("branch_merge_text");
+    }
+}

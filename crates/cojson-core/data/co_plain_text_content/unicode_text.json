@@ -1,0 +1,121 @@
+{
+  "description": "multi-codepoint graphemes: combining, ZWJ, flag, skin tone, mixed script",
+  "covalues": [
+    {
+      "coId": "co_zdtRX2gWp7fXQoDyM3NrDHgKwVS",
+      "headerJson": "{\"createdAt\":\"2026-07-05T04:16:13.786Z\",\"meta\":null,\"ruleset\":{\"type\":\"unsafeAllowAll\"},\"type\":\"coplaintext\",\"uniqueness\":\"z42sMHExAp3eNjxWos\"}",
+      "sessions": [
+        {
+          "sessionId": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+          "signerId": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ",
+          "transactions": [
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"a̐\\\",\\\"after\\\":\\\"start\\\"},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"é\\\",\\\"after\\\":\\\"start\\\"},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"ö̲\\\",\\\"after\\\":\\\"start\\\"}]\",\"madeAt\":1783224973786,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"👨‍👩‍👧‍👦\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":2}}]\",\"madeAt\":1783224973786,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"🇺🇸\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":1,\\\"changeIdx\\\":0}}]\",\"madeAt\":1783224973787,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"pre\\\",\\\"value\\\":\\\"👍🏽\\\",\\\"before\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":0,\\\"changeIdx\\\":0}}]\",\"madeAt\":1783224973787,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"!\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":2,\\\"changeIdx\\\":0}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"녕\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":2,\\\"changeIdx\\\":0}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\"안\\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":2,\\\"changeIdx\\\":0}},{\\\"op\\\":\\\"app\\\",\\\"value\\\":\\\" \\\",\\\"after\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":2,\\\"changeIdx\\\":0}}]\",\"madeAt\":1783224973787,\"privacy\":\"trusting\"}",
+            "{\"changes\":\"[{\\\"op\\\":\\\"del\\\",\\\"insertion\\\":{\\\"sessionID\\\":\\\"sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM\\\",\\\"txIndex\\\":1,\\\"changeIdx\\\":0}}]\",\"madeAt\":1783224973787,\"privacy\":\"trusting\"}"
+          ],
+          "lastSignature": "signature_z2uX7e7LNwZAem7bMwT4d8Vmr5XxfJbMNd6EkDtuu1wQmhNVDHKf8MMMDdjC5Cgq5o8EbmxxbGTw4TnqTFmqpvvnb"
+        }
+      ]
+    }
+  ],
+  "listId": "co_zdtRX2gWp7fXQoDyM3NrDHgKwVS",
+  "provideKeys": [],
+  "snapshot": [
+    "👍🏽",
+    "a̐",
+    "é",
+    "ö̲",
+    "🇺🇸",
+    " ",
+    "안",
+    "녕",
+    "!"
+  ],
+  "entries": [
+    {
+      "value": "👍🏽",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 3,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "a̐",
+      "madeAt": 1783224973786,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 0,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": "é",
+      "madeAt": 1783224973786,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 0,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "ö̲",
+      "madeAt": 1783224973786,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 0,
+        "changeIdx": 2
+      }
+    },
+    {
+      "value": "🇺🇸",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 2,
+        "changeIdx": 0
+      }
+    },
+    {
+      "value": " ",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 4,
+        "changeIdx": 3
+      }
+    },
+    {
+      "value": "안",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 4,
+        "changeIdx": 2
+      }
+    },
+    {
+      "value": "녕",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 4,
+        "changeIdx": 1
+      }
+    },
+    {
+      "value": "!",
+      "madeAt": 1783224973787,
+      "opID": {
+        "sessionID": "sealer_zAnvYAWmvmJz8c8G1hKcjP9m6i7vKu27TgGf1x3nxJPpB/signer_zDrdn6kFJU8QhHFVizZgPgVTf7SWzPBxywQDfjKghDuXQ_session_zhf2fUfhdfpM",
+        "txIndex": 4,
+        "changeIdx": 0
+      }
+    }
+  ],
+  "text": "👍🏽a̐éö̲🇺🇸 안녕!"
+}
