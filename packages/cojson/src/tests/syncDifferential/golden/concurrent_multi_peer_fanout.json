@@ -1,0 +1,334 @@
+{
+  "scenario": "concurrent_multi_peer_fanout",
+  "trace": [
+    "clientA -> server | CONTENT Group header: true new: After: 0 New: 6",
+    "server -> clientA | KNOWN Group sessions: header/6",
+    "clientA -> server | KNOWN Group sessions: header/6",
+    "clientA -> server | CONTENT Map header: true new: After: 0 New: 1",
+    "server -> clientA | KNOWN Map sessions: header/1",
+    "clientA -> server | KNOWN Map sessions: header/1",
+    "clientB -> server | LOAD Map sessions: empty",
+    "server -> clientB | CONTENT Group header: true new: After: 0 New: 6",
+    "clientB -> server | KNOWN Group sessions: header/6",
+    "server -> clientB | CONTENT Map header: true new: After: 0 New: 1",
+    "clientB -> server | KNOWN Map sessions: header/1",
+    "clientC -> server | LOAD Map sessions: empty",
+    "server -> clientC | CONTENT Group header: true new: After: 0 New: 6",
+    "clientC -> server | KNOWN Group sessions: header/6",
+    "server -> clientC | CONTENT Map header: true new: After: 0 New: 1",
+    "clientC -> server | KNOWN Map sessions: header/1",
+    "clientA -> server | CONTENT Map header: false new: After: 1 New: 1",
+    "server -> clientA | KNOWN Map sessions: header/2",
+    "server -> clientB | CONTENT Map header: false new: After: 1 New: 1",
+    "clientB -> server | KNOWN Map sessions: header/3",
+    "clientB -> server | CONTENT Map header: false new: After: 0 New: 1",
+    "server -> clientC | CONTENT Map header: false new: After: 1 New: 1",
+    "clientC -> server | KNOWN Map sessions: header/3",
+    "clientC -> server | CONTENT Map header: false new: After: 0 New: 1",
+    "server -> clientB | KNOWN Map sessions: header/3",
+    "server -> clientA | CONTENT Map header: false new: After: 0 New: 1",
+    "clientA -> server | KNOWN Map sessions: header/3",
+    "server -> clientC | CONTENT Map header: false new: After: 0 New: 1",
+    "clientC -> server | KNOWN Map sessions: header/4",
+    "server -> clientC | KNOWN Map sessions: header/4",
+    "server -> clientA | CONTENT Map header: false new: After: 0 New: 1",
+    "clientA -> server | KNOWN Map sessions: header/4",
+    "server -> clientB | CONTENT Map header: false new: After: 0 New: 1",
+    "clientB -> server | KNOWN Map sessions: header/4",
+    "clientB -> server | CONTENT Map header: false new: After: 1 New: 1 | After: 0 New: 1 | After: 0 New: 1",
+    "server -> clientB | KNOWN Map sessions: header/4",
+    "clientC -> server | CONTENT Map header: false new: After: 1 New: 1 | After: 0 New: 1 | After: 0 New: 1",
+    "server -> clientC | KNOWN Map sessions: header/4"
+  ],
+  "nodes": {
+    "clientA": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 2,
+            "clientB": 1,
+            "clientC": 1
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "clientB": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 2,
+            "clientB": 1,
+            "clientC": 1
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "clientC": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 2,
+            "clientB": 1,
+            "clientC": 1
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "server": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 2,
+            "clientB": 1,
+            "clientC": 1
+          }
+        }
+      },
+      "peers": {
+        "clientA": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        },
+        "clientB": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        },
+        "clientC": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 2,
+                "clientB": 1,
+                "clientC": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "convergence": {
+    "Group": true,
+    "Map": true
+  },
+  "converged": true
+}

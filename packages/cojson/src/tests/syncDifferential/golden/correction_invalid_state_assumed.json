@@ -1,0 +1,118 @@
+{
+  "scenario": "correction_invalid_state_assumed",
+  "trace": [
+    "client -> server | CONTENT Group header: true new: After: 0 New: 6",
+    "server -> client | KNOWN Group sessions: header/6",
+    "client -> server | KNOWN Group sessions: header/6",
+    "client -> server | CONTENT Map header: true new: After: 0 New: 1",
+    "server -> client | KNOWN Map sessions: header/1",
+    "client -> server | KNOWN Map sessions: header/1",
+    "client -> server | CONTENT Map header: false new: After: 1 New: 1",
+    "server -> client | KNOWN CORRECTION Map sessions: empty",
+    "client -> server | CONTENT Map header: true new: After: 0 New: 2",
+    "server -> client | KNOWN Map sessions: header/2"
+  ],
+  "nodes": {
+    "client": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "client": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "client": 2
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    "server": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "client": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "client": 2
+          }
+        }
+      },
+      "peers": {
+        "client": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "convergence": {
+    "Group": true,
+    "Map": true
+  },
+  "converged": true
+}

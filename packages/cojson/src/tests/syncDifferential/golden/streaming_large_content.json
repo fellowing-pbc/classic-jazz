@@ -1,0 +1,208 @@
+{
+  "scenario": "streaming_large_content",
+  "trace": [
+    "clientA -> server | CONTENT Group header: true new: After: 0 New: 6",
+    "server -> clientA | KNOWN Group sessions: header/6",
+    "clientA -> server | KNOWN Group sessions: header/6",
+    "clientA -> server | CONTENT Map header: true new: After: 0 New: 73 expectContentUntil: header/200",
+    "server -> clientA | KNOWN Map sessions: header/73",
+    "clientA -> server | CONTENT Map header: false new: After: 73 New: 73 expectContentUntil: header/200",
+    "clientA -> server | CONTENT Map header: false new: After: 146 New: 54",
+    "server -> clientA | KNOWN Map sessions: header/146",
+    "server -> clientA | KNOWN Map sessions: header/200",
+    "clientA -> server | CONTENT Map header: false new: After: 73 New: 73",
+    "server -> clientA | KNOWN Map sessions: header/200",
+    "clientA -> server | CONTENT Map header: false new: After: 146 New: 54",
+    "server -> clientA | KNOWN Map sessions: header/200",
+    "clientB -> server | LOAD Map sessions: empty",
+    "server -> clientB | CONTENT Group header: true new: After: 0 New: 6",
+    "clientB -> server | KNOWN Group sessions: header/6",
+    "server -> clientB | CONTENT Map header: true new: After: 0 New: 73 expectContentUntil: header/200",
+    "clientB -> server | KNOWN Map sessions: header/73",
+    "server -> clientB | CONTENT Map header: false new: After: 73 New: 73",
+    "clientB -> server | KNOWN Map sessions: header/146",
+    "server -> clientB | CONTENT Map header: false new: After: 146 New: 54",
+    "clientB -> server | KNOWN Map sessions: header/200"
+  ],
+  "nodes": {
+    "clientA": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 200
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "clientB": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 200
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "server": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "clientA": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "clientA": 200
+          }
+        }
+      },
+      "peers": {
+        "clientA": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            }
+          }
+        },
+        "clientB": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "clientA": 200
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "convergence": {
+    "Group": true,
+    "Map": true
+  },
+  "converged": true
+}
