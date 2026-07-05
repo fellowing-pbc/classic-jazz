@@ -3,13 +3,13 @@ import { unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalNode, StorageApiSync, cojsonInternals } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { getBetterSqliteStorage } from "../index.js";
 import { toSimplifiedMessages } from "./messagesTestUtils.js";
 import { trackMessages, waitFor } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 function createSQLiteStorage(defaultDbPath?: string) {
   const dbPath = defaultDbPath ?? join(tmpdir(), `test-${randomUUID()}.db`);

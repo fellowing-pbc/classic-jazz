@@ -27,7 +27,7 @@ import {
   SignerSecret,
   textDecoder,
   textEncoder,
-} from "./crypto.js";
+} from "../crypto/crypto.js";
 import {
   blake3HashOnce,
   blake3HashOnceWithContext,
@@ -73,7 +73,7 @@ function toArrayBuffer(view: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-export class RNCrypto extends CryptoProvider<Blake3State> {
+export class RNNode extends CryptoProvider<Blake3State> {
   private constructor() {
     super();
   }
@@ -212,14 +212,14 @@ export class RNCrypto extends CryptoProvider<Blake3State> {
     return new RNNodeCoreAdapter(new NativeNodeCore());
   }
 
-  static async create(): Promise<RNCrypto> {
+  static async create(): Promise<RNNode> {
     // Register native base64 implementation for React Native
     setNativeBase64Implementation({
       bytesToBase64url: nativeBytesToBase64url,
       base64urlToBytes: nativeBase64urlToBytes,
       bytesToBase64: nativeBytesToBase64,
     });
-    return new RNCrypto();
+    return new RNNode();
   }
 
   newEd25519SigningKey(): Uint8Array {

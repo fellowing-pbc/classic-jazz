@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assert, beforeEach, describe, expect, test, vi } from "vitest";
 import { Account, Group, subscribeToCoValue, z } from "../index.js";
 import {
@@ -16,7 +16,7 @@ import {
 } from "../testing.js";
 import { setupTwoNodes, waitFor } from "./utils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 let me = await Account.create({
   creationProps: { name: "Hermes Puggington" },

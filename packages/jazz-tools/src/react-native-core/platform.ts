@@ -19,7 +19,7 @@ import { ReactNativeSessionProvider } from "./ReactNativeSessionProvider.js";
 
 import { SQLiteDatabaseDriverAsync } from "cojson";
 import { WebSocketPeerWithReconnection } from "cojson-transport-ws";
-import { RNCrypto } from "cojson/crypto/RNCrypto";
+import { RNNode } from "cojson/node/RNNode";
 
 export type BaseReactNativeContextOptions = {
   sync: SyncConfig;
@@ -38,7 +38,7 @@ class ReactNativeWebSocketPeerWithReconnection extends WebSocketPeerWithReconnec
 }
 
 async function setupPeers(options: BaseReactNativeContextOptions) {
-  const crypto = await RNCrypto.create();
+  const crypto = await RNNode.create();
   let node: LocalNode | undefined = undefined;
 
   const peers: Peer[] = [];

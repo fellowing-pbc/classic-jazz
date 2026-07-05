@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { RawAccountID, SessionID } from "cojson";
 import { beforeEach, describe, expect, test } from "vitest";
 import { InMemoryKVStore } from "jazz-tools";
@@ -12,7 +12,7 @@ import type { CryptoProvider } from "jazz-tools";
 const kvStore = new InMemoryKVStore() as KvStore;
 KvStoreContext.getInstance().initialize(kvStore);
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 describe("ReactNativeSessionProvider", () => {
   let sessionProvider: ReactNativeSessionProvider;

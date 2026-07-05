@@ -9,7 +9,7 @@ import {
   type AnyWebSocketConstructor,
   WebSocketPeerWithReconnection,
 } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import {
   Account,
   AccountClass,
@@ -116,7 +116,7 @@ export async function startWorker<
     AccountSchema,
     sessionProvider: new MockSessionProvider(),
     peers,
-    crypto: options.crypto ?? (await WasmCrypto.create()),
+    crypto: options.crypto ?? (await WasmNode.create()),
     asActiveAccount,
     storage: options.storage,
     experimental_clockSyncFromServerPings:

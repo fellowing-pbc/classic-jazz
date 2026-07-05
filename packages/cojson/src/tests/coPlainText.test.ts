@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { expectPlainText } from "../coValue.js";
 import { setMaxRecommendedTxSize } from "../config.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import {
   SyncMessagesLog,
   loadCoValueOrFail,
@@ -9,7 +9,7 @@ import {
   setupTestNode,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(() => {
   setMaxRecommendedTxSize(100 * 1024);

@@ -7,12 +7,12 @@ import {
   SyncMessage,
   cojsonInternals,
 } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 
 import { toSimplifiedMessages } from "./messagesTestUtils.js";
 import { getDurableObjectSqlStorage } from "../index.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 // Adopted from cojson-storage-sqlite/src/tests/testUtils.js
 export function trackMessages() {

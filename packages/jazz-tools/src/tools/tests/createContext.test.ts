@@ -1,5 +1,5 @@
 import { AgentSecret } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   Account,
@@ -26,7 +26,7 @@ import {
 } from "../testing";
 import { assertLoaded, loadCoValueOrFail } from "./utils";
 import { createAsyncStorage } from "./testStorage";
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 let randomSessionProvider = new MockSessionProvider();
 KvStoreContext.getInstance().initialize(new InMemoryKVStore());

@@ -1,5 +1,5 @@
 import { cojsonInternals } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assert, beforeEach, describe, expect, test, vi } from "vitest";
 import { Group, co, subscribeToCoValue, z } from "../exports.js";
 

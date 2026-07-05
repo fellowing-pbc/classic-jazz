@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { CryptoProvider, LocalNode } from "cojson";
 import { getBetterSqliteStorage } from "cojson-storage-sqlite";
 import { createWebSocketPeer } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { WebSocketServer } from "ws";
 import { type SyncServer } from "./types.js";
 
@@ -25,7 +25,7 @@ export const startSyncServer = async ({
   middleware?: (req: IncomingMessage, res: ServerResponse) => boolean;
   enableFullStorageReconciliation?: boolean;
 }): Promise<SyncServer> => {
-  crypto ??= await WasmCrypto.create();
+  crypto ??= await WasmNode.create();
 
   const server = createServer((req, res) => {
     if (middleware?.(req, res)) {

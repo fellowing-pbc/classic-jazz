@@ -1,5 +1,5 @@
 import { type CryptoProvider, LocalNode } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { WebSocket } from "ws";
 import { createWebSocketPeer } from "../createWebSocketPeer";
@@ -12,7 +12,7 @@ describe("WebSocket Peer Integration", () => {
   let crypto: CryptoProvider;
 
   beforeEach(async () => {
-    crypto = await WasmCrypto.create();
+    crypto = await WasmNode.create();
     const result = await startSyncServer();
     server = result;
     syncServerUrl = result.syncServer;

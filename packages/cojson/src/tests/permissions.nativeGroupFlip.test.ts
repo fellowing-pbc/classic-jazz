@@ -21,16 +21,16 @@
  * writer, giving us a valid revocation of a valid earlier grant.)
  *
  * After the late revocation arrives, B was not a manager at t3, so B's "add C"
- * must flip to invalid. This test asserts that on the native path (NapiCrypto).
+ * must flip to invalid. This test asserts that on the native path (NapiNode).
  */
 import { expect, test, vi } from "vitest";
 import { ControlledAccount, ControlledAgent } from "../coValues/account.js";
 import { type RawGroup } from "../coValues/group.js";
-import { NapiCrypto } from "../crypto/NapiCrypto.js";
+import { NapiNode } from "../node/NapiNode.js";
 import { LocalNode } from "../localNode.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
 
-const Crypto = await NapiCrypto.create();
+const Crypto = await NapiNode.create();
 
 function newNodeWithGroup() {
   const agentSecret = Crypto.newRandomAgentSecret();

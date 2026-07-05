@@ -1,12 +1,12 @@
 import { beforeEach, expect, test } from "vitest";
 import { expectAccount } from "../coValues/account.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { LocalNode } from "../localNode.js";
 import { connectedPeers } from "../streamUtils.js";
 import { createAsyncStorage } from "./testStorage.js";
 import { setupTestAccount, setupTestNode } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   await setupTestNode({ isSyncServer: true });

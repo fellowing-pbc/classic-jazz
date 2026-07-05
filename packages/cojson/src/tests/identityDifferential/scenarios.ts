@@ -29,7 +29,7 @@ import { idforHeader } from "../../coValueCore/coValueCore.js";
 import type { CoValueHeader } from "../../coValueCore/verifiedState.js";
 import type { AgentID } from "../../ids.js";
 import { LocalNode } from "../../localNode.js";
-import { WasmCrypto } from "../../crypto/WasmCrypto.js";
+import { WasmNode } from "../../node/WasmNode.js";
 import {
   type BootstrapTrace,
   type BootstrapWrite,
@@ -38,7 +38,7 @@ import {
   type SessionIdCase,
 } from "./harness.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 /** A 32-byte fixed secret seed filled with `byte` (deterministic identities). */
 function fixedSeed(byte: number): Uint8Array {

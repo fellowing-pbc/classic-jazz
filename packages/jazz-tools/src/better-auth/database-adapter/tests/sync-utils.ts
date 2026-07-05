@@ -1,12 +1,12 @@
 import { createServer } from "node:http";
 import { LocalNode } from "cojson";
 import { createWebSocketPeer } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { WebSocket, WebSocketServer } from "ws";
 import { Account, isControlledAccount } from "jazz-tools";
 
 export const startSyncServer = async (port?: number) => {
-  const crypto = await WasmCrypto.create();
+  const crypto = await WasmNode.create();
 
   const server = createServer((req, res) => {
     if (req.url === "/health") {
@@ -100,7 +100,7 @@ export const createWorkerAccount = async ({
   name: string;
   peer: string;
 }) => {
-  const crypto = await WasmCrypto.create();
+  const crypto = await WasmNode.create();
 
   const peer = createWebSocketPeer({
     id: "upstream",

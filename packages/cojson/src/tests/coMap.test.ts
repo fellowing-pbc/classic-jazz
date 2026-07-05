@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 import { expectMap } from "../coValue.js";
 import { operationToEditEntry } from "../coValues/coMap.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { accountOrAgentIDfromSessionID } from "../typeUtils/accountOrAgentIDfromSessionID.js";
 import {
   hotSleep,
@@ -11,7 +11,7 @@ import {
   waitFor,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   setupTestNode({ isSyncServer: true });

@@ -1,5 +1,5 @@
 import { cojsonInternals } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import {
   assert,
   beforeEach,
@@ -37,7 +37,7 @@ import {
 } from "./utils.js";
 import { setDefaultValidationMode } from "../implementation/zodSchema/validationSettings.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   cojsonInternals.CO_VALUE_LOADING_CONFIG.RETRY_DELAY = 1000;

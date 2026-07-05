@@ -6,10 +6,10 @@ import {
   setupTestAccount,
 } from "./testUtils";
 import { Stringified } from "../jsonStringify";
-import { WasmCrypto } from "../crypto/WasmCrypto";
+import { WasmNode } from "../node/WasmNode";
 import { JsonValue } from "../jsonValue";
 
-const wasmCrypto = await WasmCrypto.create();
+const wasmCrypto = await WasmNode.create();
 setCurrentTestCryptoProvider(wasmCrypto);
 
 let syncServer: ReturnType<typeof setupTestNode>;
@@ -22,7 +22,7 @@ beforeEach(() => {
 // - Keys creation and unsealing
 // - Signature creation and verification
 // - Encryption and decryption of values
-describe("WasmCrypto", () => {
+describe("WasmNode", () => {
   it("successfully creates a private CoValue and reads it in another session", async () => {
     const client = setupTestNode({
       connected: true,

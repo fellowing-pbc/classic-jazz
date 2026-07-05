@@ -15,7 +15,7 @@ let nativeBytesToBase64: ((bytes: ArrayBuffer) => string) | undefined;
 
 /**
  * Set native base64 implementation for React Native.
- * Called by RNCrypto.create() to register native Rust implementations.
+ * Called by RNNode.create() to register native Rust implementations.
  * @internal
  */
 export function setNativeBase64Implementation(impl: {

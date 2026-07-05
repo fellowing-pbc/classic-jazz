@@ -8,21 +8,21 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./crypto/NapiCrypto": {
-      "types": "./dist/crypto/NapiCrypto.d.ts",
-      "default": "./dist/crypto/NapiCrypto.js"
+    "./node/NapiNode": {
+      "types": "./dist/node/NapiNode.d.ts",
+      "default": "./dist/node/NapiNode.js"
     },
-    "./crypto/WasmCrypto": {
-      "types": "./dist/crypto/WasmCrypto.d.ts",
-      "default": "./dist/crypto/WasmCrypto.js"
+    "./node/WasmNode": {
+      "types": "./dist/node/WasmNode.d.ts",
+      "default": "./dist/node/WasmNode.js"
     },
-    "./crypto/WasmCrypto/edge": {
-      "types": "./dist/crypto/WasmCryptoEdge.d.ts",
-      "default": "./dist/crypto/WasmCryptoEdge.js"
+    "./node/WasmNode/edge": {
+      "types": "./dist/node/WasmNodeEdge.d.ts",
+      "default": "./dist/node/WasmNodeEdge.js"
     },
-    "./crypto/RNCrypto": {
-      "types": "./dist/crypto/RNCrypto.d.ts",
-      "default": "./dist/crypto/RNCrypto.js"
+    "./node/RNNode": {
+      "types": "./dist/node/RNNode.d.ts",
+      "default": "./dist/node/RNNode.js"
     },
     "./dist/*": "./dist/*",
     "./src/*": "./src/*"

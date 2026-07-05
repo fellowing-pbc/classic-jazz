@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, test } from "vitest";
-import { NapiCrypto } from "../crypto/NapiCrypto.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { NapiNode } from "../node/NapiNode.js";
+import { WasmNode } from "../node/WasmNode.js";
 import type { CryptoProvider, NodeCoreImpl } from "../crypto/crypto.js";
 
-// RNCrypto now has a native NodeCore adapter (RNNodeCoreAdapter, mirroring
+// RNNode now has a native NodeCore adapter (RNNodeCoreAdapter, mirroring
 // NapiNodeCoreAdapter's casing bridge) — see Part B of the cleanup-phase
-// plan. It can't be added to nodeCoreSuite here: `RNCrypto.create()` loads
+// plan. It can't be added to nodeCoreSuite here: `RNNode.create()` loads
 // `cojson-core-rn`'s generated bindings, which register a React Native
 // TurboModule (`NativeCojsonCoreRn` via `TurboModuleRegistry.getEnforcing`)
 // at import time — that requires the RN runtime and cannot be instantiated
@@ -18,8 +18,8 @@ let crypto: CryptoProvider;
 let wasmCrypto: CryptoProvider;
 
 beforeAll(async () => {
-  crypto = await NapiCrypto.create();
-  wasmCrypto = await WasmCrypto.create();
+  crypto = await NapiNode.create();
+  wasmCrypto = await WasmNode.create();
 });
 
 // Build a real header + coId the way VerifiedState does, so createCoValue
@@ -113,11 +113,11 @@ nodeCoreSuite(
   () => wasmCrypto,
 );
 
-test("NapiCrypto.createNodeCore returns the native adapter", () => {
+test("NapiNode.createNodeCore returns the native adapter", () => {
   expect(crypto.createNodeCore().constructor.name).toBe("NapiNodeCoreAdapter");
 });
 
-test("WasmCrypto.createNodeCore returns the native adapter", () => {
+test("WasmNode.createNodeCore returns the native adapter", () => {
   expect(wasmCrypto.createNodeCore().constructor.name).toBe(
     "WasmNodeCoreAdapter",
   );

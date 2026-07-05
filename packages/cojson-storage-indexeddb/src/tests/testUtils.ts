@@ -12,7 +12,7 @@ import {
   StorageApiAsync,
   StorageAPI,
 } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { onTestFinished } from "vitest";
 
 const { knownStateFromContent } = cojsonInternals;
@@ -183,7 +183,7 @@ export function fillCoMapWithLargeData(map: RawCoMap) {
   return map;
 }
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 export function getAgentAndSessionID(
   secret: AgentSecret = Crypto.newRandomAgentSecret(),

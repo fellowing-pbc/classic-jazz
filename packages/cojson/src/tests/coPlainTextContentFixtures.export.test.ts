@@ -41,12 +41,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { expectPlainText } from "../coValue.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import type { RawCoID } from "../ids.js";
 import { LocalNode } from "../localNode.js";
 import { loadCoValueOrFail, setupTestNode, waitFor } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 const EXPORT = process.env.EXPORT_COPLAINTEXT_CONTENT_FIXTURES === "1";
 const OUT_DIR = join(

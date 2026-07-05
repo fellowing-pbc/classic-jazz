@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import {
   createTwoConnectedNodes,
   importContentIntoNode,

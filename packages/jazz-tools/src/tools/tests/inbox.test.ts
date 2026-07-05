@@ -13,7 +13,7 @@ import {
   setupJazzTestSync,
 } from "../testing";
 import { cojsonInternals, LocalNode } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assertLoaded } from "./utils";
 
 const Message = co.map({

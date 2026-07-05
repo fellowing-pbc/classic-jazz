@@ -1,7 +1,7 @@
 import { assert, beforeEach, describe, expect, test } from "vitest";
 
 import { expectList, expectMap } from "../coValue";
-import { WasmCrypto } from "../crypto/WasmCrypto";
+import { WasmNode } from "../node/WasmNode";
 import { CO_VALUE_LOADING_CONFIG, setCoValueLoadingTimeout } from "../config";
 import {
   SyncMessagesLog,
@@ -17,7 +17,7 @@ import { RawCoMap } from "../coValues/coMap";
 // We want to simulate a real world communication that happens asynchronously
 TEST_NODE_CONFIG.withAsyncPeers = true;
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 let server1: ReturnType<typeof setupTestNode>;
 let server2: ReturnType<typeof setupTestNode>;
 

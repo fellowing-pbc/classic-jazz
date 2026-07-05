@@ -1,5 +1,5 @@
 import type { SessionID } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { LocalNode } from "cojson";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { makeDurabilityMarkerListener } from "../implementation/sessionDurabilityMarker.js";
@@ -116,7 +116,7 @@ describe("makeDurabilityMarkerListener", () => {
   });
 });
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 KvStoreContext.getInstance().initialize(new InMemoryKVStore());
 
 describe("createContext wiring", () => {

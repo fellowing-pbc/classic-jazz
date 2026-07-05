@@ -1,5 +1,5 @@
 import { assert, beforeEach, expect, test } from "vitest";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { type SessionID, isDeleteSessionID } from "../ids.js";
 import type { CoValueCore } from "../exports.js";
 import {
@@ -14,7 +14,7 @@ import {
 } from "./testUtils.js";
 import { CO_VALUE_PRIORITY } from "../priority.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 function makeDeleteMarkerTransaction(core: CoValueCore, madeAt?: number) {
   core.makeTransaction([], "trusting", { deleted: core.id }, madeAt);

@@ -2,9 +2,9 @@ import { describe, expect, test } from "vitest";
 import { ClockOffset } from "../ClockOffset.js";
 import { LocalNode } from "../localNode.js";
 import { randomAgentAndSessionID } from "./testUtils.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 function makeNode(opts: { experimental_clockSyncFromServerPings?: boolean }) {
   const [admin, session] = randomAgentAndSessionID();

@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { Channel } from "queueueue";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -9,7 +9,7 @@ import {
 } from "../index.js";
 import { co, MockSessionProvider } from "../internal.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 const randomSessionProvider = new MockSessionProvider();
 const connectedPeers = cojsonInternals.connectedPeers;
 

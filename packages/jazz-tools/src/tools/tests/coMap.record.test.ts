@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import {
   assert,
   beforeEach,
@@ -16,7 +16,7 @@ import { assertLoaded, expectValidationError, waitFor } from "./utils.js";
 import { CoValueLoadingState, TypeSym } from "../internal.js";
 import { setDefaultValidationMode } from "../implementation/zodSchema/validationSettings.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   await setupJazzTestSync();

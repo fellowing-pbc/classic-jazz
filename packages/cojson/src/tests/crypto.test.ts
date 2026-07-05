@@ -4,12 +4,12 @@ import { blake3 } from "@noble/hashes/blake3";
 import { base58, base64url } from "@scure/base";
 import { expect, test, vi } from "vitest";
 import { shortHashLength } from "../crypto/crypto.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { SessionID } from "../ids.js";
 import { stableStringify } from "../jsonStringify.js";
 import { JsonValue } from "../jsonValue.js";
 
-const crypto = await WasmCrypto.create();
+const crypto = await WasmNode.create();
 
 const name = crypto.constructor.name;
 

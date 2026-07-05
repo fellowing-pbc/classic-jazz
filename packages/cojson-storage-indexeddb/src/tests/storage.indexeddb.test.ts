@@ -5,7 +5,7 @@ import {
   StorageReconciliationAcquireResult,
   cojsonInternals,
 } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getIndexedDBStorage, internal_setDatabaseName } from "../index.js";
 import { toSimplifiedMessages } from "./messagesTestUtils.js";
@@ -19,7 +19,7 @@ import {
   waitFor,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 let syncMessages: ReturnType<typeof trackMessages>;
 
 let dbName: string;

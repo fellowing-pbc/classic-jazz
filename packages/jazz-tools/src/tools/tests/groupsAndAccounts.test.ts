@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assert, beforeEach, describe, expect, test } from "vitest";
 import { CoMap, Group, z } from "../exports.js";
 import {
@@ -18,7 +18,7 @@ import {
   waitFor,
 } from "./utils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   await setupJazzTestSync();

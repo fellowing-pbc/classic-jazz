@@ -1,4 +1,4 @@
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assert, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   Account,
@@ -55,7 +55,7 @@ describe("SchemaUnion", () => {
   let me: Account;
 
   beforeAll(async () => {
-    Crypto = await WasmCrypto.create();
+    Crypto = await WasmNode.create();
     me = await createJazzTestAccount({
       isCurrentActiveAccount: true,
       creationProps: { name: "Hermes Puggington" },

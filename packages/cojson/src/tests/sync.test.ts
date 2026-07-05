@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { expectMap } from "../coValue.js";
 import { RawCoMap } from "../coValues/coMap.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { connectedPeers, newQueuePair } from "../streamUtils.js";
 import type { LoadMessage } from "../sync.js";
 import {
@@ -24,7 +24,7 @@ import { JsonValue } from "../jsonValue.js";
 // We want to simulate a real world communication that happens asynchronously
 TEST_NODE_CONFIG.withAsyncPeers = true;
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 let jazzCloud: ReturnType<typeof setupTestNode>;
 

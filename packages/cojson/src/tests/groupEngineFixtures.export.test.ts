@@ -37,7 +37,7 @@ import { describe, expect, test, vi } from "vitest";
 import { expectMap } from "../coValue.js";
 import type { CoValueCore } from "../coValueCore/coValueCore.js";
 import { ControlledAgent } from "../coValues/account.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import type { RawCoID } from "../ids.js";
 import { LocalNode } from "../localNode.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
@@ -47,7 +47,7 @@ import {
   newGroupHighLevel,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 const EXPORT = process.env.EXPORT_GROUP_ENGINE_FIXTURES === "1";
 const OUT_DIR = join(

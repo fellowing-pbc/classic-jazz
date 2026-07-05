@@ -1,5 +1,5 @@
 import { cojsonInternals } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import {
   assert,
   beforeEach,
@@ -31,7 +31,7 @@ import { createJazzTestAccount, linkAccounts } from "../testing.js";
 import { assertLoaded, waitFor } from "./utils.js";
 import { setCustomErrorReporter } from "../config.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 const { connectedPeers } = cojsonInternals;
 const randomSessionProvider = new MockSessionProvider();
 const InnermostMap = co.map({

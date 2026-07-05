@@ -1,6 +1,6 @@
 import { LocalNode } from "cojson";
 import { createWebSocketPeer } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { describe, expect, it, onTestFinished } from "vitest";
 import { WebSocket } from "ws";
 import { createWorkerAccount } from "../createWorkerAccount.js";
@@ -41,7 +41,7 @@ describe("createWorkerAccount - integration tests", () => {
       role: "server",
     });
 
-    const crypto = await WasmCrypto.create();
+    const crypto = await WasmNode.create();
     const { node } = await LocalNode.withNewlyCreatedAccount({
       creationProps: { name: "test" },
       peers: [peer],
@@ -66,7 +66,7 @@ describe("createWorkerAccount - integration tests", () => {
       role: "server",
     });
 
-    const crypto = await WasmCrypto.create();
+    const crypto = await WasmNode.create();
     const { node } = await LocalNode.withNewlyCreatedAccount({
       creationProps: { name: "test" },
       peers: [peer],

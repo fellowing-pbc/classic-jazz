@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import { LocalNode } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { type WebSocket, WebSocketServer } from "ws";
 import { createWebSocketPeer } from "../createWebSocketPeer";
 
 export const startSyncServer = async (port?: number) => {
-  const crypto = await WasmCrypto.create();
+  const crypto = await WasmNode.create();
 
   const server = createServer((req, res) => {
     if (req.url === "/health") {

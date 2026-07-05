@@ -1,5 +1,5 @@
 import { StorageAPI } from "cojson";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { assert, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   Account,
@@ -36,7 +36,7 @@ import {
 import { SubscriptionCache } from "../subscribe/SubscriptionCache";
 import { createAsyncStorage, getDbPath } from "./testStorage";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 const randomSessionProvider = new MockSessionProvider();
 
 class TestJazzContextManager<Acc extends Account> extends JazzContextManager<

@@ -1,6 +1,6 @@
 import { assert, beforeEach, describe, expect, test } from "vitest";
 
-import { WasmCrypto } from "../crypto/WasmCrypto";
+import { WasmNode } from "../node/WasmNode";
 import { LocalNode } from "../localNode";
 import {
   SyncMessagesLog,
@@ -9,7 +9,7 @@ import {
   setupTestNode,
 } from "./testUtils";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 let jazzCloud: ReturnType<typeof setupTestNode>;
 
 // We want to simulate a real world communication that happens asynchronously

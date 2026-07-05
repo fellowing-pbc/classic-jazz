@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { RawAccountID, SessionID } from "cojson";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { BrowserSessionProvider } from "./BrowserSessionProvider.js";
@@ -9,7 +9,7 @@ import { BrowserSessionDurabilityMarker } from "./BrowserSessionDurabilityMarker
 import { createJazzTestAccount } from "jazz-tools/testing";
 import type { CryptoProvider } from "jazz-tools";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 // Mock navigator.locks
 interface LockInfo {

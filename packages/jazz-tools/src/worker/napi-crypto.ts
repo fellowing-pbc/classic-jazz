@@ -1,1 +1,1 @@
-export * from "cojson/crypto/NapiCrypto";
+export * from "cojson/node/NapiNode";

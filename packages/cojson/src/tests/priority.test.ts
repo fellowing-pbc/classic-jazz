@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { CO_VALUE_PRIORITY, getPriorityFromHeader } from "../priority.js";
 import {
   createAccountInNode,
   nodeWithRandomAgentAndSessionID,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 describe("getPriorityFromHeader", () => {
   test("returns MEDIUM priority for boolean or undefined headers", () => {

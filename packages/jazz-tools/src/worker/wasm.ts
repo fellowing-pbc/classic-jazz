@@ -1,1 +1,1 @@
-export { initWasmCrypto as initWasm } from "cojson/crypto/WasmCrypto";
+export { initWasmNode as initWasm } from "cojson/node/WasmNode";

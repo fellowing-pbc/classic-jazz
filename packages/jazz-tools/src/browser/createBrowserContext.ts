@@ -1,7 +1,7 @@
 import { LocalNode, Peer } from "cojson";
 import { getIndexedDBStorage } from "cojson-storage-indexeddb";
 import { WebSocketPeerWithReconnection } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import {
   Account,
   AccountClass,
@@ -47,7 +47,7 @@ class BrowserWebSocketPeerWithReconnection extends WebSocketPeerWithReconnection
 }
 
 async function setupPeers(options: BaseBrowserContextOptions) {
-  const crypto = options.crypto || (await WasmCrypto.create());
+  const crypto = options.crypto || (await WasmNode.create());
   let node: LocalNode | undefined = undefined;
 
   const peers: Peer[] = [];

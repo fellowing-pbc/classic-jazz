@@ -6,7 +6,7 @@ import {
 } from "../coValues/binaryCoStream.js";
 import { CoStreamItem, RawCoStreamView } from "../coValues/coStream.js";
 import { TRANSACTION_CONFIG } from "../config.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { SessionID } from "../ids.js";
 import {
   loadCoValueOrFail,
@@ -15,7 +15,7 @@ import {
   waitFor,
 } from "./testUtils.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 beforeEach(async () => {
   setupTestNode({ isSyncServer: true });

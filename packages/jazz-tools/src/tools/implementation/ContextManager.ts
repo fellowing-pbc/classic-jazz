@@ -9,7 +9,7 @@ import { AnonymousJazzAgent } from "./anonymousJazzAgent.js";
 import { createAnonymousJazzContext } from "./createContext.js";
 import { InstanceOfSchema } from "./zodSchema/typeConverters/InstanceOfSchema.js";
 import { SubscriptionCache } from "../subscribe/SubscriptionCache.js";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 
 export type JazzContextManagerAuthProps = {
   credentials?: AuthCredentials;
@@ -47,7 +47,7 @@ type PlatformSpecificContext<Acc extends Account> =
 function getAnonymousFallback() {
   const context = createAnonymousJazzContext({
     peers: [],
-    crypto: WasmCrypto.createSync(),
+    crypto: WasmNode.createSync(),
   });
 
   return {

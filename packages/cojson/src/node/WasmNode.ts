@@ -1,6 +1,8 @@
 import {
-  SessionMap as NativeSessionMap,
-  NodeCore as NativeNodeCore,
+  SessionMap as WasmSessionMap,
+  NodeCore as WasmNodeCore,
+  initialize,
+  initializeSync,
   Blake3Hasher,
   blake3HashOnce,
   blake3HashOnceWithContext,
@@ -19,9 +21,10 @@ import {
   verify,
   groupExtend as nativeGroupExtend,
   planSessionWrite as nativePlanSessionWrite,
-} from "cojson-core-napi";
+} from "cojson-core-wasm";
 import { base64URLtoBytes, bytesToBase64url } from "../base64url.js";
 import { RawCoID, TransactionID } from "../ids.js";
+import { Transaction } from "../coValueCore/verifiedState.js";
 import { Stringified, stableStringify } from "../jsonStringify.js";
 import { JsonValue } from "../jsonValue.js";
 import { logger } from "../logger.js";
@@ -45,63 +48,70 @@ import {
   SignerSecret,
   textDecoder,
   textEncoder,
-} from "./crypto.js";
-import { WasmCrypto } from "./WasmCrypto.js";
-
-/**
- * Bridge one public {@link NodeCorePendingTx} to the napi `PendingTx` object.
- * Seam: the native `SourceTxId` object is plain camelCase (`sessionId`/
- * `txIndex`) because napi objects bypass serde's `#[serde(rename)]`; the public
- * TS type follows this codebase's `sessionID` convention for transaction-identity
- * wire objects (matching `TransactionID`). Bridge the casing here.
- */
-function napiPendingTx(p: NodeCorePendingTx) {
-  return {
-    sessionId: p.sessionId,
-    txIndex: p.txIndex,
-    sourceMadeAt: p.sourceMadeAt,
-    metaJson: p.metaJson,
-    sourceTxId: p.sourceTxId
-      ? { sessionId: p.sourceTxId.sessionID, txIndex: p.sourceTxId.txIndex }
-      : undefined,
-  };
-}
-
-function napiVerdict(v: {
-  sessionId: string;
-  txIndex: number;
-  valid: boolean;
-  outcome: string;
-  reason?: string | null;
-}): NodeCoreGroupVerdict {
-  return {
-    sessionId: v.sessionId,
-    txIndex: v.txIndex,
-    valid: v.valid,
-    outcome: v.outcome as "valid" | "invalid" | "validBranchPointerOnly",
-    reason: v.reason ?? undefined,
-  };
-}
-
-import { Transaction } from "../coValueCore/verifiedState.js";
+} from "../crypto/crypto.js";
+import { isCloudflare, isEvalAllowed } from "../platformUtils.js";
 
 type Blake3State = Blake3Hasher;
 
+let wasmInit = initialize;
+let wasmInitSync = initializeSync;
+
+const wasmCryptoErrorMessage = (
+  e: unknown,
+) => `Critical Error: Failed to load WASM module
+
+${!isEvalAllowed() ? `You need to add \`import "jazz-tools/load-edge-wasm";\` on top of your entry module to make Jazz work with ${isCloudflare() ? "Cloudflare workers" : "this runtime"}` : (e as Error).message}
+
+A native crypto module is required for Jazz to work. See https://jazz.tools/docs/react/reference/performance#use-the-best-crypto-implementation-for-your-platform for possible alternatives.`;
+
 /**
- * N-API implementation of the CryptoProvider interface using cojson-core-napi.
- * This provides the primary implementation using N-API for optimal performance, offering:
+ * Initializes the WasmNode module. This function can be used to initialize the WasmNode module in a worker or a browser.
+ * if you are using SSR and you want to initialize WASM crypto asynchronously you can use this function.
+ * @returns A promise that resolves when the WasmNode module is successfully initialized.
+ */
+export async function initWasmNode() {
+  try {
+    await wasmInit();
+  } catch (e) {
+    throw new Error(wasmCryptoErrorMessage(e), { cause: e });
+  }
+}
+
+/**
+ * WebAssembly implementation of the CryptoProvider interface using cojson-core-wasm.
+ * This provides the primary implementation using WebAssembly for optimal performance, offering:
  * - Signing/verifying (Ed25519)
  * - Encryption/decryption (XSalsa20)
  * - Sealing/unsealing (X25519 + XSalsa20-Poly1305)
  * - Hashing (BLAKE3)
  */
-export class NapiCrypto extends CryptoProvider<Blake3State> {
-  private constructor() {
+export class WasmNode extends CryptoProvider<Blake3State> {
+  protected constructor() {
     super();
   }
 
-  static async create(): Promise<NapiCrypto | WasmCrypto> {
-    return new NapiCrypto();
+  static setInit(value: typeof initialize) {
+    wasmInit = value;
+  }
+
+  static setInitSync(value: typeof initializeSync) {
+    wasmInitSync = value;
+  }
+
+  static createSync(): WasmNode {
+    try {
+      wasmInitSync();
+    } catch (e) {
+      throw new Error(wasmCryptoErrorMessage(e), { cause: e });
+    }
+    return new WasmNode();
+  }
+
+  // TODO: Remove this method and use createSync instead, this is not necessary since we can use createSync in the browser and in the worker.
+  // @deprecated
+  static async create(): Promise<WasmNode> {
+    await initWasmNode();
+    return new WasmNode();
   }
 
   blake3HashOnce(data: Uint8Array) {
@@ -270,20 +280,24 @@ export class NapiCrypto extends CryptoProvider<Blake3State> {
     skipVerify?: boolean,
   ): SessionMapImpl {
     return new SessionMapAdapter(
-      new NativeSessionMap(coID, headerJson, maxTxSize, skipVerify),
+      new WasmSessionMap(coID, headerJson, maxTxSize, skipVerify),
     );
   }
 
   override createNodeCore(): NodeCoreImpl {
-    return new NapiNodeCoreAdapter(new NativeNodeCore());
+    return new WasmNodeCoreAdapter(new WasmNodeCore());
   }
 }
 
 /**
- * Adapter wrapping NativeSessionMap to implement SessionMapImpl interface
+ * Adapter wrapping WasmSessionMap to implement SessionMapImpl interface
  */
 class SessionMapAdapter implements SessionMapImpl {
-  constructor(private readonly sessionMap: NativeSessionMap) {}
+  constructor(private readonly sessionMap: WasmSessionMap) {}
+
+  dispose(): void {
+    this.sessionMap.free();
+  }
 
   // === Header ===
   getHeader(): string {
@@ -385,7 +399,7 @@ class SessionMapAdapter implements SessionMapImpl {
     header: boolean;
     sessions: Record<string, number>;
   } {
-    // NAPI returns a native JS object via #[napi(object)]
+    // WASM returns a native JS object via serde_wasm_bindgen
     return this.sessionMap.getKnownState() as {
       id: string;
       header: boolean;
@@ -396,7 +410,7 @@ class SessionMapAdapter implements SessionMapImpl {
   getKnownStateWithStreaming():
     | { id: string; header: boolean; sessions: Record<string, number> }
     | undefined {
-    // NAPI returns a native JS object via #[napi(object)], or undefined
+    // WASM returns a native JS object via serde_wasm_bindgen, or undefined
     const result = this.sessionMap.getKnownStateWithStreaming();
     if (!result || result === undefined) return undefined;
     return result as {
@@ -448,10 +462,33 @@ class SessionMapAdapter implements SessionMapImpl {
 }
 
 /**
- * Adapter wrapping the native NodeCore registry to implement NodeCoreImpl.
+ * Adapter wrapping the native (wasm) NodeCore registry to implement
+ * NodeCoreImpl.
+ *
+ * Unlike `NapiNodeCoreAdapter`, `validateTransactions`'s `pending` argument
+ * needs NO casing bridge: the Rust side's `PendingTxWire` (see
+ * `crates/cojson-core-wasm/src/lib.rs`) deserializes the `JsValue` through
+ * serde with `#[serde(rename)]`s that reproduce `NodeCorePendingTx`'s wire
+ * shape verbatim (`sessionId`/`txIndex`/`sourceMadeAt`/`metaJson` at the top
+ * level, `sourceTxId: {sessionID, txIndex}` nested) — so the TS objects are
+ * passed straight through. Verdicts come back the same way: `GroupVerdictWire`
+ * is serialized via `serialize_js_value` with fields matching
+ * `NodeCoreGroupVerdict` verbatim, so only a cast + `reason` normalization is
+ * needed here, not a field-by-field rebuild.
  */
-class NapiNodeCoreAdapter implements NodeCoreImpl {
-  constructor(private readonly nodeCore: NativeNodeCore) {}
+/** Normalize a wasm-returned verdict (`reason: null` → `undefined`). */
+function normalizeWasmVerdict(v: NodeCoreGroupVerdict): NodeCoreGroupVerdict {
+  return {
+    sessionId: v.sessionId,
+    txIndex: v.txIndex,
+    valid: v.valid,
+    outcome: v.outcome,
+    reason: v.reason ?? undefined,
+  };
+}
+
+class WasmNodeCoreAdapter implements NodeCoreImpl {
+  constructor(private readonly nodeCore: WasmNodeCore) {}
 
   // === Registry ===
   createCoValue(
@@ -601,7 +638,7 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     header: boolean;
     sessions: Record<string, number>;
   } {
-    // NAPI returns a native JS object via #[napi(object)]
+    // WASM returns a native JS object via serde_wasm_bindgen
     return this.nodeCore.getKnownState(coId) as {
       id: string;
       header: boolean;
@@ -614,7 +651,7 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
   ):
     | { id: string; header: boolean; sessions: Record<string, number> }
     | undefined {
-    // NAPI returns a native JS object via #[napi(object)], or undefined
+    // WASM returns a native JS object via serde_wasm_bindgen, or undefined
     const result = this.nodeCore.getKnownStateWithStreaming(coId);
     if (!result || result === undefined) return undefined;
     return result as {
@@ -637,7 +674,10 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     coId: string,
     knownStateJson?: string,
   ): string | null | undefined {
-    return this.nodeCore.contentToSend(coId, knownStateJson);
+    return this.nodeCore.contentToSend(coId, knownStateJson) as
+      | string
+      | null
+      | undefined;
   }
 
   // === Deletion ===
@@ -683,9 +723,14 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     coId: string,
     pending: NodeCorePendingTx[],
   ): NodeCoreGroupVerdict[] {
-    return this.nodeCore
-      .validateTransactions(coId, pending.map(napiPendingTx))
-      .map(napiVerdict);
+    // Wire shape match verbatim (see PendingTxWire/GroupVerdictWire doc
+    // comments in crates/cojson-core-wasm/src/lib.rs) — pass pending straight
+    // through with no casing bridge, unlike NapiNodeCoreAdapter.
+    const verdicts = this.nodeCore.validateTransactions(
+      coId,
+      pending,
+    ) as NodeCoreGroupVerdict[];
+    return verdicts.map(normalizeWasmVerdict);
   }
 
   validateTransactionsDelta(
@@ -694,16 +739,18 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     sinceCount: number,
     pending: NodeCorePendingTx[],
   ): NodeCoreVerdictDelta {
+    // Wire shape match verbatim (see VerdictDeltaWire in
+    // crates/cojson-core-wasm/src/lib.rs) — pending passes straight through.
     const delta = this.nodeCore.validateTransactionsDelta(
       coId,
       sinceGeneration,
       sinceCount,
-      pending.map(napiPendingTx),
-    );
+      pending,
+    ) as NodeCoreVerdictDelta;
     return {
       generation: delta.generation,
       fromIndex: delta.fromIndex,
-      verdicts: delta.verdicts.map(napiVerdict),
+      verdicts: delta.verdicts.map(normalizeWasmVerdict),
     };
   }
 
@@ -721,7 +768,8 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
 
   // === coMap materialization (stage 2b) ===
   mapMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
-    return this.nodeCore.mapMaterialize(coId, pending.map(napiPendingTx));
+    // pending passes straight through (wire shape match, no casing bridge).
+    return this.nodeCore.mapMaterialize(coId, pending);
   }
 
   mapGet(coId: string, key: string): string | undefined {
@@ -770,22 +818,18 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     sinceVersion: number,
     pending: NodeCorePendingTx[],
   ): NodeCoreIngestOutcome {
-    const outcome = this.nodeCore.ingestAndMaterialize(
+    // IngestOutcomeWire is `{generation, count, viewVersion, deltaJson}` —
+    // straight-through, no casing bridge (see crates/cojson-core-wasm/src/lib.rs).
+    return this.nodeCore.ingestAndMaterialize(
       coId,
       sessionId,
-      signerId ?? undefined,
+      signerId,
       transactionsJson,
       signature,
       skipVerify,
       sinceVersion,
-      pending.map(napiPendingTx),
-    );
-    return {
-      generation: outcome.generation,
-      count: outcome.count,
-      viewVersion: outcome.viewVersion,
-      deltaJson: outcome.deltaJson,
-    };
+      pending,
+    ) as NodeCoreIngestOutcome;
   }
 
   missingKeyIds(coId: string): string[] {
@@ -797,7 +841,7 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
   }
 
   streamMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
-    return this.nodeCore.streamMaterialize(coId, pending.map(napiPendingTx));
+    return this.nodeCore.streamMaterialize(coId, pending);
   }
 
   streamDelta(coId: string, sinceVersion: number): string {
@@ -817,7 +861,7 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
   }
 
   listMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
-    return this.nodeCore.listMaterialize(coId, pending.map(napiPendingTx));
+    return this.nodeCore.listMaterialize(coId, pending);
   }
 
   listDelta(coId: string, sinceVersion: number): string {

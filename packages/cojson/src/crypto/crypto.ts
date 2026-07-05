@@ -412,7 +412,7 @@ export type NodeCorePendingTx = {
    * matches {@link TransactionID} (this codebase's convention for
    * transaction-identity wire objects), NOT the napi-generated `SourceTxId`
    * object, whose fields are plain camelCase (`sessionId`/`txIndex`) because
-   * napi objects bypass serde's `#[serde(rename)]`. The NapiCrypto adapter is
+   * napi objects bypass serde's `#[serde(rename)]`. The NapiNode adapter is
    * the seam that converts `{sessionID, txIndex}` -> `{sessionId, txIndex}`
    * when calling into the native binding.
    */

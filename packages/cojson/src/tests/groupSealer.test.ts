@@ -1,5 +1,5 @@
 import { assert, beforeEach, describe, expect, test } from "vitest";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { SessionID } from "../ids.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
 import { LocalNode } from "../localNode.js";
@@ -13,7 +13,7 @@ import {
   setupTestNode,
 } from "./testUtils.js";
 
-const crypto = await WasmCrypto.create();
+const crypto = await WasmNode.create();
 
 /**
  * Creates a group without the groupSealer field, simulating a legacy group

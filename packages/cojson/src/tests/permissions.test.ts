@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { expectMap } from "../coValue.js";
 import { ControlledAgent } from "../coValues/account.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
 import {
   connectTwoPeers,
@@ -19,7 +19,7 @@ import {
 } from "./testUtils.js";
 import { Role } from "../permissions.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 test("Initial admin can add another admin to a group", () => {
   groupWithTwoAdmins();

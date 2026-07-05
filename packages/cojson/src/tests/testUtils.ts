@@ -7,7 +7,7 @@ import {
 } from "@opentelemetry/sdk-metrics";
 import { assert, expect, onTestFinished, vi } from "vitest";
 import { ControlledAccount, ControlledAgent } from "../coValues/account.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import {
   type AgentSecret,
   AnyRawCoValue,
@@ -31,9 +31,9 @@ import { createAsyncStorage, createSyncStorage } from "./testStorage.js";
 import { CoValueHeader } from "../coValueCore/verifiedState.js";
 import { idforHeader } from "../coValueCore/coValueCore.js";
 
-let Crypto = await WasmCrypto.create();
+let Crypto = await WasmNode.create();
 
-export function setCurrentTestCryptoProvider(crypto: WasmCrypto) {
+export function setCurrentTestCryptoProvider(crypto: WasmNode) {
   Crypto = crypto;
 }
 

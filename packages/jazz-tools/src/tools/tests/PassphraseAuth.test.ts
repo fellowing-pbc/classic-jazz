@@ -16,7 +16,7 @@ import {
   setupJazzTestSync,
 } from "../testing";
 import { testWordlist } from "./fixtures";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 
 // Initialize KV store for tests
 KvStoreContext.getInstance().initialize(new InMemoryKVStore());
@@ -26,7 +26,7 @@ beforeEach(async () => {
 });
 
 describe("PassphraseAuth", () => {
-  let crypto: WasmCrypto;
+  let crypto: WasmNode;
   let mockAuthenticate: any;
   let mockRegister: any;
   let authSecretStorage: AuthSecretStorage;
@@ -38,7 +38,7 @@ describe("PassphraseAuth", () => {
     KvStoreContext.getInstance().getStorage().clearAll();
 
     // Set up crypto and mocks
-    crypto = await WasmCrypto.create();
+    crypto = await WasmNode.create();
     mockAuthenticate = vi.fn();
     mockRegister = vi.fn();
     authSecretStorage = new AuthSecretStorage();
@@ -201,7 +201,7 @@ describe("PassphraseAuth", () => {
 KvStoreContext.getInstance().initialize(new InMemoryKVStore());
 
 describe("PassphraseAuth with TestJazzContextManager", () => {
-  let crypto: WasmCrypto;
+  let crypto: WasmNode;
   let contextManager: TestJazzContextManager<any>;
   let authSecretStorage: AuthSecretStorage;
   let passphraseAuth: PassphraseAuth;
@@ -215,7 +215,7 @@ describe("PassphraseAuth with TestJazzContextManager", () => {
     });
 
     // Set up crypto and context manager
-    crypto = await WasmCrypto.create();
+    crypto = await WasmNode.create();
     contextManager = TestJazzContextManager.fromAccountOrGuest(account);
     authSecretStorage = contextManager.getAuthSecretStorage();
 

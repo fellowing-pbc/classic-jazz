@@ -4,11 +4,11 @@ import {
   enableNativeGroupKeyWrites,
 } from "../coValueCore/coValueCore.js";
 import type { CoValueUniqueness } from "../coValueCore/verifiedState.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { LocalNode } from "../localNode.js";
 import { expectGroup } from "../typeUtils/expectGroup.js";
 
-const crypto = await WasmCrypto.create();
+const crypto = await WasmNode.create();
 
 const ROTATIONS = 300;
 

@@ -8,7 +8,7 @@ import {
   vi,
 } from "vitest";
 import { CoValueCore, idforHeader } from "../coValueCore/coValueCore.js";
-import { WasmCrypto } from "../crypto/WasmCrypto.js";
+import { WasmNode } from "../node/WasmNode.js";
 import { Stringified } from "../jsonStringify.js";
 import { LocalNode } from "../localNode.js";
 import {
@@ -28,7 +28,7 @@ import {
 import { CO_VALUE_PRIORITY } from "../priority.js";
 import { JsonValue } from "../jsonValue.js";
 
-const Crypto = await WasmCrypto.create();
+const Crypto = await WasmNode.create();
 
 let metricReader: ReturnType<typeof createTestMetricReader>;
 const agentSecret =
