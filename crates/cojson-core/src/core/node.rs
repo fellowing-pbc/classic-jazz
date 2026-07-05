@@ -155,6 +155,16 @@ impl NodeCore {
         self.covalues.contains_key(co_id)
     }
 
+    /// Guard that `co_id` is a registered covalue, else `UnknownCoValue`. An
+    /// unregistered primary coId is API misuse, consistent with `get`/`get_mut`.
+    fn require_covalue(&self, co_id: &str) -> Result<(), SessionMapError> {
+        if self.covalues.contains_key(co_id) {
+            Ok(())
+        } else {
+            Err(SessionMapError::UnknownCoValue(co_id.to_string()))
+        }
+    }
+
     /// Returns true if an entry was removed. Absent id is a no-op (false).
     pub fn remove_co_value(&mut self, co_id: &str) -> bool {
         self.engines.remove(co_id);
@@ -179,17 +189,13 @@ impl NodeCore {
         co_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<Vec<crate::core::group_engine::engine::Verdict>, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let Self {
             covalues,
             engines,
-            co_maps: _,
-            co_streams: _,
-            co_lists: _,
             keys,
             keys_version,
+            ..
         } = self;
         engine_validate_transactions(covalues, engines, keys, *keys_version, co_id, pending)
     }
@@ -208,17 +214,13 @@ impl NodeCore {
         since_count: u32,
         pending: &[PendingTxIn],
     ) -> Result<VerdictDelta, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let Self {
             covalues,
             engines,
-            co_maps: _,
-            co_streams: _,
-            co_lists: _,
             keys,
             keys_version,
+            ..
         } = self;
         engine_validate_transactions_delta(
             covalues,
@@ -273,17 +275,14 @@ impl NodeCore {
         co_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<u64, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let Self {
             covalues,
             engines,
             co_maps,
-            co_streams: _,
-            co_lists: _,
             keys,
             keys_version,
+            ..
         } = self;
         ensure_co_map(
             covalues,
@@ -308,17 +307,14 @@ impl NodeCore {
         co_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<u64, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let Self {
             covalues,
             engines,
-            co_maps: _,
             co_streams,
-            co_lists: _,
             keys,
             keys_version,
+            ..
         } = self;
         ensure_co_stream(
             covalues,
@@ -334,9 +330,7 @@ impl NodeCore {
     /// Whole materialized stream `{sessionID: [value, ...]}` as a JSON string
     /// (empty object if not yet materialized). Matches `RawCoStream.toJSON`.
     pub fn stream_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let snapshot = self
             .co_streams
             .get(co_id)
@@ -350,9 +344,7 @@ impl NodeCore {
     /// the payload a TS `RawCoStream` rebuilds its `items` from. See
     /// [`crate::core::co_stream::CoStreamView::delta`].
     pub fn stream_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_streams
             .get(co_id)
@@ -397,9 +389,7 @@ impl NodeCore {
         co_id: &str,
         frontier_json: &str,
     ) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let frontier = Self::parse_frontier(frontier_json);
         let snapshot = self
             .co_streams
@@ -431,17 +421,14 @@ impl NodeCore {
         co_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<u64, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let Self {
             covalues,
             engines,
-            co_maps: _,
-            co_streams: _,
             co_lists,
             keys,
             keys_version,
+            ..
         } = self;
         ensure_co_list(
             covalues,
@@ -457,9 +444,7 @@ impl NodeCore {
     /// The whole materialized list as a JSON array of VALUES (empty array if not
     /// yet materialized). Matches `RawCoList.asArray()` / `toJSON()`.
     pub fn list_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_lists
             .get(co_id)
@@ -470,9 +455,7 @@ impl NodeCore {
     /// The whole ordered entry list `[{value, madeAt, opID}, ...]` — the payload
     /// a TS `RawCoList` rebuilds its `entries()` from.
     pub fn list_entries(&self, co_id: &str) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_lists
             .get(co_id)
@@ -483,9 +466,7 @@ impl NodeCore {
     /// RICH delta `{version, reset, entries}` since `since_version`. See
     /// [`crate::core::co_list::CoListView::delta`].
     pub fn list_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_lists
             .get(co_id)
@@ -505,9 +486,7 @@ impl NodeCore {
     /// Boundary (a): latest value of `key` as a JSON string (`None` = absent /
     /// deleted / not-yet-materialized).
     pub fn map_get(&self, co_id: &str, key: &str) -> Result<Option<String>, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_maps
             .get(co_id)
@@ -523,9 +502,7 @@ impl NodeCore {
         key: &str,
         at_time: Option<u64>,
     ) -> Result<Option<String>, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_maps
             .get(co_id)
@@ -536,9 +513,7 @@ impl NodeCore {
     /// Boundary (b): whole materialized map `{key: latestValue}` as a JSON
     /// string (empty object if not yet materialized).
     pub fn map_snapshot(&self, co_id: &str) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let snapshot = self
             .co_maps
             .get(co_id)
@@ -550,9 +525,7 @@ impl NodeCore {
     /// Boundary (c): `{version, changedKeys, deletedKeys}` since `since_version`
     /// as a JSON string.
     pub fn map_delta(&self, co_id: &str, since_version: u64) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let delta = self
             .co_maps
             .get(co_id)
@@ -576,9 +549,7 @@ impl NodeCore {
         co_id: &str,
         since_version: u64,
     ) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_maps
             .get(co_id)
@@ -600,9 +571,7 @@ impl NodeCore {
         co_id: &str,
         key: &str,
     ) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         Ok(self
             .co_maps
             .get(co_id)
@@ -625,9 +594,7 @@ impl NodeCore {
         key: &str,
         frontier_json: &str,
     ) -> Result<Option<String>, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let frontier = Self::parse_frontier(frontier_json);
         Ok(self
             .co_maps
@@ -643,9 +610,7 @@ impl NodeCore {
         co_id: &str,
         frontier_json: &str,
     ) -> Result<String, SessionMapError> {
-        if !self.covalues.contains_key(co_id) {
-            return Err(SessionMapError::UnknownCoValue(co_id.to_string()));
-        }
+        self.require_covalue(co_id)?;
         let frontier = Self::parse_frontier(frontier_json);
         let snapshot = self
             .co_maps
@@ -726,17 +691,13 @@ impl NodeCore {
         member: &str,
         at_time: Option<u64>,
     ) -> Result<Option<Role>, SessionMapError> {
-        if !self.covalues.contains_key(group_id) {
-            return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
-        }
+        self.require_covalue(group_id)?;
         let Self {
             covalues,
             engines,
-            co_maps: _,
-            co_streams: _,
-            co_lists: _,
             keys,
             keys_version,
+            ..
         } = self;
         engine_role_of(
             covalues,
@@ -762,9 +723,7 @@ impl NodeCore {
         group_id: &str,
         pending: &[PendingTxIn],
     ) -> Result<GroupKeyState, SessionMapError> {
-        if !self.covalues.contains_key(group_id) {
-            return Err(SessionMapError::UnknownCoValue(group_id.to_string()));
-        }
+        self.require_covalue(group_id)?;
         self.map_materialize(group_id, pending)?;
         let snapshot = self
             .co_maps
