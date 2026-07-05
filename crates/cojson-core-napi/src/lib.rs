@@ -1254,6 +1254,50 @@ impl BinaryTransferProbe {
 }
 
 // ============================================================================
+// Group key-management write paths (JSON wire; native-only, stage-1 FFI surface)
+// ============================================================================
+//
+// Thin napi wrappers over `cojson_core::core::group_key_ffi`. Each takes the
+// call's inputs as a single JSON string and returns a JSON string (the ordered
+// `(field, value)` write list, or `{ skipped, writes }` for rotation, or a
+// `{ op, field, value? }` mutation array for the everyone->writeOnly path). See
+// that module for the exact wire shapes. NOTHING in cojson production TS calls
+// these yet — group.ts wiring is stage 2.
+
+/// Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
+#[napi(js_name = "groupRotateReadKey")]
+pub fn group_rotate_read_key(input_json: String) -> napi::Result<String> {
+  cojson_core::core::group_key_ffi::rotate_read_key_json(&input_json).map_err(to_napi_err)
+}
+
+/// Reproduce `RawGroup.addMemberInternal` (add/createInvite) — returns a JSON
+/// array of writes.
+#[napi(js_name = "groupAddMemberInternal")]
+pub fn group_add_member_internal(input_json: String) -> napi::Result<String> {
+  cojson_core::core::group_key_ffi::add_member_internal_json(&input_json).map_err(to_napi_err)
+}
+
+/// Reproduce `addMember(everyone, "writeOnly")` — returns a JSON array of
+/// mutations `[{ op, field, value? }]` (set OR del).
+#[napi(js_name = "groupAddEveryoneWriteOnly")]
+pub fn group_add_everyone_write_only(input_json: String) -> napi::Result<String> {
+  cojson_core::core::group_key_ffi::add_everyone_write_only_json(&input_json).map_err(to_napi_err)
+}
+
+/// Reproduce `RawGroup.removeMember` — returns a JSON array of writes.
+#[napi(js_name = "groupRemoveMember")]
+pub fn group_remove_member(input_json: String) -> napi::Result<String> {
+  cojson_core::core::group_key_ffi::remove_member_json(&input_json).map_err(to_napi_err)
+}
+
+/// Reproduce `RawGroup.extend` (standard/account-member parent path) — returns a
+/// JSON array of writes.
+#[napi(js_name = "groupExtend")]
+pub fn group_extend(input_json: String) -> napi::Result<String> {
+  cojson_core::core::group_key_ffi::extend_json(&input_json).map_err(to_napi_err)
+}
+
+// ============================================================================
 // Hash Functions
 // ============================================================================
 

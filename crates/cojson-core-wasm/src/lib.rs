@@ -1180,3 +1180,45 @@ impl NodeCore {
         self.internal.missing_key_ids(&co_id)
     }
 }
+
+// ============================================================================
+// Group key-management write paths (JSON wire; native-only, stage-1 FFI surface)
+// ============================================================================
+//
+// Thin wasm wrappers over `cojson_core::core::group_key_ffi`, byte-identical in
+// behaviour to their napi twins. Each takes the call's inputs as a single JSON
+// string and returns a JSON string (the ordered `(field, value)` write list, or
+// `{ skipped, writes }` for rotation, or a `{ op, field, value? }` mutation
+// array for the everyone->writeOnly path). NOTHING in cojson production TS calls
+// these yet — group.ts wiring is stage 2.
+
+/// Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
+#[wasm_bindgen(js_name = groupRotateReadKey)]
+pub fn group_rotate_read_key(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::group_key_ffi::rotate_read_key_json(&input_json).map_err(to_wasm_err)
+}
+
+/// Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
+#[wasm_bindgen(js_name = groupAddMemberInternal)]
+pub fn group_add_member_internal(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::group_key_ffi::add_member_internal_json(&input_json).map_err(to_wasm_err)
+}
+
+/// Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
+#[wasm_bindgen(js_name = groupAddEveryoneWriteOnly)]
+pub fn group_add_everyone_write_only(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::group_key_ffi::add_everyone_write_only_json(&input_json).map_err(to_wasm_err)
+}
+
+/// Reproduce `RawGroup.removeMember` — JSON write array.
+#[wasm_bindgen(js_name = groupRemoveMember)]
+pub fn group_remove_member(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::group_key_ffi::remove_member_json(&input_json).map_err(to_wasm_err)
+}
+
+/// Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
+/// write array.
+#[wasm_bindgen(js_name = groupExtend)]
+pub fn group_extend(input_json: String) -> Result<String, JsValue> {
+    cojson_core::core::group_key_ffi::extend_json(&input_json).map_err(to_wasm_err)
+}
