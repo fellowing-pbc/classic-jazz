@@ -266,13 +266,22 @@ export function mergeBranch(branch: CoValueCore): CoValueCore {
   // `previousTransaction.madeAt` (coValueCore.ts:1566-1567). That fallback is a
   // TS-only mechanism — the native `derive_merge_source` (R2,
   // `group_engine/tx_view.rs`) explicitly does NOT implement it (deferred to
-  // `pending`, which the native-gated coMap fast path never supplies — see
-  // `CoValueCore.materializeNativeCoMap`'s `EMPTY_NODE_CORE_PENDING`).
+  // `pending`, which the native-gated coMap/coStream fast paths never supply —
+  // see `CoValueCore.materializeNativeCoMap`'s `EMPTY_NODE_CORE_PENDING`).
   // Without `meta.t`, native falls back to the merge commit's OWN (real,
   // un-backdated) `currentMadeAt`, which can sort a stale branch write AFTER
-  // a later main-line edit to the same key. So: for a native-gated target,
-  // never compress `t` away — always send it explicitly.
+  // a later main-line edit (`compareStreamItems` orders coStream entries by
+  // `madeAt`, so a backdated merged entry that loses its `t` sorts as if freshly
+  // written and wrongly wins last-write). So: for a native-gated target (coMap
+  // OR coStream/coFeed/binaryCoStream), never compress `t` away — always send it
+  // explicitly.
+  // Each guard is evaluated in its own binding: `isNativeCoMap`/`isNativeCoStream`
+  // are `this is AvailableCoValueCore` type guards, so combining them inline with
+  // `||` would narrow `target` to `never` on the second call. Plain assignments
+  // sidestep that control-flow narrowing.
   const targetIsNativeCoMap = target.isNativeCoMap();
+  const targetIsNativeCoStream = target.isNativeCoStream();
+  const targetIsNative = targetIsNativeCoMap || targetIsNativeCoStream;
 
   for (const tx of branchValidTransactions) {
     const mergeMeta: MergedTransactionMetadata = {
@@ -280,7 +289,7 @@ export function mergeBranch(branch: CoValueCore): CoValueCore {
     };
 
     // We compress the original made at, to reduce the size of the meta information
-    if (targetIsNativeCoMap || tx.madeAt !== lastOriginalMadeAt) {
+    if (targetIsNative || tx.madeAt !== lastOriginalMadeAt) {
       // Storing the diff with madeAt to consume less bytes in the meta information
       mergeMeta.t = now - tx.madeAt;
     }
