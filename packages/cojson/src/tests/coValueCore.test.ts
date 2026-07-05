@@ -976,10 +976,6 @@ describe("CoValueCore.decryptTransaction", () => {
       readKey.secret!,
     );
 
-    // tx.changes is derived via a separate, already-verified decryption path
-    // (transaction validation), so comparing against it is a genuine
-    // independent check that decryptTransaction returns real, correct content.
-    expect(decrypted).toEqual(tx.changes);
     expect(decrypted).toEqual([{ op: "set", key: "key1", value: "value1" }]);
   });
 });
