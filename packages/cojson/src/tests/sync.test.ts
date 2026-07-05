@@ -1213,6 +1213,18 @@ describe("LocalNode sync forwarding", () => {
     expect(waitForSyncSpy).toHaveBeenCalledWith(group.id, 1000);
   });
 
+  test("waitForAllCoValuesSync delegates to syncManager.waitForAllCoValuesSync", async () => {
+    const node = createTestNode();
+    const waitForAllCoValuesSyncSpy = vi.spyOn(
+      node.syncManager,
+      "waitForAllCoValuesSync",
+    );
+
+    await node.waitForAllCoValuesSync(1000);
+
+    expect(waitForAllCoValuesSyncSpy).toHaveBeenCalledWith(1000);
+  });
+
   test("handleIncomingContent delegates to syncManager.handleNewContent", () => {
     const node = createTestNode();
     const group = node.createGroup();

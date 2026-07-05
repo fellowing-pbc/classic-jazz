@@ -214,6 +214,15 @@ export class LocalNode {
   }
 
   /**
+   * Resolves once all currently-known CoValues have synced with every
+   * connected peer and any configured storage.
+   * @category 3. Low-level
+   */
+  waitForAllCoValuesSync(timeout?: number) {
+    return this.syncManager.waitForAllCoValuesSync(timeout);
+  }
+
+  /**
    * Imports externally-sourced content pieces into this node.
    * @category 3. Low-level
    */
