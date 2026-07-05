@@ -822,4 +822,24 @@ class WasmNodeCoreAdapter implements NodeCoreImpl {
   supportsNativeCoMapMaterialization(): boolean {
     return true;
   }
+
+  streamMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
+    return this.nodeCore.streamMaterialize(coId, pending);
+  }
+
+  streamDelta(coId: string, sinceVersion: number): string {
+    return this.nodeCore.streamDelta(coId, sinceVersion);
+  }
+
+  streamSnapshot(coId: string): string {
+    return this.nodeCore.streamSnapshot(coId);
+  }
+
+  streamMissingKeyIds(coId: string): string[] {
+    return this.nodeCore.streamMissingKeyIds(coId);
+  }
+
+  supportsNativeCoStreamMaterialization(): boolean {
+    return true;
+  }
 }

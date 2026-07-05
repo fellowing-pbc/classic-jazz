@@ -858,4 +858,36 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
   supportsNativeCoMapMaterialization(): boolean {
     return true;
   }
+
+  // The RN uniffi binding does not yet expose the coStream materialization
+  // surface (regenerated only by an `ubrn` build). `supportsNativeCoStream-
+  // Materialization` returns `false`, so the coStream path stays on the TS
+  // `getValidTransactions` materializer and these stubs are never reached.
+  streamMaterialize(_coId: string, _pending: NodeCorePendingTx[]): number {
+    throw new Error(
+      "native coStream materialization is not supported on this binding",
+    );
+  }
+
+  streamDelta(_coId: string, _sinceVersion: number): string {
+    throw new Error(
+      "native coStream materialization is not supported on this binding",
+    );
+  }
+
+  streamSnapshot(_coId: string): string {
+    throw new Error(
+      "native coStream materialization is not supported on this binding",
+    );
+  }
+
+  streamMissingKeyIds(_coId: string): string[] {
+    throw new Error(
+      "native coStream materialization is not supported on this binding",
+    );
+  }
+
+  supportsNativeCoStreamMaterialization(): boolean {
+    return false;
+  }
 }

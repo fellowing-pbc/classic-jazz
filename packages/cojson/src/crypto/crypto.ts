@@ -701,4 +701,37 @@ export interface NodeCoreImpl {
    * bindings are regenerated.
    */
   supportsNativeCoMapMaterialization(): boolean;
+
+  /**
+   * R4a native coStream/coFeed materialization surface (mirrors the coMap block
+   * above). The native side keeps a Rust-resident per-session entry view of every
+   * gated coStream (header type `costream`, plain or binary); TS consumes it
+   * through the delta below instead of walking `getValidTransactions` in TS.
+   *
+   * Materialize (or incrementally refresh) `coId`'s coStream view against the
+   * currently-known valid transactions; returns the view's monotonic version.
+   */
+  streamMaterialize(coId: string, pending: NodeCorePendingTx[]): number;
+  /**
+   * RICH delta `{version, reset, sessions}` since `sinceVersion`, as JSON — each
+   * `sessions[sid]` the full ordered `CoStreamItem[]` for a changed session.
+   * `reset` tells the caller to clear and rebuild its `items` from the full
+   * delta; otherwise it replaces the changed sessions wholesale.
+   */
+  streamDelta(coId: string, sinceVersion: number): string;
+  /** Whole materialized stream `{sessionID: [value, ...]}` as a JSON string. */
+  streamSnapshot(coId: string): string;
+  /**
+   * The `KeyID`s `coId`'s coStream view still needs a secret for (a private tx
+   * used a key not yet in the native key store). The caller resolves each in TS,
+   * feeds it via {@link provideKeySecret}, and re-materializes.
+   */
+  streamMissingKeyIds(coId: string): string[];
+  /**
+   * Whether this adapter's native binding exposes the coStream materialization
+   * surface. The napi and wasm bindings do; the React Native uniffi binding only
+   * does after an `ubrn` regeneration. When `false` the coStream path stays on
+   * the TS `getValidTransactions` materializer.
+   */
+  supportsNativeCoStreamMaterialization(): boolean;
 }

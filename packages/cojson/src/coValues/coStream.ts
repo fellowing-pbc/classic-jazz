@@ -16,6 +16,30 @@ export type CoStreamItem<Item extends JsonValue> = {
   madeAt: number;
 };
 
+/**
+ * The rich per-session delta the native (Rust-resident) coStream materializer
+ * emits (`crates/cojson-core/src/core/co_stream.rs`'s `CoStreamView::delta`).
+ * Each `sessions[sid]` is the FULL ordered `CoStreamItem[]` for a changed
+ * session — a straight adopt-and-replace, never an incremental patch. `reset`
+ * signals the consumer to clear and rebuild from the full delta.
+ */
+export type NativeStreamDelta = {
+  version: number;
+  reset: boolean;
+  sessions: Record<string, CoStreamItem<JsonValue>[]>;
+};
+
+/**
+ * Implemented by every coStream-shaped content class (plain `RawCoStreamView`
+ * and `RawBinaryCoStreamView`) so `CoValueCore` can drive native materialization
+ * uniformly. `consumeNativeStreamDelta` returns the native view's new monotonic
+ * version (the core stores it as the next `sinceVersion`).
+ */
+export interface NativeStreamConsumer {
+  consumeNativeStreamDelta(delta: NativeStreamDelta): number;
+  rebuildFromCore(): void;
+}
+
 export class RawCoStreamView<
   Item extends JsonValue = JsonValue,
   Meta extends JsonObject | null = JsonObject | null,
@@ -36,10 +60,35 @@ export class RawCoStreamView<
   /** @internal */
   atFrontierFilter?: CoValueFrontier = undefined;
 
+  /**
+   * True when this coStream's `items` are fed by the native (Rust-resident)
+   * materializer via {@link consumeNativeStreamDelta} instead of the TS
+   * {@link processNewTransactions} walk over `getValidTransactions`. Set once at
+   * construction from {@link CoValueCore.isNativeCoStream}. A time-travel
+   * (`atFrontier`) view keeps the TS path — the native delta carries the full
+   * un-filtered per-session lists, and the TS walk already applies the frontier
+   * filter at build time.
+   */
+  readonly nativeMaterialization: boolean = false;
+
+  /**
+   * Refcount of `sessionID:txIndex` -> number of items currently in `items` that
+   * come from that transaction. Drives {@link totalValidTransactions} (its
+   * `size` = distinct contributing valid transactions) under the native path,
+   * where the rich delta replaces a session's whole item-list at once and a
+   * single transaction may contribute several items. Unused on the TS path.
+   */
+  #nativeTxRefcount = new Map<string, number>();
+  /** Whether the native view has been materialized into this content at least
+   * once — the first materialization does NOT bump {@link version} (it is the
+   * initial build); later full rebuilds (`reset` deltas) do. */
+  #nativeMaterializedOnce = false;
+
   private resetInternalState() {
     this.items = {};
     this.knownTransactions = { [this.core.id]: 0 };
     this.totalValidTransactions = 0;
+    this.#nativeTxRefcount.clear();
   }
 
   constructor(
@@ -53,10 +102,72 @@ export class RawCoStreamView<
     this.items = {};
     this.knownTransactions = { [core.id]: 0 };
     this.atFrontierFilter = options?.atFrontierFilter;
-    this.processNewTransactions();
+
+    this.nativeMaterialization =
+      !this.atFrontierFilter && this.core.isNativeCoStream();
+
+    if (this.nativeMaterialization) {
+      this.core.materializeNativeCoStreamContent(this);
+    } else {
+      this.processNewTransactions();
+    }
+  }
+
+  /**
+   * Rebuild `items` from a native rich delta (`{version, reset, sessions}`, each
+   * `sessions[sid]` a full ordered `CoStreamItem[]`). On `reset` the store is
+   * cleared and rebuilt; otherwise each changed session's list is replaced
+   * wholesale. The resulting `CoStreamItem` shape is identical to the TS path's,
+   * so every reader is unchanged. Returns the native view's new version.
+   */
+  consumeNativeStreamDelta(delta: NativeStreamDelta): number {
+    if (delta.reset) {
+      if (this.#nativeMaterializedOnce) {
+        this.version += 1;
+      }
+      this.items = {};
+      this.#nativeTxRefcount.clear();
+    }
+
+    const items = this.items as Record<string, CoStreamItem<Item>[]>;
+    for (const sid in delta.sessions) {
+      const list = delta.sessions[sid]! as CoStreamItem<Item>[];
+      const previous = items[sid];
+      if (previous) {
+        for (const it of previous) this.#decNativeTxRef(it.tx);
+      }
+      items[sid] = list;
+      for (const it of list) this.#incNativeTxRef(it.tx);
+    }
+
+    this.totalValidTransactions = this.#nativeTxRefcount.size;
+    this.#nativeMaterializedOnce = true;
+    return delta.version;
+  }
+
+  #incNativeTxRef(txID: TransactionID) {
+    const k = `${txID.sessionID}:${txID.txIndex}`;
+    this.#nativeTxRefcount.set(k, (this.#nativeTxRefcount.get(k) ?? 0) + 1);
+  }
+
+  #decNativeTxRef(txID: TransactionID) {
+    const k = `${txID.sessionID}:${txID.txIndex}`;
+    const n = (this.#nativeTxRefcount.get(k) ?? 0) - 1;
+    if (n <= 0) this.#nativeTxRefcount.delete(k);
+    else this.#nativeTxRefcount.set(k, n);
   }
 
   rebuildFromCore() {
+    if (this.nativeMaterialization) {
+      // Full re-pull from the native view. `version` is bumped by
+      // `consumeNativeStreamDelta` on the `reset` this triggers.
+      this.resetInternalState();
+      this.#nativeMaterializedOnce = false;
+      this.version += 1;
+      this.core.materializeNativeCoStreamContent(this);
+      return;
+    }
+
     this.version++;
 
     this.resetInternalState();
@@ -104,6 +215,14 @@ export class RawCoStreamView<
 
   /** @internal */
   processNewTransactions() {
+    // Under the native path the core drives materialization through
+    // `consumeNativeStreamDelta`; the TS walk is a no-op here (callers like
+    // `push` still invoke it after `makeTransaction`, but the core's own
+    // `processNewTransactions` already pushed the native delta).
+    if (this.nativeMaterialization) {
+      return;
+    }
+
     const changeEntries = new Set<CoStreamItem<Item>[]>();
 
     const newValidTransactions = this.core.getValidTransactions({

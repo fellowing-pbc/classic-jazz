@@ -17,6 +17,7 @@ import {
   SignerID,
 } from "../crypto/crypto.js";
 import type { RawCoMap } from "../coValues/coMap.js";
+import type { NativeStreamConsumer } from "../coValues/coStream.js";
 import {
   AgentID,
   isDeleteSessionID,
@@ -90,6 +91,40 @@ export function enableNativeCoMapMaterialization() {
 
 export function disableNativeCoMapMaterialization() {
   nativeCoMapMaterializationEnabled = false;
+}
+
+// The native coStream/coFeed materialization path (rich per-session delta pulled
+// on every ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
+// materialization should live in the Rust core, not TS. A known absolute
+// performance cost may exist on cold-bulk-ingest shapes — the delta transfer can
+// exceed the JS materialization it replaces (see bench/cojson/*.bench.ts) — but
+// it is accepted because the goal is architectural completeness, not raw speed.
+// The TS `RawCoStreamView` materialization stays in place as fallback/reference
+// pending its own deletion phase; this flag lets it be toggled off if ever needed.
+let nativeCoStreamMaterializationEnabled = true;
+
+export function enableNativeCoStreamMaterialization() {
+  nativeCoStreamMaterializationEnabled = true;
+}
+
+export function disableNativeCoStreamMaterialization() {
+  nativeCoStreamMaterializationEnabled = false;
+}
+
+// The native binaryCoStream materialization path (same Rust coStream view,
+// projected into chunks/start/ended in TS). ON by default per the 100%-Rust
+// scope goal, with the same accepted cold-bulk-ingest performance trade-off as
+// the coStream flag above; the TS `RawBinaryCoStreamView` materialization stays
+// as fallback/reference. Kept as a SEPARATE flag from the coStream one so binary
+// streams (jazz-tools `FileStream`) can be toggled independently if needed.
+let nativeBinaryStreamMaterializationEnabled = true;
+
+export function enableNativeBinaryStreamMaterialization() {
+  nativeBinaryStreamMaterializationEnabled = true;
+}
+
+export function disableNativeBinaryStreamMaterialization() {
+  nativeBinaryStreamMaterializationEnabled = false;
 }
 
 export class VerifiedTransaction {
@@ -617,6 +652,7 @@ export class CoValueCore {
     // at 0 — realign the delta cursor so the first materialization is a full
     // build.
     this.coMapViewVersion = 0;
+    this.coStreamViewVersion = 0;
 
     // Create VerifiedState - Rust validates uniqueness and id match unless skipVerify is true
     try {
@@ -1097,6 +1133,17 @@ export class CoValueCore {
       this.materializeNativeCoMap(this._cachedContent as RawCoMap | undefined);
       return;
     }
+    if (this.isNativeCoStream()) {
+      // Native path: re-materialize the Rust-resident coStream view and push the
+      // rich per-session delta into the cached content. Used by local writes
+      // (`push`, via `makeTransaction`) and by the sync receive path — the raw
+      // log was already written by `verified.tryAddTransactions`, exactly as on
+      // the TS path, so this only refreshes the projected view.
+      this.materializeNativeCoStream(
+        this._cachedContent as NativeStreamConsumer | undefined,
+      );
+      return;
+    }
     if (this._cachedContent) {
       this._cachedContent.processNewTransactions();
     }
@@ -1189,6 +1236,95 @@ export class CoValueCore {
     };
     this.coMapViewVersion = delta.version;
     content.consumeNativeDelta(delta as never);
+  }
+
+  // ── Native coStream/coFeed materialization (R4a) ────────────────────────────
+  //
+  // Cursor into the native coStream view's monotonic version, the coStream twin
+  // of {@link coMapViewVersion}. Advances on every native materialization; the
+  // content passes it as `sinceVersion` on its next rich-delta pull so the delta
+  // stays O(changed sessions). Reset in lockstep with the native view whenever
+  // `removeVerifiedContent`/`provideHeader` drops the covalue.
+  coStreamViewVersion = 0;
+
+  /**
+   * Whether this covalue's coStream content is fed by the native materializer.
+   * True for a `costream` header (plain coStream/coFeed OR binaryCoStream) that
+   * is NOT branched, on a binding exposing the coStream surface. A binary meta
+   * (`meta.type === "binary"`) is gated by the binary flag, everything else by
+   * the coStream flag, so the two content shapes can be toggled independently.
+   */
+  isNativeCoStream(): this is AvailableCoValueCore {
+    const verified = this._verified;
+    if (!verified || verified.header.type !== "costream") return false;
+    if (this.isBranched()) return false;
+    if (!this.node.nodeCore.supportsNativeCoStreamMaterialization())
+      return false;
+    const isBinary =
+      (verified.header.meta as { type?: string } | null)?.type === "binary";
+    return isBinary
+      ? nativeBinaryStreamMaterializationEnabled
+      : nativeCoStreamMaterializationEnabled;
+  }
+
+  /**
+   * Resolve every read key the native coStream view still needs (a private tx
+   * used a key not yet in the native store) and feed it across. Returns whether
+   * any secret was newly provided (i.e. a re-materialization is worthwhile).
+   * The coStream twin of {@link #provideMissingCoMapKeys}.
+   */
+  #provideMissingCoStreamKeys(): boolean {
+    if (!this.verified) return false;
+    const missing = this.node.nodeCore.streamMissingKeyIds(this.id);
+    let provided = false;
+    for (const keyId of missing) {
+      const secret = this.getReadKey(keyId as KeyID);
+      if (secret) {
+        this.node.nodeCore.provideKeySecret(keyId, secret);
+        provided = true;
+      }
+    }
+    return provided;
+  }
+
+  /**
+   * (Re)materialize the native coStream view against the already-ingested log,
+   * resolving any missing private keys, then push the rich delta since
+   * {@link coStreamViewVersion} into `content`. Used by local writes and by
+   * `processNewTransactions` — cases where the native log already holds the
+   * transactions and only the view needs refreshing. A `content` of `undefined`
+   * (no reader yet) defers materialization to the first `getCurrentContent`,
+   * mirroring the coMap "no reader" laziness.
+   */
+  private materializeNativeCoStream(
+    content: NativeStreamConsumer | undefined,
+  ): void {
+    if (!content) return;
+    const nodeCore = this.node.nodeCore;
+    const sinceVersion = this.coStreamViewVersion;
+    nodeCore.streamMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    if (this.#provideMissingCoStreamKeys()) {
+      nodeCore.streamMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    }
+    const delta = JSON.parse(nodeCore.streamDelta(this.id, sinceVersion));
+    this.coStreamViewVersion = content.consumeNativeStreamDelta(delta);
+  }
+
+  /**
+   * Build a fresh coStream content's `items` from the native view. Pulls the
+   * FULL delta (since version 0 → `reset`), so it does not depend on
+   * {@link coStreamViewVersion}; it advances that cursor to the native view's
+   * current version so subsequent incremental pushes stay O(changed sessions).
+   * The coStream twin of {@link materializeNativeCoMapContent}.
+   */
+  materializeNativeCoStreamContent(content: NativeStreamConsumer): void {
+    const nodeCore = this.node.nodeCore;
+    nodeCore.streamMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    if (this.#provideMissingCoStreamKeys()) {
+      nodeCore.streamMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    }
+    const delta = JSON.parse(nodeCore.streamDelta(this.id, 0));
+    this.coStreamViewVersion = content.consumeNativeStreamDelta(delta);
   }
 
   /**
@@ -1536,7 +1672,7 @@ export class CoValueCore {
       // Native path: hand the write key to the native store up front so the
       // materialization triggered by `processNewTransactions` can decrypt this
       // just-written private tx without a missing-key re-materialize round-trip.
-      if (this.isNativeCoMap()) {
+      if (this.isNativeCoMap() || this.isNativeCoStream()) {
         this.node.nodeCore.provideKeySecret(keyID, keySecret);
       }
     } else {
@@ -1626,6 +1762,16 @@ export class CoValueCore {
 
   // Reset the parsed transactions and branches, to validate them again from scratch when the group is updated
   resetParsedTransactions() {
+    // Snapshot the native coStream view BEFORE `resetValidation` drops it, so the
+    // coStream fast path below can decide whether the rebuild observably changed
+    // anything (binaryCoStream's `toJSON()` is `{}`, so a content-side compare
+    // like the coMap path's is not usable — both sides come from the same native
+    // serializer, so string equality is a sound change test).
+    const nativeStreamBefore =
+      this.isNativeCoStream() && this._cachedContent
+        ? this.node.nodeCore.streamSnapshot(this.id)
+        : undefined;
+
     // Drop the native validation engine cache for this CoValue in lockstep with
     // the TS re-parse: the engine cache is keyed only by per-session tx counts,
     // so pending changes (e.g. late-decrypted private meta) require an explicit
@@ -1704,6 +1850,48 @@ export class CoValueCore {
       return;
     }
 
+    // Native coStream fast path — the coStream twin of the coMap block above.
+    // A native coStream's `verifiedTransactions` is normally never loaded (its
+    // content is fed straight from the native materializer), so the classic
+    // block below would no-op on its empty-length guard even though cached
+    // content needs refreshing after a group permission change. Handle it here.
+    if (
+      this.isNativeCoStream() &&
+      this.#verifiedTransactionsStore.length === 0
+    ) {
+      const content = this._cachedContent as NativeStreamConsumer | undefined;
+      const nodeCore = this.node.nodeCore;
+      if (content) {
+        // `resetValidation` dropped the native view; rebuild it and compare the
+        // resolved snapshot against the pre-reset one (`nativeStreamBefore`) to
+        // decide whether a `rebuildFromCore()` (bumps `version`, matches the TS
+        // classic block's "only when validity changed" contract) is warranted.
+        let freshVersion = nodeCore.streamMaterialize(
+          this.id,
+          EMPTY_NODE_CORE_PENDING,
+        );
+        if (this.#provideMissingCoStreamKeys()) {
+          freshVersion = nodeCore.streamMaterialize(
+            this.id,
+            EMPTY_NODE_CORE_PENDING,
+          );
+        }
+        const after = nodeCore.streamSnapshot(this.id);
+        if (nativeStreamBefore !== after) {
+          content.rebuildFromCore();
+        } else {
+          // Nothing observable changed — leave `content` untouched, but realign
+          // the cursor to the freshly-rebuilt view's version so the NEXT real
+          // change isn't filtered out against a now-stale (too-high) cursor.
+          this.coStreamViewVersion = freshVersion;
+        }
+      } else {
+        this.coStreamViewVersion = 0;
+      }
+      this.scheduleNotifyUpdate();
+      return;
+    }
+
     // Internal bookkeeping: read the backing field directly (never the
     // self-healing public getter) — this method IS the "already loaded" path,
     // so there's nothing to heal, and going through the getter here risks
@@ -1772,7 +1960,10 @@ export class CoValueCore {
     // nothing new (their own per-session `verifiedTransactionsKnownSessions`
     // cursor makes it an O(sessions) no-op), so this is safe to do
     // unconditionally for a native coMap.
-    if (!this.#syncingNativeVerifiedTransactions && this.isNativeCoMap()) {
+    if (
+      !this.#syncingNativeVerifiedTransactions &&
+      (this.isNativeCoMap() || this.isNativeCoStream())
+    ) {
       this.#syncingNativeVerifiedTransactions = true;
       try {
         this.parseNewTransactions(false);
