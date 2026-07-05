@@ -164,6 +164,25 @@ export function disableNativeCoListMaterialization() {
   nativeCoListMaterializationEnabled = false;
 }
 
+// coPlainText (the grapheme text CRDT) is a thin `RawCoList` subclass: its
+// entries are single graphemes and it emits the SAME `pre`/`app`/`del` wire ops
+// as a coList, so the native (Rust-resident) RGA materializer — which is
+// header-type-agnostic (`ensure_co_list` never inspects the covalue type) —
+// reproduces its `entries()`/`toString()` byte-for-byte with no extra Rust code.
+// This flag gates that native path for `coplaintext` headers independently of
+// the coList flag; default OFF until fixture- and full-suite-verified. Toggle
+// via `enableNativeCoPlainTextMaterialization()` /
+// `disableNativeCoPlainTextMaterialization()`.
+let nativeCoPlainTextMaterializationEnabled = false;
+
+export function enableNativeCoPlainTextMaterialization() {
+  nativeCoPlainTextMaterializationEnabled = true;
+}
+
+export function disableNativeCoPlainTextMaterialization() {
+  nativeCoPlainTextMaterializationEnabled = false;
+}
+
 export class VerifiedTransaction {
   // The ID of the CoValue that the transaction belongs to
   coValueId: RawCoID;
@@ -1398,14 +1417,24 @@ export class CoValueCore {
    */
   isNativeCoList(): this is AvailableCoValueCore {
     const verified = this._verified;
-    if (!verified || verified.header.type !== "colist") return false;
+    if (!verified) return false;
+    // coPlainText shares the coList RGA materializer (same wire ops, same native
+    // view) but is gated by its own flag.
+    let flagEnabled: boolean;
+    if (verified.header.type === "colist") {
+      flagEnabled = nativeCoListMaterializationEnabled;
+    } else if (verified.header.type === "coplaintext") {
+      flagEnabled = nativeCoPlainTextMaterializationEnabled;
+    } else {
+      return false;
+    }
     if (this.isBranched()) return false;
     const ruleset = verified.header.ruleset;
     if (ruleset.type === "ownedByGroup" && ruleset.restrictDeletion === true) {
       return false;
     }
     if (!this.node.nodeCore.supportsNativeCoListMaterialization()) return false;
-    return nativeCoListMaterializationEnabled;
+    return flagEnabled;
   }
 
   /** Resolve every read key the native coList view still needs. coList twin of
