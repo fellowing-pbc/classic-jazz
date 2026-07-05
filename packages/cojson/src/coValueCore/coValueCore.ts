@@ -170,10 +170,13 @@ export function disableNativeCoListMaterialization() {
 // header-type-agnostic (`ensure_co_list` never inspects the covalue type) —
 // reproduces its `entries()`/`toString()` byte-for-byte with no extra Rust code.
 // This flag gates that native path for `coplaintext` headers independently of
-// the coList flag; default OFF until fixture- and full-suite-verified. Toggle
-// via `enableNativeCoPlainTextMaterialization()` /
-// `disableNativeCoPlainTextMaterialization()`.
-let nativeCoPlainTextMaterializationEnabled = false;
+// the coList flag; default ON after byte-for-byte content-fixture replay
+// (`data/co_plain_text_content/*`, covering grapheme inserts/deletes,
+// insert-after-deleted, multi-codepoint graphemes, two-session concurrent
+// same-anchor inserts, and branch/merge) plus the full cojson + jazz-tools
+// suites. Toggle off via `disableNativeCoPlainTextMaterialization()` /
+// `enableNativeCoPlainTextMaterialization()`.
+let nativeCoPlainTextMaterializationEnabled = true;
 
 export function enableNativeCoPlainTextMaterialization() {
   nativeCoPlainTextMaterializationEnabled = true;
