@@ -1315,4 +1315,100 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }
+
+    // ========================================================================
+    // Stable stringify equivalence
+    //
+    // The `JsonValue` type uses `BTreeMap` for objects, so `serde_json` emits
+    // object keys in sorted order. These cases parse UNSORTED input JSON into
+    // `JsonValue` and assert the re-serialized output matches, byte-for-byte,
+    // the output of TypeScript's `stableStringify`
+    // (`packages/cojson/src/jsonStringify.ts`). Expected strings were captured
+    // by running the live TS implementation on each input.
+    // ========================================================================
+
+    fn stable_stringify(input_json: &str) -> String {
+        let value: JsonValue = serde_json::from_str(input_json).expect("valid JSON");
+        serde_json::to_string(&value).expect("serialize")
+    }
+
+    #[test]
+    fn stable_stringify_matches_typescript() {
+        // (unsorted input JSON, expected TS stableStringify output)
+        let cases: &[(&str, &str)] = &[
+            ("{}", "{}"),
+            (r#"{"b":1,"a":2,"c":3}"#, r#"{"a":2,"b":1,"c":3}"#),
+            (
+                r#"{"z":{"y":1,"x":2},"a":[3,2,1]}"#,
+                r#"{"a":[3,2,1],"z":{"x":2,"y":1}}"#,
+            ),
+            (
+                r#"{"nested":{"deep":{"deeper":{"k":"v","a":"b"}}}}"#,
+                r#"{"nested":{"deep":{"deeper":{"a":"b","k":"v"}}}}"#,
+            ),
+            ("[1,2,3]", "[1,2,3]"),
+            (
+                r#"[{"b":2,"a":1},{"d":4,"c":3}]"#,
+                r#"[{"a":1,"b":2},{"c":3,"d":4}]"#,
+            ),
+            (r#""hello""#, r#""hello""#),
+            ("42", "42"),
+            ("0", "0"),
+            ("true", "true"),
+            ("false", "false"),
+            ("null", "null"),
+            (
+                r#"{"keyWithNull":null,"other":2}"#,
+                r#"{"keyWithNull":null,"other":2}"#,
+            ),
+            (r#"{"arr":[null,null,1]}"#, r#"{"arr":[null,null,1]}"#),
+            (
+                r#"{"normal":"v","":"empty key"}"#,
+                r#"{"":"empty key","normal":"v"}"#,
+            ),
+            (
+                r#"{"createdAt":"2024-01-01T00:00:00.000Z","type":"comap","uniqueness":"z123"}"#,
+                r#"{"createdAt":"2024-01-01T00:00:00.000Z","type":"comap","uniqueness":"z123"}"#,
+            ),
+            (
+                r#"{"b":[{"y":2,"x":1}],"a":"first"}"#,
+                r#"{"a":"first","b":[{"x":1,"y":2}]}"#,
+            ),
+            (
+                r#"{"num":0,"neg":-1,"big":9007199254740991}"#,
+                r#"{"big":9007199254740991,"neg":-1,"num":0}"#,
+            ),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(
+                &stable_stringify(input),
+                expected,
+                "\ninput:    {input}\nexpected: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn stable_stringify_preserves_unicode() {
+        // TS `stableStringify` (via JSON.stringify) does NOT escape non-ASCII;
+        // serde_json also emits raw UTF-8, and sorts by the raw UTF-8 key bytes.
+        assert_eq!(
+            stable_stringify(r#"{"unicode":"café ☕ 日本語 😀"}"#),
+            r#"{"unicode":"café ☕ 日本語 😀"}"#
+        );
+        assert_eq!(
+            stable_stringify(r#"{"🔑":"emoji key","z":1}"#),
+            r#"{"z":1,"🔑":"emoji key"}"#
+        );
+    }
+
+    #[test]
+    fn stable_stringify_escapes_control_chars_like_typescript() {
+        // Quotes, backslashes and newlines must be escaped identically.
+        assert_eq!(
+            stable_stringify(r#"{"s":"\"q\" and \\b\\ and \n nl"}"#),
+            r#"{"s":"\"q\" and \\b\\ and \n nl"}"#
+        );
+    }
 }
