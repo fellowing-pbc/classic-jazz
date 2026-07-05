@@ -75,12 +75,14 @@ export function enablePermissionErrors() {
 }
 
 // The native coMap materialization path (rich per-op delta pulled on every
-// ingest) is measured SLOWER than the TS path on cold-build/ingest shapes —
-// the delta transfer cost exceeds the JS materialization it replaces (see
-// docs/superpowers/specs/2026-07-04-covaluecore-in-rust.md, R3 stage 2b
-// yardstick: INGEST ~0.4x vs main). Off by default until a cheaper transfer
-// (e.g. lazy per-key reads deferring full history) closes that gap.
-let nativeCoMapMaterializationEnabled = false;
+// ingest) is ON by default per the 100%-Rust scope goal: cojson's CRDT
+// materialization should live in the Rust core, not TS. A known absolute
+// performance cost remains on cold-bulk-ingest shapes — the delta transfer can
+// exceed the JS materialization it replaces (see bench/cojson/*.bench.ts) — but
+// it is accepted because the goal is architectural completeness, not raw speed.
+// The TS `RawCoMap` materialization stays in place as fallback/reference pending
+// its own deletion phase; this flag lets it be toggled off if ever needed.
+let nativeCoMapMaterializationEnabled = true;
 
 export function enableNativeCoMapMaterialization() {
   nativeCoMapMaterializationEnabled = true;
