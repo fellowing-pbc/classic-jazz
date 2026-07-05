@@ -748,6 +748,10 @@ class NapiNodeCoreAdapter implements NodeCoreImpl {
     return this.nodeCore.mapDeltaRich(coId, sinceVersion);
   }
 
+  mapMaterializeBatch(inputJson: string): string {
+    return this.nodeCore.mapMaterializeBatch(inputJson);
+  }
+
   mapGetAtFrontier(
     coId: string,
     key: string,

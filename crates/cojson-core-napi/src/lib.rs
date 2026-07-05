@@ -987,6 +987,18 @@ impl NodeCore {
       .map_err(to_napi_err)
   }
 
+  /// Boundary (batch): materialize MANY coMap views and return ALL their rich
+  /// deltas in ONE FFI crossing. Mirrors `mapMaterialize` + `mapDeltaRich` run
+  /// per covalue, but amortizes the boundary over the whole `$each` child set.
+  /// See `NodeCore::map_materialize_batch_json` for the wire shape.
+  #[napi]
+  pub fn map_materialize_batch(&mut self, input_json: String) -> napi::Result<String> {
+    self
+      .internal
+      .map_materialize_batch_json(&input_json)
+      .map_err(to_napi_err)
+  }
+
   /// Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
   /// array string (`[]` if absent). The lazy per-key counterpart to
   /// `mapDeltaRich`: a TS `RawCoMap` pulls this ONLY when a rich accessor first

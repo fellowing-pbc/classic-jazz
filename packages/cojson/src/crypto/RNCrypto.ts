@@ -817,6 +817,23 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
     return this.nodeCore.mapDeltaRich(coId, sinceVersion);
   }
 
+  // The RN uniffi binding has no batched native entry point, so this mirrors
+  // the batch wire shape by looping the per-covalue calls in TS. Correctness is
+  // identical to the native batch; only the FFI-amortization is absent (RN is
+  // outside the batch materialization performance scope).
+  mapMaterializeBatch(inputJson: string): string {
+    const input = JSON.parse(inputJson) as {
+      items: { coId: string; sinceVersion: number }[];
+    };
+    const results = input.items.map(({ coId, sinceVersion }) => {
+      this.mapMaterialize(coId, []);
+      const missingKeyIds = this.missingKeyIds(coId);
+      const delta = JSON.parse(this.mapDeltaRich(coId, sinceVersion));
+      return { coId, delta, missingKeyIds };
+    });
+    return JSON.stringify({ results });
+  }
+
   mapGetAtFrontier(
     coId: string,
     key: string,

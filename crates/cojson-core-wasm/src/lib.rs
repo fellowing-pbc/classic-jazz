@@ -1033,6 +1033,17 @@ impl NodeCore {
             .map_err(to_wasm_err)
     }
 
+    /// Boundary (batch): materialize MANY coMap views and return ALL their rich
+    /// deltas in ONE FFI crossing. Mirrors `mapMaterialize` + `mapDeltaRich` run
+    /// per covalue, amortized over the whole `$each` child set. See
+    /// `NodeCore::map_materialize_batch_json` for the wire shape.
+    #[wasm_bindgen(js_name = mapMaterializeBatch)]
+    pub fn map_materialize_batch(&mut self, input_json: String) -> Result<String, JsValue> {
+        self.internal
+            .map_materialize_batch_json(&input_json)
+            .map_err(to_wasm_err)
+    }
+
     /// Frontier read: latest frontier-visible value of `key` (undefined =
     /// absent). `frontier_json` is `{ sessionID: txCount }`.
     #[wasm_bindgen(js_name = mapGetAtFrontier)]

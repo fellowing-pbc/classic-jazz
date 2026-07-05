@@ -68,6 +68,42 @@ export class LocalNode {
   /** @internal */
   private readonly coValues = new Map<RawCoID, CoValueCore>();
 
+  // ── Native coMap `$each` batch materialization ────────────────────────────
+  // When a resolve-many query (`$each` over a CoList/CoMap of refs) is loading a
+  // set of native-coMap children, the first child to materialize batch-materializes
+  // ALL its ready siblings in ONE FFI crossing and stashes their rich deltas here;
+  // each sibling then consumes its delta with zero further crossings. This
+  // amortizes the JS→native boundary over the whole child set instead of paying
+  // `mapMaterialize` + `mapDeltaRich` per child. Both maps hold only transient
+  // resolve-time state (entries are consumed/cleared as children materialize).
+  /** @internal id → the `$each` sibling id set it belongs to (incl. itself). */
+  readonly coMapBatchSiblings = new Map<RawCoID, RawCoID[]>();
+  /** @internal id → precomputed rich delta awaiting consumption by that child. */
+  readonly coMapBatchDeltaCache = new Map<
+    RawCoID,
+    { version: number; reset: boolean; changedKeys: Record<string, never> }
+  >();
+
+  /**
+   * Register the child id set of a `$each` resolve so their native-coMap
+   * materializations can be batched into one FFI call. Groups of <2 are ignored
+   * (nothing to amortize). Called from the subscription layer's resolve-many path.
+   * @internal
+   */
+  registerCoMapBatchGroup(ids: RawCoID[]) {
+    if (ids.length < 2) {
+      return;
+    }
+    for (const id of ids) {
+      this.coMapBatchSiblings.set(id, ids);
+    }
+  }
+
+  /** Existing (already-tracked) core for `id`, WITHOUT creating a shell. @internal */
+  getLoadedCoValue(id: RawCoID): CoValueCore | undefined {
+    return this.coValues.get(id);
+  }
+
   /** @category 3. Low-level */
   readonly currentSessionID: SessionID;
   readonly agentSecret: AgentSecret;

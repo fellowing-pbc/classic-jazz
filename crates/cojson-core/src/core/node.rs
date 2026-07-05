@@ -559,6 +559,63 @@ impl NodeCore {
             }))
     }
 
+    /// Boundary (batch): materialize MANY coMap views and return ALL their rich
+    /// deltas in a SINGLE FFI crossing, amortizing the JS→native boundary over N
+    /// covalues instead of paying it per covalue. Used by the `$each` resolve-many
+    /// path (e.g. a playlist's whole track list), where the caller would otherwise
+    /// loop `map_materialize` + `map_delta_rich` once per child. Each item pairs a
+    /// `coId` with the `sinceVersion` cursor the caller wants the delta computed
+    /// from (a fresh `RawCoMap` passes `0` for a full/`reset` delta). The result
+    /// also reports each view's `missingKeyIds` so the caller can provide any
+    /// private read keys and re-materialize only the affected ids — identical
+    /// per-covalue semantics to the single-call path, just batched.
+    ///
+    /// Input JSON:  `{ "items": [{ "coId": string, "sinceVersion": number }] }`
+    /// Output JSON: `{ "results": [{ "coId": string, "delta": {version,reset,
+    ///              changedKeys}, "missingKeyIds": string[] }] }`
+    pub fn map_materialize_batch_json(&mut self, input_json: &str) -> Result<String, SessionMapError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ItemIn {
+            co_id: String,
+            #[serde(default)]
+            since_version: u64,
+        }
+        #[derive(serde::Deserialize)]
+        struct BatchIn {
+            items: Vec<ItemIn>,
+        }
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ItemOut {
+            co_id: String,
+            delta: serde_json::Value,
+            missing_key_ids: Vec<String>,
+        }
+        #[derive(serde::Serialize)]
+        struct BatchOut {
+            results: Vec<ItemOut>,
+        }
+
+        let input: BatchIn = serde_json::from_str(input_json)?;
+        let mut results = Vec::with_capacity(input.items.len());
+        for item in input.items {
+            // Same three steps the single-call TS path runs per covalue
+            // (`map_materialize` → `missing_key_ids` → `map_delta_rich`), but with
+            // one boundary crossing for the whole batch.
+            self.map_materialize(&item.co_id, &[])?;
+            let missing_key_ids = self.missing_key_ids(&item.co_id);
+            let delta_str = self.map_delta_rich(&item.co_id, item.since_version)?;
+            let delta: serde_json::Value = serde_json::from_str(&delta_str)?;
+            results.push(ItemOut {
+                co_id: item.co_id,
+                delta,
+                missing_key_ids,
+            });
+        }
+        Ok(serde_json::to_string(&BatchOut { results })?)
+    }
+
     /// Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
     /// string (`[]` if the key is absent or the view is not yet materialized).
     /// The lazy per-key counterpart to [`map_delta_rich`]: a TS `RawCoMap` pulls
@@ -929,6 +986,96 @@ mod tests {
         let snap: serde_json::Value =
             serde_json::from_str(&node.map_snapshot(&co_id).unwrap()).unwrap();
         assert_eq!(snap, serde_json::json!({"a": 1, "b": 2}));
+    }
+
+    /// Like `valid_header`, but parametrized by uniqueness so a test can build
+    /// several distinct covalues (distinct co_ids).
+    fn valid_header_unique(uniqueness: &str) -> (String, String) {
+        use crate::core::{CoValueHeader, NullableString, RulesetDef, Uniqueness};
+        let header = CoValueHeader {
+            created_at: NullableString::Missing,
+            meta: None,
+            ruleset: RulesetDef::unsafe_allow_all(),
+            co_type: "comap".to_string(),
+            uniqueness: Uniqueness::String(uniqueness.to_string()),
+        };
+        let header_json = serde_json::to_string(&header).unwrap();
+        let co_id = crate::hash::blake3::short_hash_with_prefix(header_json.as_bytes(), "co_z");
+        (co_id, header_json)
+    }
+
+    #[test]
+    fn map_materialize_batch_matches_per_covalue_path() {
+        // Two independent covalues, each with a couple of trusting txs.
+        let mut node = NodeCore::new();
+        let (id_a, hdr_a) = valid_header_unique("batch-a");
+        let (id_b, hdr_b) = valid_header_unique("batch-b");
+        node.create_co_value(&id_a, &hdr_a, None, true).unwrap();
+        node.create_co_value(&id_b, &hdr_b, None, true).unwrap();
+        let sess_a = format!("{id_a}_session_zS");
+        let sess_b = format!("{id_b}_session_zS");
+        node.ingest_and_materialize(
+            &id_a,
+            &sess_a,
+            None,
+            &trusting_chunk("a", serde_json::json!(1), 1_700_000_000_000),
+            "sig",
+            true,
+            0,
+            &[],
+        )
+        .unwrap();
+        node.ingest_and_materialize(
+            &id_b,
+            &sess_b,
+            None,
+            &trusting_chunk("b", serde_json::json!(2), 1_700_000_000_000),
+            "sig",
+            true,
+            0,
+            &[],
+        )
+        .unwrap();
+
+        // Batch materialize both in one call.
+        let input = serde_json::json!({
+            "items": [
+                { "coId": id_a, "sinceVersion": 0 },
+                { "coId": id_b, "sinceVersion": 0 },
+            ]
+        })
+        .to_string();
+        let out: serde_json::Value =
+            serde_json::from_str(&node.map_materialize_batch_json(&input).unwrap()).unwrap();
+        let results = out["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2, "one result per requested covalue");
+
+        // Each batched delta must equal the single-call `map_delta_rich(id, 0)`,
+        // and the materialized snapshots must match — identical semantics, batched.
+        for (id, expect_snap) in [
+            (&id_a, serde_json::json!({ "a": 1 })),
+            (&id_b, serde_json::json!({ "b": 2 })),
+        ] {
+            let r = results
+                .iter()
+                .find(|r| r["coId"] == serde_json::json!(id))
+                .unwrap();
+            assert!(r["missingKeyIds"].as_array().unwrap().is_empty());
+            let single: serde_json::Value =
+                serde_json::from_str(&node.map_delta_rich(id, 0).unwrap()).unwrap();
+            assert_eq!(r["delta"], single, "batched delta == single-call delta");
+            let snap: serde_json::Value =
+                serde_json::from_str(&node.map_snapshot(id).unwrap()).unwrap();
+            assert_eq!(snap, expect_snap);
+        }
+    }
+
+    #[test]
+    fn map_materialize_batch_unknown_covalue_errors() {
+        let mut node = NodeCore::new();
+        let input = serde_json::json!({ "items": [{ "coId": "co_zNope", "sinceVersion": 0 }] })
+            .to_string();
+        assert!(node.map_materialize_batch_json(&input).is_err());
     }
 
     #[test]

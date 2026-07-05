@@ -669,6 +669,17 @@ export interface NodeCoreImpl {
    */
   mapDeltaRich(coId: string, sinceVersion: number): string;
   /**
+   * BATCH materialize: materialize many coMap views and return ALL their rich
+   * deltas in ONE FFI crossing, amortizing the boundary over the whole `$each`
+   * child set instead of paying {@link mapMaterialize} + {@link mapDeltaRich}
+   * per covalue.
+   *
+   * Input JSON:  `{ items: [{ coId, sinceVersion }] }`
+   * Output JSON: `{ results: [{ coId, delta: {version,reset,changedKeys},
+   *              missingKeyIds: string[] }] }`
+   */
+  mapMaterializeBatch(inputJson: string): string;
+  /**
    * Frontier read: latest frontier-visible value of `key` (undefined = absent).
    * `frontierJson` is `{ sessionID: txCount }`.
    */

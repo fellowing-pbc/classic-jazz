@@ -1175,6 +1175,11 @@ export class CoValueCore {
             skipVerify,
           );
         }
+        // New transactions invalidate any pending `$each` batch delta for this
+        // covalue (precomputed before these arrived): drop it so the next
+        // materialization recomputes against the now-current log rather than
+        // consuming a stale snapshot.
+        this.node.coMapBatchDeltaCache.delete(this.id);
         this.#trackNativeTxMadeAt(newTransactions);
 
         // Mark deleted state when a delete marker transaction is accepted.
@@ -1418,18 +1423,129 @@ export class CoValueCore {
    * current version so subsequent incremental pushes stay O(changed keys).
    */
   materializeNativeCoMapContent(content: RawCoMap): void {
-    const nodeCore = this.node.nodeCore;
-    nodeCore.mapMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
-    if (this.#provideMissingCoMapKeys()) {
-      nodeCore.mapMaterialize(this.id, EMPTY_NODE_CORE_PENDING);
+    // Fast path: this covalue's rich delta was already computed as part of a
+    // `$each` sibling batch (one FFI call for the whole child set) — consume it
+    // with zero further crossings.
+    const cached = this.node.coMapBatchDeltaCache.get(this.id);
+    if (cached) {
+      this.node.coMapBatchDeltaCache.delete(this.id);
+      this.node.coMapBatchSiblings.delete(this.id);
+      this.coMapViewVersion = cached.version;
+      content.consumeNativeDelta(cached as never);
+      return;
     }
-    const delta = JSON.parse(nodeCore.mapDeltaRich(this.id, 0)) as {
-      version: number;
-      reset: boolean;
-      changedKeys: Record<string, never>;
-    };
-    this.coMapViewVersion = delta.version;
-    content.consumeNativeDelta(delta as never);
+    this.#materializeNativeCoMapFused(content);
+  }
+
+  /**
+   * Fused native coMap materialization: build this covalue's fresh-RawCoMap delta
+   * in ONE FFI crossing (the batch entry point materializes the view, reports any
+   * `missingKeyIds`, and returns the rich delta together — versus three separate
+   * crossings on the legacy path: `mapMaterialize` + `missingKeyIds` +
+   * `mapDeltaRich`). When this covalue is part of a `$each` resolve whose OTHER
+   * children are already downloaded-but-not-yet-materialized, those ready siblings
+   * are folded into the SAME crossing and their deltas cached, so the whole child
+   * set costs one crossing instead of one per child.
+   *
+   * A sibling is "ready" only when it is a native coMap, fully downloaded, and not
+   * yet materialized (no cached content, no pending batch delta) — so pre-computing
+   * its delta cannot race a later, more-complete view. Missing private read keys
+   * are resolved exactly as the legacy path does: the crossing reports each view's
+   * `missingKeyIds`, we feed the secrets across (keys are node-global, so one
+   * provide covers every sibling sharing that key) and re-run only the affected ids.
+   */
+  #materializeNativeCoMapFused(content: RawCoMap): void {
+    const node = this.node;
+    const siblings = node.coMapBatchSiblings.get(this.id);
+
+    // `content`-bearing self is always first; add any ready `$each` siblings.
+    const batchCores: AvailableCoValueCore[] = [
+      this as unknown as AvailableCoValueCore,
+    ];
+    if (siblings) {
+      for (const id of siblings) {
+        if (id === this.id) continue;
+        const sibling = node.getLoadedCoValue(id);
+        if (
+          sibling &&
+          sibling.isNativeCoMap() &&
+          sibling.isCompletelyDownloaded() &&
+          !sibling.hasCachedContent() &&
+          !node.coMapBatchDeltaCache.has(id)
+        ) {
+          batchCores.push(sibling);
+        }
+      }
+    }
+
+    // A fresh RawCoMap always rebuilds from the full delta (since version 0).
+    const runBatch = (cores: AvailableCoValueCore[]) =>
+      JSON.parse(
+        node.nodeCore.mapMaterializeBatch(
+          JSON.stringify({
+            items: cores.map((c) => ({ coId: c.id, sinceVersion: 0 })),
+          }),
+        ),
+      ) as {
+        results: Array<{
+          coId: RawCoID;
+          delta: {
+            version: number;
+            reset: boolean;
+            changedKeys: Record<string, never>;
+          };
+          missingKeyIds: string[];
+        }>;
+      };
+
+    const coreById = new Map<RawCoID, AvailableCoValueCore>(
+      batchCores.map((c) => [c.id, c]),
+    );
+    const deltaById = new Map<
+      RawCoID,
+      { version: number; reset: boolean; changedKeys: Record<string, never> }
+    >();
+
+    let batch = runBatch(batchCores);
+    for (;;) {
+      const needReMaterialize: AvailableCoValueCore[] = [];
+      let anyProvided = false;
+      for (const r of batch.results) {
+        deltaById.set(r.coId, r.delta);
+        if (r.missingKeyIds.length > 0) {
+          const core = coreById.get(r.coId);
+          if (core) {
+            for (const keyId of r.missingKeyIds) {
+              const secret = core.getReadKey(keyId as KeyID);
+              if (secret) {
+                node.nodeCore.provideKeySecret(keyId, secret);
+                anyProvided = true;
+              }
+            }
+            needReMaterialize.push(core);
+          }
+        }
+      }
+      if (!anyProvided || needReMaterialize.length === 0) {
+        break;
+      }
+      // Newly-provided keys unlock more fields — re-materialize only those ids.
+      batch = runBatch(needReMaterialize);
+    }
+
+    for (const [id, delta] of deltaById) {
+      // These ids are now materialized (self) or cached (siblings); drop their
+      // batch-group registration so the transient siblings map self-cleans.
+      node.coMapBatchSiblings.delete(id);
+      if (id === this.id) {
+        this.coMapViewVersion = delta.version;
+        content.consumeNativeDelta(delta as never);
+      } else {
+        // The sibling consumes this (and sets its own view version) when its own
+        // RawCoMap is first constructed — zero further FFI crossings.
+        node.coMapBatchDeltaCache.set(id, delta);
+      }
+    }
   }
 
   // ── Native coStream/coFeed materialization (R4a) ────────────────────────────
@@ -2039,6 +2155,11 @@ export class CoValueCore {
     }
 
     return newContent;
+  }
+
+  /** Whether a materialized content view (`RawCoValue`) has been built and cached. */
+  hasCachedContent(): boolean {
+    return this._cachedContent !== undefined;
   }
 
   // The starting point of the branch, in case this CoValue is a branch

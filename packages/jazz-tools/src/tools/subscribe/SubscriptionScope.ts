@@ -948,16 +948,21 @@ export class SubscriptionScope<D extends CoValue> {
         coValueType === "SnapshotRef"
       ) {
         const map = value as unknown as CoMap;
-        const keys =
-          "$each" in depth ? map.$jazz.raw.keys() : Object.keys(depth);
+        const isEach = "$each" in depth;
+        const keys = isEach ? map.$jazz.raw.keys() : Object.keys(depth);
 
+        const batchIds: string[] = [];
         for (const key of keys) {
           const id = this.loadCoMapKey(map, key, depth[key] ?? depth.$each);
 
           if (id) {
             idsToLoad.add(id);
+            if (isEach) batchIds.push(id);
           }
         }
+        // Resolve-many over refs: let their native-coMap materializations batch
+        // into a single FFI crossing instead of one per child.
+        if (isEach) this.node.registerCoMapBatchGroup(batchIds as RawCoID[]);
       } else if (value[TypeSym] === "CoList") {
         const list = value as unknown as CoList;
 
@@ -966,16 +971,21 @@ export class SubscriptionScope<D extends CoValue> {
         if (descriptor && isRefEncoded(descriptor)) {
           list.$jazz.raw.processNewTransactions();
           const entries = list.$jazz.raw.entries();
-          const keys =
-            "$each" in depth ? Object.keys(entries) : Object.keys(depth);
+          const isEach = "$each" in depth;
+          const keys = isEach ? Object.keys(entries) : Object.keys(depth);
 
+          const batchIds: string[] = [];
           for (const key of keys) {
             const id = this.loadCoListKey(list, key, depth[key] ?? depth.$each);
 
             if (id) {
               idsToLoad.add(id);
+              if (isEach) batchIds.push(id);
             }
           }
+          // Resolve-many over refs: batch the children's native-coMap
+          // materializations into a single FFI crossing.
+          if (isEach) this.node.registerCoMapBatchGroup(batchIds as RawCoID[]);
         }
       } else if (value[TypeSym] === "CoStream") {
         const stream = value as unknown as CoFeed;
