@@ -2399,6 +2399,27 @@ export interface NodeCoreInterface {
    */
   isStreaming(coId: string) /*throws*/ : boolean;
   /**
+   * RICH delta `{version, reset, entries}` since `since_version` — the payload
+   * a TS `RawCoList` rebuilds its `entries()` from.
+   */
+  listDelta(coId: string, sinceVersion: /*f64*/ number) /*throws*/ : string;
+  /**
+   * Materialize (or refresh) `co_id`'s coList view; returns its current
+   * monotonic version. Call after each ingest batch.
+   */
+  listMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ) /*throws*/ : /*f64*/ number;
+  /**
+   * The `KeyID`s `co_id`'s coList view still needs a secret for.
+   */
+  listMissingKeyIds(coId: string) /*throws*/ : Array<string>;
+  /**
+   * The whole materialized list as a JSON array of VALUES.
+   */
+  listSnapshot(coId: string) /*throws*/ : string;
+  /**
    * Create new private transaction (for local writes)
    * Returns JSON: { signature: string, transaction: Transaction }
    */
@@ -2509,6 +2530,28 @@ export interface NodeCoreInterface {
    * Set streaming known state
    */
   setStreamingKnownState(coId: string, streamingJson: string) /*throws*/ : void;
+  /**
+   * RICH delta `{version, reset, sessions}` since `since_version`, each
+   * `sessions[sid]` the full `CoStreamItem[]` for a changed session — the
+   * payload a TS `RawCoStream` rebuilds `items` from.
+   */
+  streamDelta(coId: string, sinceVersion: /*f64*/ number) /*throws*/ : string;
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coStream view; returns
+   * its current monotonic version. Call after each ingest batch.
+   */
+  streamMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ) /*throws*/ : /*f64*/ number;
+  /**
+   * The `KeyID`s `co_id`'s coStream view still needs a secret for.
+   */
+  streamMissingKeyIds(coId: string) /*throws*/ : Array<string>;
+  /**
+   * Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+   */
+  streamSnapshot(coId: string) /*throws*/ : string;
   /**
    * Validate a group/account CoValue; verdicts for ALL its transactions in
    * validation order.
@@ -3060,6 +3103,100 @@ export class NodeCore
   }
 
   /**
+   * RICH delta `{version, reset, entries}` since `since_version` — the payload
+   * a TS `RawCoList` rebuilds its `entries()` from.
+   */
+  public listDelta(
+    coId: string,
+    sinceVersion: /*f64*/ number
+  ): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_delta(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterFloat64.lower(sinceVersion),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Materialize (or refresh) `co_id`'s coList view; returns its current
+   * monotonic version. Call after each ingest batch.
+   */
+  public listMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ): /*f64*/ number /*throws*/ {
+    return FfiConverterFloat64.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_materialize(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterArrayTypePendingTx.lower(pending),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * The `KeyID`s `co_id`'s coList view still needs a secret for.
+   */
+  public listMissingKeyIds(coId: string): Array<string> /*throws*/ {
+    return FfiConverterArrayString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_missing_key_ids(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * The whole materialized list as a JSON array of VALUES.
+   */
+  public listSnapshot(coId: string): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_snapshot(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
    * Create new private transaction (for local writes)
    * Returns JSON: { signature: string, transaction: Transaction }
    */
@@ -3485,6 +3622,101 @@ export class NodeCore
         );
       },
       /*liftString:*/ FfiConverterString.lift
+    );
+  }
+
+  /**
+   * RICH delta `{version, reset, sessions}` since `since_version`, each
+   * `sessions[sid]` the full `CoStreamItem[]` for a changed session — the
+   * payload a TS `RawCoStream` rebuilds `items` from.
+   */
+  public streamDelta(
+    coId: string,
+    sinceVersion: /*f64*/ number
+  ): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_delta(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterFloat64.lower(sinceVersion),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Materialize (or incrementally refresh) `co_id`'s coStream view; returns
+   * its current monotonic version. Call after each ingest batch.
+   */
+  public streamMaterialize(
+    coId: string,
+    pending: Array<PendingTx>
+  ): /*f64*/ number /*throws*/ {
+    return FfiConverterFloat64.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_materialize(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            FfiConverterArrayTypePendingTx.lower(pending),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * The `KeyID`s `co_id`'s coStream view still needs a secret for.
+   */
+  public streamMissingKeyIds(coId: string): Array<string> /*throws*/ {
+    return FfiConverterArrayString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_missing_key_ids(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
+  }
+
+  /**
+   * Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+   */
+  public streamSnapshot(coId: string): string /*throws*/ {
+    return FfiConverterString.lift(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeSessionMapError.lift.bind(
+          FfiConverterTypeSessionMapError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_snapshot(
+            uniffiTypeNodeCoreObjectFactory.clonePointer(this),
+            FfiConverterString.lower(coId),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
     );
   }
 
@@ -4826,6 +5058,38 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_delta() !==
+    21969
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_list_delta'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_materialize() !==
+    49260
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_list_materialize'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_missing_key_ids() !==
+    38574
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_list_missing_key_ids'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_snapshot() !==
+    115
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_list_snapshot'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_private_transaction() !==
     15320
   ) {
@@ -4959,6 +5223,38 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_cojson_core_rn_checksum_method_nodecore_set_streaming_known_state'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_delta() !==
+    3500
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_stream_delta'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_materialize() !==
+    63240
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_stream_materialize'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_missing_key_ids() !==
+    40707
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_stream_missing_key_ids'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_snapshot() !==
+    32619
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_cojson_core_rn_checksum_method_nodecore_stream_snapshot'
     );
   }
   if (

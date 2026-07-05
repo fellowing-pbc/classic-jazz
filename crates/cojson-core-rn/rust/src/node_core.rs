@@ -768,6 +768,128 @@ impl NodeCore {
             .map_err(|e| SessionMapError::Internal(e.to_string()))
     }
 
+    // === R4a coStream/coFeed materialization (previously absent on RN) ===
+    // Mirrors the coMap surface: `stream_materialize` is the only mutating path;
+    // the read methods are `&self` over the cached per-session entry view. Only
+    // the subset the RN `RNCrypto` adapter calls is exposed (materialize,
+    // snapshot, delta, missing_key_ids) — the napi/wasm bench-only channels
+    // (`stream_delta_binary`, `stream_binary_chunks`, ...) stay off this binding.
+
+    /// Materialize (or incrementally refresh) `co_id`'s coStream view; returns
+    /// its current monotonic version. Call after each ingest batch.
+    pub fn stream_materialize(
+        &self,
+        co_id: String,
+        pending: Vec<PendingTx>,
+    ) -> Result<f64, SessionMapError> {
+        let pending = rn_pending_to_rust(pending);
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .stream_materialize(&co_id, &pending)
+            .map(|v| v as f64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// Whole materialized stream `{sessionID: [value, ...]}` as a JSON string.
+    pub fn stream_snapshot(&self, co_id: String) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .stream_snapshot(&co_id)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// RICH delta `{version, reset, sessions}` since `since_version`, each
+    /// `sessions[sid]` the full `CoStreamItem[]` for a changed session — the
+    /// payload a TS `RawCoStream` rebuilds `items` from.
+    pub fn stream_delta(
+        &self,
+        co_id: String,
+        since_version: f64,
+    ) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .stream_delta(&co_id, since_version as u64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// The `KeyID`s `co_id`'s coStream view still needs a secret for.
+    pub fn stream_missing_key_ids(&self, co_id: String) -> Result<Vec<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        Ok(internal.stream_missing_key_ids(&co_id))
+    }
+
+    // === coList (RGA list) materialization (previously absent on RN) ===
+    // Mirrors the coMap/coStream surface: `list_materialize` is the only mutating
+    // path; the read methods are `&self` over the cached view. Only the subset the
+    // RN `RNCrypto` adapter calls is exposed (materialize, snapshot, delta,
+    // missing_key_ids).
+
+    /// Materialize (or refresh) `co_id`'s coList view; returns its current
+    /// monotonic version. Call after each ingest batch.
+    pub fn list_materialize(
+        &self,
+        co_id: String,
+        pending: Vec<PendingTx>,
+    ) -> Result<f64, SessionMapError> {
+        let pending = rn_pending_to_rust(pending);
+        let mut internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .list_materialize(&co_id, &pending)
+            .map(|v| v as f64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// The whole materialized list as a JSON array of VALUES.
+    pub fn list_snapshot(&self, co_id: String) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .list_snapshot(&co_id)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// RICH delta `{version, reset, entries}` since `since_version` — the payload
+    /// a TS `RawCoList` rebuilds its `entries()` from.
+    pub fn list_delta(
+        &self,
+        co_id: String,
+        since_version: f64,
+    ) -> Result<String, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        internal
+            .list_delta(&co_id, since_version as u64)
+            .map_err(|e| SessionMapError::Internal(e.to_string()))
+    }
+
+    /// The `KeyID`s `co_id`'s coList view still needs a secret for.
+    pub fn list_missing_key_ids(&self, co_id: String) -> Result<Vec<String>, SessionMapError> {
+        let internal = self
+            .internal
+            .lock()
+            .map_err(|_| SessionMapError::LockError)?;
+        Ok(internal.list_missing_key_ids(&co_id))
+    }
+
     /// Drop the cached validation engine for `co_id`, forcing a full recompute
     /// on the next `validate_transactions` / `role_of`. An absent `co_id` is a
     /// no-op (not `UnknownCoValue`): callers invoke this on dependants that may

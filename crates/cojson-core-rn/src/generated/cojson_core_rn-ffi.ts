@@ -187,6 +187,28 @@ interface NativeModuleInterface {
     coId: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_delta(
+    ptr: bigint,
+    coId: Uint8Array,
+    sinceVersion: number,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_materialize(
+    ptr: bigint,
+    coId: Uint8Array,
+    pending: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_missing_key_ids(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_list_snapshot(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_make_new_private_transaction(
     ptr: bigint,
     coId: Uint8Array,
@@ -297,6 +319,28 @@ interface NativeModuleInterface {
     streamingJson: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): void;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_delta(
+    ptr: bigint,
+    coId: Uint8Array,
+    sinceVersion: number,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_materialize(
+    ptr: bigint,
+    coId: Uint8Array,
+    pending: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): number;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_missing_key_ids(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_cojson_core_rn_fn_method_nodecore_stream_snapshot(
+    ptr: bigint,
+    coId: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
   ubrn_uniffi_cojson_core_rn_fn_method_nodecore_validate_transactions(
     ptr: bigint,
     coId: Uint8Array,
@@ -638,6 +682,10 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_ingest_and_materialize(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_deleted(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_is_streaming(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_delta(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_materialize(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_missing_key_ids(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_list_snapshot(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_private_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_make_new_trusting_transaction(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_map_delta(): number;
@@ -655,6 +703,10 @@ interface NativeModuleInterface {
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_reset_validation(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_role_of(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_set_streaming_known_state(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_delta(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_materialize(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_missing_key_ids(): number;
+  ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_stream_snapshot(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_nodecore_validate_transactions_delta(): number;
   ubrn_uniffi_cojson_core_rn_checksum_method_sessionmap_add_transactions(): number;
