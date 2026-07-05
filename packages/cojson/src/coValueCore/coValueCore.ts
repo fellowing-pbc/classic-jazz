@@ -186,6 +186,36 @@ export function disableNativeCoPlainTextMaterialization() {
   nativeCoPlainTextMaterializationEnabled = false;
 }
 
+// Phase 3 (narrow cutover): use the native Rust `content_to_send` decision as
+// the REAL content computation in `sync.ts`'s `sendNewContent`, replacing the
+// TS `VerifiedState.newContentSince` recomputation at that one call site.
+// Unlike the materialization flags above, this defaults OFF: it is the first
+// point where native content output drives LIVE bytes sent to peers, and the
+// Phase 2 shadow comparison (15,377 real decisions, zero mismatches) is strong
+// but not sufficient evidence to flip it on by default. The TS
+// `newContentSince` remains the default and stays in place as the reference.
+// Enable programmatically via `enableNativeSyncContentDecision()` or by setting
+// `COJSON_SYNC_NATIVE_CONTENT_DECISION=1` (read once at module load). Even when
+// enabled, it only takes effect where the backend advertises the capability
+// (`VerifiedState.supportsNativeContentDecision()`), otherwise it transparently
+// falls back to the TS path.
+let nativeSyncContentDecisionEnabled =
+  typeof process !== "undefined" &&
+  process.env?.COJSON_SYNC_NATIVE_CONTENT_DECISION === "1";
+
+export function enableNativeSyncContentDecision() {
+  nativeSyncContentDecisionEnabled = true;
+}
+
+export function disableNativeSyncContentDecision() {
+  nativeSyncContentDecisionEnabled = false;
+}
+
+/** Read the current state of the native sync content-decision flag. */
+export function isNativeSyncContentDecisionEnabled(): boolean {
+  return nativeSyncContentDecisionEnabled;
+}
+
 export class VerifiedTransaction {
   // The ID of the CoValue that the transaction belongs to
   coValueId: RawCoID;

@@ -15,7 +15,10 @@ import {
   getTransactionSize,
   knownStateFromContent,
 } from "./coValueContentMessage.js";
-import { CoValueCore } from "./coValueCore/coValueCore.js";
+import {
+  CoValueCore,
+  isNativeSyncContentDecisionEnabled,
+} from "./coValueCore/coValueCore.js";
 import { CoValueHeader, Transaction } from "./coValueCore/verifiedState.js";
 import { maybeRunShadowContentCompare } from "./syncShadowCompare.js";
 import { Signature } from "./crypto/crypto.js";
@@ -326,7 +329,21 @@ export class SyncManager {
 
     const optimisticKnownState = peer.getOptimisticKnownState(id);
 
-    const newContentPieces = coValue.newContentSince(optimisticKnownState);
+    // Phase 3 (narrow cutover): behind a default-OFF flag, compute the content
+    // pieces with the native Rust `content_to_send` decision instead of the TS
+    // `newContentSince`. The native path returns the SAME `NewContentMessage[]`
+    // shape (proven byte-identical in Phase 2 shadow mode), so everything
+    // downstream — trySendToPeer, combineOptimisticWith, deletion handling,
+    // expectContentUntil — operates identically on whichever result was
+    // produced. Falls back to the TS path when the backend does not advertise
+    // the native capability.
+    const useNative =
+      isNativeSyncContentDecisionEnabled() &&
+      coValue.verified.supportsNativeContentDecision();
+
+    const newContentPieces = useNative
+      ? coValue.verified.newContentSinceNative(optimisticKnownState)
+      : coValue.newContentSince(optimisticKnownState);
 
     // SHADOW-MODE ONLY (Phase 2): run the native content decision alongside the
     // real one and record whether they agree. Provably inert by default — the
