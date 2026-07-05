@@ -27,6 +27,8 @@ pub mod core {
     pub use group_engine::*;
     pub mod group_key_state;
     pub use group_key_state::*;
+    pub mod group_key_rotation;
+    pub use group_key_rotation::*;
     pub mod co_map;
     pub use co_map::*;
     pub mod co_stream;
