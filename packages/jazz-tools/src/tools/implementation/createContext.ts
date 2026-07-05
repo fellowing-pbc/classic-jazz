@@ -402,7 +402,7 @@ export function createAnonymousJazzContext({
   );
 
   for (const peer of peers) {
-    node.syncManager.addPeer(peer);
+    node.addPeer(peer);
   }
 
   if (storage) {

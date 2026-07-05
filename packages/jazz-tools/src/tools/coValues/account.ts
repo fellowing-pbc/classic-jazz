@@ -296,7 +296,7 @@ export class Account extends CoValueBase implements CoValue {
       { peer1role: "server", peer2role: "client" },
     );
 
-    worker.$jazz.localNode.syncManager.addPeer(connectedPeers[1]);
+    worker.$jazz.localNode.addPeer(connectedPeers[1]);
 
     const account = await this.create<A>({
       creationProps: options.creationProps,
@@ -616,7 +616,7 @@ class AccountJazzApi<A extends Account> extends CoValueJazzApi<A> {
    * @category Subscription & Loading
    */
   waitForAllCoValuesSync(options?: { timeout?: number }) {
-    return this.localNode.syncManager.waitForAllCoValuesSync(options?.timeout);
+    return this.localNode.waitForAllCoValuesSync(options?.timeout);
   }
 
   get loadedAs(): Account | AnonymousJazzAgent {

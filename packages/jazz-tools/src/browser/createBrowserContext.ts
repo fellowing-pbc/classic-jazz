@@ -72,7 +72,7 @@ async function setupPeers(options: BaseBrowserContextOptions) {
     reconnectionTimeout: options.reconnectionTimeout,
     addPeer: (peer) => {
       if (node) {
-        node.syncManager.addPeer(peer);
+        node.addPeer(peer);
       } else {
         peers.push(peer);
       }

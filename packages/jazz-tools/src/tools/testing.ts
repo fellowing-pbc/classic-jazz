@@ -81,7 +81,7 @@ export function getPeerConnectedToTestSyncServer() {
     };
   }
 
-  syncServer.current.syncManager.addPeer(aPeer);
+  syncServer.current.addPeer(aPeer);
 
   return bPeer;
 }
@@ -361,8 +361,8 @@ export async function linkAccounts(
     },
   );
 
-  a.$jazz.localNode.syncManager.addPeer(aPeer);
-  b.$jazz.localNode.syncManager.addPeer(bPeer);
+  a.$jazz.localNode.addPeer(aPeer);
+  b.$jazz.localNode.addPeer(bPeer);
 
   await a.$jazz.waitForAllCoValuesSync();
   await b.$jazz.waitForAllCoValuesSync();

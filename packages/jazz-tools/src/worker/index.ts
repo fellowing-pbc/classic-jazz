@@ -80,7 +80,7 @@ export async function startWorker<
       reconnectionTimeout: 100,
       addPeer: (peer) => {
         if (node) {
-          node.syncManager.addPeer(peer);
+          node.addPeer(peer);
         } else {
           peers.push(peer);
         }

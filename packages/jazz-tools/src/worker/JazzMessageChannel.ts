@@ -54,7 +54,7 @@ export class JazzMessageChannel {
 
     const peer = await CojsonMessageChannel.expose(target, cojsonOpts);
 
-    node.syncManager.addPeer(peer);
+    node.addPeer(peer);
   }
 
   /**

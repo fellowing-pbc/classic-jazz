@@ -66,7 +66,7 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
     reconnectionTimeout: options.reconnectionTimeout,
     addPeer: (peer) => {
       if (node) {
-        node.syncManager.addPeer(peer);
+        node.addPeer(peer);
       } else {
         peers.push(peer);
       }
