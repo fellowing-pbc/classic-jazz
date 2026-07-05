@@ -1,0 +1,75 @@
+{
+  "description": "Rotation with a writeOnly member: the member gets a fresh writeOnly key (revealed to self + writeKeyFor_ + revealed to the admin reader).",
+  "trigger": {
+    "kind": "rotate"
+  },
+  "groupId": "co_zhAhVCBMrhkbjQQbDNqMAovBupW",
+  "sessionId": "sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq_session_zh7Re6WUgKhd",
+  "startTxIndex": 8,
+  "fromSealerSecret": "sealerSecret_z4CJ8MhxRJ4nUhCr5qFgBb2SgZ5druHEimFLB7uF86AA7",
+  "currentReadKey": {
+    "id": "key_z3DyVNysnxPgQbLVyU",
+    "secret": "keySecret_z4hpXSERewLreep3HajHXkKynTXAoL5nqwTREJwku6qeD"
+  },
+  "newReadKey": {
+    "id": "key_z59VpcgFxij1TFGgYq",
+    "secret": "keySecret_z8haPDNHEHLavSDkkUT2zdD2MCgyX1Js2tLuTFTaQoE36"
+  },
+  "members": [
+    {
+      "memberKey": "sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq",
+      "agentSealerId": "sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz"
+    },
+    {
+      "memberKey": "co_zXdAWVL1gADVSj8fAUNfKNpcEPy",
+      "agentSealerId": "sealer_z5QE5uiL4v3ZA1XG53WJLEoMMKmcFRuugn9uu6rmdLczm"
+    }
+  ],
+  "writeOnlyFreshKeys": [
+    {
+      "id": "key_z5Je68N2bVtmKqaTNJ",
+      "secret": "keySecret_z2S2pS2TpVGUhe3vUikbmTVmyY8wqAQTW3Gzs6YqnboEP"
+    }
+  ],
+  "parents": [],
+  "snapshot": {
+    "sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq": "admin",
+    "key_z3DyVNysnxPgQbLVyU_for_sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq": "sealed_UbK9AqU5b-E-l3y--N7z-tEJd1MhwbbgogqZRj2i37eV13iTG40sixH12Uery60M_X1brWi99q9ANeDO8D0YJhwH1gB1Aoko87Q==",
+    "readKey": "key_z3DyVNysnxPgQbLVyU",
+    "groupSealer": "key_z3DyVNysnxPgQbLVyU@sealer_zB68NGTuE2V2qtqboYEAftMaFLesqnTE3TGmrr5G3KWVh",
+    "co_zXdAWVL1gADVSj8fAUNfKNpcEPy": "writeOnly",
+    "writeKeyFor_co_zXdAWVL1gADVSj8fAUNfKNpcEPy": "key_ztpKp8sjrnjZzFZvM",
+    "key_ztpKp8sjrnjZzFZvM_for_co_zXdAWVL1gADVSj8fAUNfKNpcEPy": "sealed_UmaPYSRPsC-KDaGWfuQ7pn2SbrEbONBqJJTevxUv53TyveDWsyW1rInhzyhmCjVPNldqnWL2o3FnnP-b56fbk48TW6plEDX09Lg==",
+    "key_ztpKp8sjrnjZzFZvM_for_sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq": "sealed_U0w6koswAGExcIHL3svoFfeRQVSktnhZdXEmfaz7cdCpFIURLZ3MkZ259xcBmlq3-hPdKKbBLPzvX_l-5PDIN3hfaa2MhfYRKsQ=="
+  },
+  "expectedWrites": [
+    {
+      "field": "key_z59VpcgFxij1TFGgYq_for_sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq",
+      "value": "sealed_UY4iq6ufwqoyTafD739wVUfWs5BHLd5ceOg40LpPujlX_P6gFN-jR8nQ2hnYjdCW8sZ-u2QRkxlzWbNZqKU8JpaQ6FEJ9LP3CLw=="
+    },
+    {
+      "field": "key_z5Je68N2bVtmKqaTNJ_for_co_zXdAWVL1gADVSj8fAUNfKNpcEPy",
+      "value": "sealed_UduOQGWkofmaD9GsDmy4MQ_7BzOB2SMwb3G2fw7AuxAJqn0p7uaK2aqu1veP5pKZvICmtciSUoX2pqKmUXz_V_pXVmzxZ4OHCiw=="
+    },
+    {
+      "field": "writeKeyFor_co_zXdAWVL1gADVSj8fAUNfKNpcEPy",
+      "value": "key_z5Je68N2bVtmKqaTNJ"
+    },
+    {
+      "field": "key_z5Je68N2bVtmKqaTNJ_for_sealer_zHwQuzyqY8FZHqXhV3pJ3bwT7swYKS4g5Aw7AvcT34Snz/signer_z3Be2GES3uvnqcZs1tz2dwpFQV7ckra36WUMEri411waq",
+      "value": "sealed_U3EegVVTPK2L4brhg9nOXZF82Zexofk1iNCdwJIkqfj4pXrQnz-dEddlFLU4-dj1hlgEJez05wF_0th3xaPFHbncV4ZLnrQrhzw=="
+    },
+    {
+      "field": "key_z3DyVNysnxPgQbLVyU_for_key_z59VpcgFxij1TFGgYq",
+      "value": "encrypted_UT-o-1VaunMCLFMDgVc5P1aUTnXaKQa5qu5rby_kEyGzhJGaPjGDb-z80Bms5l_RmnZ8J8xXCpd30"
+    },
+    {
+      "field": "readKey",
+      "value": "key_z59VpcgFxij1TFGgYq"
+    },
+    {
+      "field": "groupSealer",
+      "value": "key_z59VpcgFxij1TFGgYq@sealer_zGVAHvR14zHbfEF6Peh1nUrj63SSBKeToFvefZsY6Sinw"
+    }
+  ]
+}

@@ -665,6 +665,184 @@ mod tests {
         ));
     }
 
+    // -----------------------------------------------------------------------
+    // Golden-fixture replay: load `data/group_key_rotation/*.json` (exported by
+    // `packages/cojson/src/tests/rotateReadKeyFixtures.export.test.ts` from real
+    // TS `rotateReadKey`) and assert `rotate_read_key` reproduces the EXACT
+    // ordered `(field, value)` write list byte-for-byte.
+    // -----------------------------------------------------------------------
+    mod fixtures {
+        use super::super::*;
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct KeyPairFx {
+            id: String,
+            secret: String,
+        }
+        #[derive(Deserialize)]
+        struct MemberFx {
+            #[serde(rename = "memberKey")]
+            member_key: String,
+            #[serde(rename = "agentSealerId")]
+            agent_sealer_id: String,
+        }
+        #[derive(Deserialize)]
+        struct ParentFx {
+            #[serde(rename = "readKeyId")]
+            read_key_id: String,
+            #[serde(rename = "readKeySecret")]
+            read_key_secret: String,
+        }
+        #[derive(Deserialize)]
+        struct WriteFx {
+            field: String,
+            value: String,
+        }
+        #[derive(Deserialize)]
+        #[serde(tag = "kind")]
+        enum TriggerFx {
+            #[serde(rename = "rotate")]
+            Rotate,
+            #[serde(rename = "removeEveryone")]
+            RemoveEveryone,
+            #[serde(rename = "removeMember")]
+            RemoveMember { member: String },
+        }
+        #[derive(Deserialize)]
+        struct RotateFx {
+            #[allow(dead_code)]
+            description: String,
+            trigger: TriggerFx,
+            #[serde(rename = "groupId")]
+            group_id: String,
+            #[serde(rename = "sessionId")]
+            session_id: String,
+            #[serde(rename = "startTxIndex")]
+            start_tx_index: u64,
+            #[serde(rename = "fromSealerSecret")]
+            from_sealer_secret: String,
+            #[serde(rename = "currentReadKey")]
+            current_read_key: KeyPairFx,
+            #[serde(rename = "newReadKey")]
+            new_read_key: KeyPairFx,
+            members: Vec<MemberFx>,
+            #[serde(rename = "writeOnlyFreshKeys")]
+            write_only_fresh_keys: Vec<KeyPairFx>,
+            parents: Vec<ParentFx>,
+            snapshot: serde_json::Value,
+            #[serde(rename = "expectedWrites")]
+            expected_writes: Vec<WriteFx>,
+        }
+
+        fn replay(name: &str) {
+            let path = format!("data/group_key_rotation/{name}.json");
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("read {path}: {e}"));
+            let fx: RotateFx =
+                serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"));
+
+            let state = GroupKeyState::from_snapshot(&fx.snapshot);
+            let trigger = match &fx.trigger {
+                TriggerFx::Rotate => RotationTrigger::Rotate,
+                TriggerFx::RemoveEveryone => RotationTrigger::RemoveEveryone,
+                TriggerFx::RemoveMember { member } => {
+                    RotationTrigger::RemoveMember(member.clone())
+                }
+            };
+            let members: Vec<MemberResolution> = fx
+                .members
+                .iter()
+                .map(|m| MemberResolution {
+                    member_key: m.member_key.clone(),
+                    agent_sealer_id: m.agent_sealer_id.clone(),
+                })
+                .collect();
+            let wo_keys: Vec<KeyPair> = fx
+                .write_only_fresh_keys
+                .iter()
+                .map(|k| KeyPair {
+                    id: k.id.clone(),
+                    secret: k.secret.clone(),
+                })
+                .collect();
+            let parents: Vec<ParentResolution> = fx
+                .parents
+                .iter()
+                .map(|p| ParentResolution {
+                    read_key_id: p.read_key_id.clone(),
+                    read_key_secret: p.read_key_secret.clone(),
+                })
+                .collect();
+
+            let input = RotateReadKeyInput {
+                state: &state,
+                group_id: &fx.group_id,
+                session_id: &fx.session_id,
+                start_tx_index: fx.start_tx_index,
+                trigger,
+                from_sealer_secret: &fx.from_sealer_secret,
+                current_read_key: KeyPair {
+                    id: fx.current_read_key.id.clone(),
+                    secret: fx.current_read_key.secret.clone(),
+                },
+                new_read_key: KeyPair {
+                    id: fx.new_read_key.id.clone(),
+                    secret: fx.new_read_key.secret.clone(),
+                },
+                members: &members,
+                write_only_fresh_keys: &wo_keys,
+                parents: &parents,
+            };
+
+            let out = rotate_read_key(&input)
+                .unwrap_or_else(|e| panic!("[{name}] rotate_read_key failed: {e}"));
+            let writes = match out {
+                RotateOutcome::Rotated(w) => w,
+                RotateOutcome::SkippedEveryoneCanRead => {
+                    panic!("[{name}] unexpectedly skipped")
+                }
+            };
+
+            // Exact ordered comparison: same length, same field, same value.
+            assert_eq!(
+                writes.len(),
+                fx.expected_writes.len(),
+                "[{name}] write COUNT differs\n native: {:#?}\n TS:     {:#?}",
+                writes.iter().map(|w| &w.field).collect::<Vec<_>>(),
+                fx.expected_writes.iter().map(|w| &w.field).collect::<Vec<_>>(),
+            );
+            for (i, (got, want)) in writes.iter().zip(fx.expected_writes.iter()).enumerate() {
+                assert_eq!(
+                    got.field, want.field,
+                    "[{name}] write #{i} FIELD differs"
+                );
+                assert_eq!(
+                    got.value, want.value,
+                    "[{name}] write #{i} ({}) VALUE differs (byte mismatch vs TS)",
+                    want.field
+                );
+            }
+        }
+
+        #[test]
+        fn readers_only() {
+            replay("readers_only");
+        }
+        #[test]
+        fn remove_member() {
+            replay("remove_member");
+        }
+        #[test]
+        fn write_only() {
+            replay("write_only");
+        }
+        #[test]
+        fn with_parent() {
+            replay("with_parent");
+        }
+    }
+
     #[test]
     fn parent_reveal_uses_encrypt_key_secret_deterministically() {
         // Parent read key = the proven encryptKeySecret "encrypting" material.

@@ -1,0 +1,71 @@
+{
+  "description": "Rotation of a child group extended to a parent: the new read key is re-revealed to the parent read key via encryptKeySecret (standard path).",
+  "trigger": {
+    "kind": "rotate"
+  },
+  "groupId": "co_zAJS1hmUsiN7FQhxK6EQQrvUAMT",
+  "sessionId": "sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U/signer_zB3gnuA5ja2JF8zBPW5quQgbaPvVBb5SaJuzBf161tSHH_session_zdn36dLzurLY",
+  "startTxIndex": 8,
+  "fromSealerSecret": "sealerSecret_zGCrtkFvdcMdjmLoNw3Aun8C6EwFxwz5E4ePeyrTdbxcd",
+  "currentReadKey": {
+    "id": "key_z5Zkk1kCsdsCoqvza6",
+    "secret": "keySecret_zDc3vZD5v9zNWpVgnT8QiovuHVif4PFAvf4zFD3i8ACZf"
+  },
+  "newReadKey": {
+    "id": "key_z2aGgg13r3rG26bkUM",
+    "secret": "keySecret_zA8KExnFwZNns9mjmzhhn3NYcxLb58WTLarJPFRJG2NgW"
+  },
+  "members": [
+    {
+      "memberKey": "sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U/signer_zB3gnuA5ja2JF8zBPW5quQgbaPvVBb5SaJuzBf161tSHH",
+      "agentSealerId": "sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U"
+    },
+    {
+      "memberKey": "co_z3hypsnw6dySTJryEUcHxayYs2L",
+      "agentSealerId": "sealer_zGbEKo7eMfB4Mc5XG5FtnUGWbDN65dqgxMfzmFyS1CQGK"
+    }
+  ],
+  "writeOnlyFreshKeys": [],
+  "parents": [
+    {
+      "readKeyId": "key_zApgS3Cdgu4UCTtrv",
+      "readKeySecret": "keySecret_zGT2hXNrPsUUkNRfSXbNdnE7BfxpvN2gCXrNarZpQBa3g"
+    }
+  ],
+  "snapshot": {
+    "sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U/signer_zB3gnuA5ja2JF8zBPW5quQgbaPvVBb5SaJuzBf161tSHH": "admin",
+    "key_z5Zkk1kCsdsCoqvza6_for_sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U/signer_zB3gnuA5ja2JF8zBPW5quQgbaPvVBb5SaJuzBf161tSHH": "sealed_UqqYzsIEZQv7wDi3Bvbd1_lniq5YI9C8TRN3OguMce2i0GtrUqYqniDZrmzcHdxoB9rCKFd0Xq0redniSg7rgc0SsJybla5-dXw==",
+    "readKey": "key_z5Zkk1kCsdsCoqvza6",
+    "groupSealer": "key_z5Zkk1kCsdsCoqvza6@sealer_zFRhyqjf2niBXyLLQsbMb1MGR4br8eY3eJPredh5Ga1NY",
+    "co_z3hypsnw6dySTJryEUcHxayYs2L": "reader",
+    "key_z5Zkk1kCsdsCoqvza6_for_co_z3hypsnw6dySTJryEUcHxayYs2L": "sealed_UXqe4q1mLcg-_iNYImtQgKj2X1jlrrxLtFniNfcfYRG5ouxEikYorVPsoa92p8kuowHqyQ7vZG5azFb5FJxWBrkcngVePkhvIxA==",
+    "parent_co_zoAEQjHypFdjzb1sEkC8jwxDe6a": "extend",
+    "key_z5Zkk1kCsdsCoqvza6_for_key_zApgS3Cdgu4UCTtrv": "encrypted_UWCpNxlhM1QChpoLhEvZbP0RzDJLSanMRnYhfyQzGpW2IEBv-E667lQkGjJ6fOm-J_g9VdiiDGPJA"
+  },
+  "expectedWrites": [
+    {
+      "field": "key_z2aGgg13r3rG26bkUM_for_sealer_z4RF5ydCP3H7gShcha8mHfzQLTnZJukznrWpGNY1H7P1U/signer_zB3gnuA5ja2JF8zBPW5quQgbaPvVBb5SaJuzBf161tSHH",
+      "value": "sealed_UCVdz3eN3Er1B9bdZl1YSxJo1DOYBL7UbLBuHLNWA69UADkwKwKkr_xkTiQevMz18GrxCxEd8nN8COpWa6jope6qXL4udo-Sv6w=="
+    },
+    {
+      "field": "key_z2aGgg13r3rG26bkUM_for_co_z3hypsnw6dySTJryEUcHxayYs2L",
+      "value": "sealed_UqcrzH3cLrWdeNGStrC02lRnUcrks4n2KyOTBTa2mYc607hcYbiQ8q7fR1SH_Uf-3WFYnDLsw-dnev3m0wb4DqiGSQR_gfSQwVg=="
+    },
+    {
+      "field": "key_z5Zkk1kCsdsCoqvza6_for_key_z2aGgg13r3rG26bkUM",
+      "value": "encrypted_UstgTAJc8GGjM2WNaSASa58oLy9xubJ6oY7gbwBp4drefS8wIT4bmn93S316lWVfYdqwMzyxmMaj0"
+    },
+    {
+      "field": "readKey",
+      "value": "key_z2aGgg13r3rG26bkUM"
+    },
+    {
+      "field": "groupSealer",
+      "value": "key_z2aGgg13r3rG26bkUM@sealer_z39q9NH1URJFYFHqysF9qdWedmmWBbBDA2fFh1jQxMyKK"
+    },
+    {
+      "field": "key_z2aGgg13r3rG26bkUM_for_key_zApgS3Cdgu4UCTtrv",
+      "value": "encrypted_UXTx-rJiUY21gZ0nATk7qjAkxizQ5Rzfjzi6SDFNFkZwvjHiuN7nPTsnqZxLvl6kVPBYUFZmcd6Xc"
+    }
+  ]
+}
