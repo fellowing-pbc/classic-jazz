@@ -22,22 +22,35 @@
 //! in rotation/`add_member_internal` — `extend`'s output does not depend on a start
 //! transaction index at all.
 //!
-//! # Scope — the non-account-member parent path is NOT handled
+//! # The non-account-member parent path
 //!
-//! `revealReadKeyToParentGroup` has a branch (group.ts:1332-1370) for when the
-//! current account is *not* an account-member of the parent group. It either seals
-//! to the parent's group sealer (`sealForGroup`, which is NON-deterministic — a
-//! fresh ephemeral key — and therefore not byte-fixturable) or, as a legacy
-//! fallback, mutates the *parent* CoValue (`internalCreateWriteOnlyKeyForMember` on
-//! the parent). Neither is reproduced here; callers whose parent requires that path
-//! must not use these functions for that parent. This mirrors the identical
-//! deferral documented in `group_key_rotation`.
+//! `revealReadKeyToParentGroup` has a branch (group.ts:1349-1387) for when the
+//! current account is *not* an account-member of the parent group:
+//!
+//! - **Group-sealer path (handled by [`extend_to_group_sealer_parent`]).** When the
+//!   parent has a `groupSealer`, TS seals the revealed key to the parent's sealer
+//!   with `sealForGroup` (anonymous box) via `storeKeyRevelationForGroupSealer`
+//!   (group.ts:1357-1378). `sealForGroup` uses a fresh ephemeral keypair per call,
+//!   so the ciphertext is NON-deterministic and cannot be byte-fixtured; it is
+//!   instead verified by ROUNDTRIP (seal then `unsealForGroup` recovers the secret),
+//!   exactly as the underlying [`crate::core::group_keys::reveal_key_to_group_sealer`]
+//!   primitive was originally verified.
+//! - **Legacy fallback (still deferred).** When the parent has NO `groupSealer`, TS
+//!   calls `parent.internalCreateWriteOnlyKeyForMember(...)` (group.ts:1382-1385),
+//!   which mutates the **parent** CoValue's OWN transaction stream and then falls
+//!   through to the standard path (which throws without the parent read key). A
+//!   cross-CoValue mutation cannot be modeled as "an ordered list of writes to THIS
+//!   group", so it is deliberately left out. In practice every modern group carries
+//!   a `groupSealer`, so this fallback is unreachable for them; reproducing it would
+//!   require a separate parent-CoValue write orchestration and is not attempted.
 //!
 //! This module is native-only and intentionally NOT wired into production
 //! `group.ts`.
 
 use crate::core::group_key_rotation::{KeyPair, ParentResolution};
-use crate::core::group_keys::{reveal_key_to_parent_group, GroupKeyWrite};
+use crate::core::group_keys::{
+    reveal_key_to_group_sealer, reveal_key_to_parent_group, GroupKeyWrite,
+};
 use crate::crypto::error::CryptoError;
 
 /// Reproduce `revealReadKeyToParentGroup`'s **standard (account-member) path**
@@ -129,6 +142,88 @@ pub fn extend(input: &ExtendInput<'_>) -> Result<Vec<GroupKeyWrite>, CryptoError
     Ok(writes)
 }
 
+/// All inputs to [`extend_to_group_sealer_parent`].
+pub struct ExtendToGroupSealerInput<'a> {
+    /// The parent group's CoValue id — the `parent_<id>` field written on the child.
+    pub parent_id: &'a str,
+    /// The value written to `parent_<id>` (`"extend"` for `inherit`, else the role).
+    pub parent_ref_value: &'a str,
+    /// The parent group's sealer id (`extractSealerID(parent.get("groupSealer"))`) —
+    /// the anonymous-box recipient every revelation is sealed *to*.
+    pub parent_sealer_id: &'a str,
+    /// This (child) group's CoValue id — seal nonce material (`in`).
+    pub group_id: &'a str,
+    /// The current session id — seal nonce material (`tx.sessionID`).
+    pub session_id: &'a str,
+    /// `group.core.nextTransactionID().txIndex` immediately before `extend` — the
+    /// `parent_<id>` set consumes this index, so the first group-sealer reveal is at
+    /// `start_tx_index + 1` (its `sealForGroup` nonce embeds that txIndex).
+    pub start_tx_index: u64,
+    /// The child group's current read key `(id, secret)` (`getCurrentReadKey()`).
+    pub child_read_key: KeyPair,
+    /// The child group's writeOnly keys `(id, secret)` in `getWriteOnlyKeys()` order
+    /// (`extend` passes `revealAllWriteOnlyKeys: true`).
+    pub write_only_keys: &'a [KeyPair],
+}
+
+/// Reproduce `RawGroup.extend` for the **non-account-member parent, group-sealer
+/// path** (group.ts:1349-1379): the child is not an account-member of the parent, but
+/// the parent has a `groupSealer`, so each revealed key is sealed to that sealer with
+/// `sealForGroup` (an anonymous box) instead of encrypted under the parent read key.
+///
+/// Emits, in order:
+/// 1. `parent_<parentId> = value` (a plain set, consuming `start_tx_index`).
+/// 2. the child read key sealed to the parent sealer
+///    (`<childKeyId>_sealedFor_<parentSealerId>`), at `start_tx_index + 1`.
+/// 3. because `extend` requests `revealAllWriteOnlyKeys: true`, each writeOnly key
+///    sealed to the parent sealer, at the following consecutive tx-indices.
+///
+/// **Non-deterministic:** every `sealedForGroup_…` value uses a fresh ephemeral key,
+/// so two calls differ. Verify by ROUNDTRIP (`unsealForGroup` with the parent sealer
+/// secret recovers the original key secret), not by byte-fixture.
+pub fn extend_to_group_sealer_parent(
+    input: &ExtendToGroupSealerInput<'_>,
+) -> Result<Vec<GroupKeyWrite>, CryptoError> {
+    let mut writes = Vec::new();
+
+    // 1. this.set(`parent_${parent.id}`, value, "trusting") — group.ts:1325.
+    writes.push(GroupKeyWrite {
+        field: format!("parent_{}", input.parent_id),
+        value: input.parent_ref_value.to_string(),
+    });
+    // The set above consumed `start_tx_index`; group-sealer nonces start after it.
+    let mut tx = input.start_tx_index + 1;
+
+    // 2. storeKeyRevelationForGroupSealer(parentSealerID, childReadKey) — the main
+    //    reveal (group.ts:1358-1362).
+    writes.push(reveal_key_to_group_sealer(
+        input.parent_sealer_id,
+        &input.child_read_key.id,
+        &input.child_read_key.secret,
+        input.group_id,
+        input.session_id,
+        tx,
+    )?);
+    tx += 1;
+
+    // 3. revealAllWriteOnlyKeys: seal each writeOnly key to the parent sealer too
+    //    (group.ts:1365-1377).
+    for wk in input.write_only_keys {
+        writes.push(reveal_key_to_group_sealer(
+            input.parent_sealer_id,
+            &wk.id,
+            &wk.secret,
+            input.group_id,
+            input.session_id,
+            tx,
+        )?);
+        tx += 1;
+    }
+
+    let _ = tx;
+    Ok(writes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +308,69 @@ mod tests {
         assert_eq!(writes.len(), 2);
         assert_eq!(writes[0].value, ENCRYPTED_REF);
         assert_eq!(writes[1].value, ENCRYPTED_REF);
+    }
+
+    // --- non-account-member parent, group-sealer path (roundtrip) -----------
+    #[test]
+    fn extend_to_group_sealer_parent_roundtrips_every_reveal() {
+        use crate::crypto::key_secret::group_sealer_from_read_key;
+        use crate::crypto::seal::unseal_for_group;
+        use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+
+        const GROUP_ID: &str = "co_zGroupID111111111";
+        const SESSION_ID: &str = "co_zAcc_session_zSess";
+        // The parent's group sealer is derived from the parent's read key secret; we
+        // hold that secret only so the test can decrypt (roundtrip) — production only
+        // needs the public sealer id to seal.
+        let parent_read_key_secret = "keySecret_zk7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn";
+        let parent_sealer = group_sealer_from_read_key(parent_read_key_secret).unwrap();
+
+        let child_read_key = KeyPair {
+            id: "key_zChildRead11111".to_string(),
+            secret: "keySecret_zswqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC".to_string(),
+        };
+        let wo = KeyPair {
+            id: "key_zWriteOnly11111".to_string(),
+            secret: "keySecret_zUS517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx".to_string(),
+        };
+
+        let input = ExtendToGroupSealerInput {
+            parent_id: "co_zParent1111111",
+            parent_ref_value: "extend",
+            parent_sealer_id: &parent_sealer.public_key,
+            group_id: GROUP_ID,
+            session_id: SESSION_ID,
+            start_tx_index: 3,
+            child_read_key: child_read_key.clone(),
+            write_only_keys: std::slice::from_ref(&wo),
+        };
+        let writes = extend_to_group_sealer_parent(&input).unwrap();
+
+        // Fields + order: parent ref, child reveal, one writeOnly reveal.
+        assert_eq!(
+            writes.iter().map(|w| w.field.clone()).collect::<Vec<_>>(),
+            vec![
+                "parent_co_zParent1111111".to_string(),
+                format!("{}_sealedFor_{}", child_read_key.id, parent_sealer.public_key),
+                format!("{}_sealedFor_{}", wo.id, parent_sealer.public_key),
+            ]
+        );
+        assert_eq!(writes[0].value, "extend");
+
+        // Roundtrip: recover each sealed secret with the parent sealer secret. The
+        // set(parent) consumed tx=3, so the child reveal is nonce'd at tx=4 and the
+        // writeOnly reveal at tx=5.
+        let recover = |value: &str, tx: u64| -> String {
+            let b64 = value.strip_prefix("sealedForGroup_U").unwrap();
+            let raw = URL_SAFE.decode(b64).unwrap();
+            let nonce = format!(
+                "{{\"in\":\"{GROUP_ID}\",\"tx\":{{\"sessionID\":\"{SESSION_ID}\",\"txIndex\":{tx}}}}}"
+            );
+            let pt = unseal_for_group(&raw, &parent_sealer.secret, nonce.as_bytes()).unwrap();
+            serde_json::from_slice::<String>(&pt).unwrap()
+        };
+        assert_eq!(recover(&writes[1].value, 4), child_read_key.secret);
+        assert_eq!(recover(&writes[2].value, 5), wo.secret);
     }
 
     #[test]
