@@ -913,16 +913,7 @@ impl NodeCore {
   /// current monotonic version. Call after each ingest batch.
   #[napi]
   pub fn map_materialize(&mut self, co_id: String, pending: Vec<PendingTx>) -> napi::Result<f64> {
-    let pending: Vec<RustPendingTxIn> = pending
-      .into_iter()
-      .map(|p| RustPendingTxIn {
-        session_id: p.session_id,
-        tx_index: p.tx_index,
-        source_made_at: p.source_made_at.map(|v| v as u64),
-        meta_json: p.meta_json,
-        source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
-      })
-      .collect();
+    let pending = to_rust_pending(pending);
     Ok(
       self
         .internal

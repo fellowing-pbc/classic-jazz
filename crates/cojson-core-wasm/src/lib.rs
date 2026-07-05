@@ -962,16 +962,7 @@ impl NodeCore {
     pub fn map_materialize(&mut self, co_id: String, pending: JsValue) -> Result<f64, JsValue> {
         let pending: Vec<PendingTxWire> = serde_wasm_bindgen::from_value(pending)
             .map_err(|e| to_wasm_err(CojsonCoreWasmError::from(e)))?;
-        let pending: Vec<RustPendingTxIn> = pending
-            .into_iter()
-            .map(|p| RustPendingTxIn {
-                session_id: p.session_id,
-                tx_index: p.tx_index,
-                source_made_at: p.source_made_at.map(|v| v as u64),
-                meta_json: p.meta_json,
-                source_tx_id: p.source_tx_id.map(|s| (s.session_id, s.tx_index)),
-            })
-            .collect();
+        let pending = pending_wire_to_rust(pending);
         Ok(self
             .internal
             .map_materialize(&co_id, &pending)
