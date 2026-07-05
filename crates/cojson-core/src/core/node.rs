@@ -365,6 +365,17 @@ impl NodeCore {
             .unwrap_or_default()
     }
 
+    /// Native binaryCoStream read-back: the concatenated raw file content of
+    /// `co_id`'s materialized coStream view (every `binary_U<base64>` chunk item
+    /// base64url-decoded and appended), as raw bytes. Empty if not materialized.
+    /// See [`crate::core::co_stream::CoStreamView::binary_chunks`].
+    pub fn stream_binary_chunks(&self, co_id: &str) -> Vec<u8> {
+        self.co_streams
+            .get(co_id)
+            .map(|v| v.binary_chunks())
+            .unwrap_or_default()
+    }
+
     /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
     /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
     pub fn stream_snapshot_at_frontier(

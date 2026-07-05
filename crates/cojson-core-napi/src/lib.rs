@@ -1080,6 +1080,15 @@ impl NodeCore {
       .into()
   }
 
+  /// Native binaryCoStream read-back: the concatenated raw file content of
+  /// `co_id`'s materialized coStream view (every `binary_U<base64>` chunk item
+  /// base64url-decoded and appended) as a napi `Buffer` — the near-zero-copy raw
+  /// channel, no base64/JSON on the wire. Call after `streamMaterialize`.
+  #[napi]
+  pub fn stream_binary_chunks(&self, co_id: String) -> napi::bindgen_prelude::Buffer {
+    self.internal.stream_binary_chunks(&co_id).into()
+  }
+
   /// Frontier read: whole `{sessionID: [visibleValue, ...]}` snapshot under
   /// `frontier_json` (`{ sessionID: txCount }`) as a JSON string.
   #[napi]
@@ -1154,6 +1163,67 @@ impl NodeCore {
   #[napi]
   pub fn missing_key_ids(&self, co_id: String) -> Vec<String> {
     self.internal.missing_key_ids(&co_id)
+  }
+}
+
+// ============================================================================
+// BENCH-ONLY: binaryCoStream Step-1 transfer probe
+// ============================================================================
+// Isolates the READ-BACK transfer-cost delta between the two candidate
+// binaryCoStream channels, on realistic file-chunk payloads — BEFORE any CRDT
+// port. Both representations are computed ONCE on the TS side (using the real
+// `bytesToBase64url`, so the base64url alphabet is byte-identical to the
+// product wire) and handed in at construction; each accessor models ONE
+// Rust->TS crossing:
+//
+//   asBase64Json()  -> a JSON String modeling the CURRENT wire: an array of
+//                      `binary_U<base64>` chunk strings that crosses napi as a
+//                      String (the shape `decryptTransaction` yields, then
+//                      `JSON.parse` + `base64URLtoBytes` on the TS side).
+//   asBuffer()      -> the raw file bytes as a napi Buffer (the PROTOTYPE
+//                      native path: no base64, no JSON — the TS side slices
+//                      chunk subarrays with zero copy).
+//
+// Not part of the shipped surface; mirrors the `stream_delta_binary` /
+// `stream_delta_byte_len` bench-only precedent.
+#[napi]
+pub struct BinaryTransferProbe {
+  bytes: Vec<u8>,
+  base64_json: String,
+}
+
+#[napi]
+impl BinaryTransferProbe {
+  #[napi(constructor)]
+  pub fn new(bytes: napi::bindgen_prelude::Buffer, base64_json: String) -> BinaryTransferProbe {
+    BinaryTransferProbe {
+      bytes: bytes.to_vec(),
+      base64_json,
+    }
+  }
+
+  /// Current-wire channel: hand back the precomputed base64-in-JSON String.
+  #[napi]
+  pub fn as_base64_json(&self) -> String {
+    self.base64_json.clone()
+  }
+
+  /// Prototype native channel: hand back the raw file bytes as a napi Buffer.
+  #[napi]
+  pub fn as_buffer(&self) -> napi::bindgen_prelude::Buffer {
+    self.bytes.clone().into()
+  }
+
+  /// Raw content length in bytes.
+  #[napi]
+  pub fn byte_len(&self) -> f64 {
+    self.bytes.len() as f64
+  }
+
+  /// Length of the base64-in-JSON wire String, in bytes.
+  #[napi]
+  pub fn base64_json_len(&self) -> f64 {
+    self.base64_json.len() as f64
   }
 }
 

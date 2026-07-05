@@ -70,6 +70,10 @@ use crate::core::group_engine::tx_view::{
 use crate::core::group_engine::types::TimeBasedEntry;
 use crate::core::session_map::{SessionMapError, SessionMapImpl};
 
+/// `"binary_U".len()` — the prefix `binaryCoStream.ts` puts on every chunk
+/// payload (`binary_U${base64url}`).
+const BINARY_U_PREFIX_LEN: usize = 8;
+
 /// One materialized coStream entry: the `CoStreamItem` shape from
 /// `coStream.ts:13-17` minus the bucket's session id (that is the map key, not
 /// duplicated per entry):
@@ -316,6 +320,62 @@ impl CoStreamView {
     ///         5 => false  (no payload)
     ///         0 => u32 json_len ; [json_len] utf8 (JSON.parse fallback)
     /// ```
+    /// Native binaryCoStream read-back — the inverse of
+    /// `RawBinaryCoStreamView.getBinaryChunks` (`binaryCoStream.ts`). Walks every
+    /// materialized entry in order and, for each `{type:"chunk", chunk:
+    /// "binary_U<base64url>"}` item, base64url-decodes the payload and appends its
+    /// raw bytes to ONE contiguous buffer. `start`/`end` marker items and any
+    /// non-chunk value contribute no bytes. The result is the concatenated file
+    /// content the native channel hands across as a napi `Buffer` — no base64, no
+    /// JSON on the wire (unlike the current TS path, which ships each chunk as a
+    /// `binary_U<base64>` string inside JSON and decodes it in JS).
+    ///
+    /// binaryCoStream is single-writer in practice (one uploader session), so
+    /// per-session iteration order equals the global valid-tx order the TS view
+    /// walks; a multi-session value would concatenate in the view's deterministic
+    /// first-appearance session order.
+    pub fn binary_chunks(&self) -> Vec<u8> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        // Capacity estimate: every base64 char decodes to 3/4 of a byte. Summing
+        // the chunk-string lengths up front avoids repeated Vec growth on large
+        // (multi-MB) files.
+        let mut cap = 0usize;
+        for (_sid, entries) in &self.sessions {
+            for entry in entries.iter_values() {
+                if let JsonValue::Object(obj) = &entry.value {
+                    if obj.get("type").and_then(|t| t.as_str()) == Some("chunk") {
+                        if let Some(c) = obj.get("chunk").and_then(|c| c.as_str()) {
+                            cap += (c.len().saturating_sub(BINARY_U_PREFIX_LEN)) * 3 / 4 + 3;
+                        }
+                    }
+                }
+            }
+        }
+        let mut out: Vec<u8> = Vec::with_capacity(cap);
+        for (_sid, entries) in &self.sessions {
+            for entry in entries.iter_values() {
+                let JsonValue::Object(obj) = &entry.value else {
+                    continue;
+                };
+                if obj.get("type").and_then(|t| t.as_str()) != Some("chunk") {
+                    continue;
+                }
+                let Some(chunk) = obj.get("chunk").and_then(|c| c.as_str()) else {
+                    continue;
+                };
+                let b64 = chunk.strip_prefix("binary_U").unwrap_or(chunk);
+                // `bytesToBase64url` may emit canonical padding (native runtime)
+                // or none (JS fallback); accept both by trimming '=' and decoding
+                // with the no-pad url-safe engine.
+                let b64 = b64.trim_end_matches('=');
+                if let Ok(bytes) = URL_SAFE_NO_PAD.decode(b64) {
+                    out.extend_from_slice(&bytes);
+                }
+            }
+        }
+        out
+    }
+
     pub fn delta_binary(&self, since_version: u64) -> Vec<u8> {
         let reset = since_version < self.last_full_version;
         let mut out: Vec<u8> = Vec::with_capacity(4096);
@@ -1000,6 +1060,48 @@ mod tests {
         let snap: serde_json::Value =
             serde_json::from_str(&node.stream_snapshot(&co_id).unwrap()).unwrap();
         assert_eq!(snap[session], serde_json::json!(["a", "b"]));
+    }
+
+    #[test]
+    fn binary_chunks_decode_and_concatenate() {
+        use base64::{
+            engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+            Engine as _,
+        };
+        let session = "co_zA_session_zS";
+        // Three chunks of raw bytes; encode two unpadded and one padded to prove
+        // the decoder tolerates both forms `bytesToBase64url` may emit.
+        let raw0: Vec<u8> = (0u8..=200).collect();
+        let raw1: Vec<u8> = (0u8..250).map(|i| i.wrapping_mul(7)).collect();
+        let raw2: Vec<u8> = vec![0xff, 0x00, 0x42]; // len 3 -> padded needs no '='; use len-2 for padding
+        let raw2b: Vec<u8> = vec![0xde, 0xad]; // 2 bytes -> canonical base64 has one '=' pad
+
+        let items = vec![
+            serde_json::json!({"type": "start", "mimeType": "application/octet-stream", "totalSizeBytes": 455}),
+            serde_json::json!({"type": "chunk", "chunk": format!("binary_U{}", URL_SAFE_NO_PAD.encode(&raw0))}),
+            serde_json::json!({"type": "chunk", "chunk": format!("binary_U{}", URL_SAFE_NO_PAD.encode(&raw1))}),
+            serde_json::json!({"type": "chunk", "chunk": format!("binary_U{}", URL_SAFE_NO_PAD.encode(&raw2))}),
+            serde_json::json!({"type": "chunk", "chunk": format!("binary_U{}", URL_SAFE.encode(&raw2b))}),
+            serde_json::json!({"type": "end"}),
+        ];
+        let (mut node, co_id) = make_stream(session, &items);
+        node.stream_materialize(&co_id, &[]).unwrap();
+
+        let mut expected = Vec::new();
+        expected.extend_from_slice(&raw0);
+        expected.extend_from_slice(&raw1);
+        expected.extend_from_slice(&raw2);
+        expected.extend_from_slice(&raw2b);
+
+        assert_eq!(node.stream_binary_chunks(&co_id), expected);
+    }
+
+    #[test]
+    fn binary_chunks_empty_when_not_materialized() {
+        let session = "co_zA_session_zS";
+        let (node, co_id) = make_stream(session, &[serde_json::json!({"type": "end"})]);
+        // No materialize call: view absent -> empty bytes, no panic.
+        assert!(node.stream_binary_chunks(&co_id).is_empty());
     }
 
     #[test]
