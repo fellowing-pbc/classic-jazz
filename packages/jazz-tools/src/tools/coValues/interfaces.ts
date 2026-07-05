@@ -1013,7 +1013,7 @@ export function importContentPieces(
   const node = "node" in account ? account.node : account.$jazz.localNode;
 
   for (const piece of contentPieces) {
-    node.syncManager.handleNewContent(piece, "import");
+    node.handleIncomingContent(piece, "import");
   }
 }
 
