@@ -1,4 +1,5 @@
 import { GarbageCollector } from "./GarbageCollector.js";
+import { PeerState } from "./PeerState.js";
 import { ClockOffset } from "./ClockOffset.js";
 import type { CoID } from "./coValue.js";
 import type { RawCoValue } from "./coValue.js";
@@ -37,6 +38,7 @@ import { AgentID, RawCoID, SessionID, isAgentID, isRawCoID } from "./ids.js";
 import { logger } from "./logger.js";
 import { StorageAPI } from "./storage/index.js";
 import {
+  NewContentMessage,
   Peer,
   PeerID,
   SyncManager,
@@ -175,6 +177,52 @@ export class LocalNode {
     this.storage?.close();
     this.storage = undefined;
     this.syncManager.removeStorage();
+  }
+
+  /**
+   * Registers a new peer connection with this node's sync manager.
+   * @category 3. Low-level
+   */
+  addPeer(peer: Peer, skipReconciliation: boolean = false) {
+    this.syncManager.addPeer(peer, skipReconciliation);
+  }
+
+  /**
+   * Gracefully shuts down every connected peer and clears them from the
+   * sync manager, without affecting configured storage.
+   * @category 3. Low-level
+   */
+  closeAllPeers() {
+    this.syncManager.closeAllPeers();
+  }
+
+  /**
+   * Starts tracking CoValues that get mutated from this point on. Returns a
+   * `done()` function that returns the set of tracked CoValue ids.
+   * @category 3. Low-level
+   */
+  trackDirtyCoValues() {
+    return this.syncManager.trackDirtyCoValues();
+  }
+
+  /**
+   * Resolves once `id` has synced with every connected peer and any
+   * configured storage.
+   * @category 3. Low-level
+   */
+  waitForPeerSync(id: RawCoID, timeout?: number) {
+    return this.syncManager.waitForSync(id, timeout);
+  }
+
+  /**
+   * Imports externally-sourced content pieces into this node.
+   * @category 3. Low-level
+   */
+  handleIncomingContent(
+    msg: NewContentMessage,
+    from: PeerState | "storage" | "import",
+  ) {
+    return this.syncManager.handleNewContent(msg, from);
   }
 
   /**

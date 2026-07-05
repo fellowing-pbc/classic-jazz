@@ -1166,3 +1166,63 @@ describe("SyncManager.closeAllPeers", () => {
     expect(Object.keys(node1.node.syncManager.peers)).toHaveLength(0);
   });
 });
+
+describe("LocalNode sync forwarding", () => {
+  test("addPeer delegates to syncManager.addPeer", () => {
+    const node = createTestNode();
+    const addPeerSpy = vi.spyOn(node.syncManager, "addPeer");
+    const [peerA] = connectedPeers("peer:a", "peer:b", {
+      peer1role: "client",
+      peer2role: "server",
+    });
+
+    node.addPeer(peerA, true);
+
+    expect(addPeerSpy).toHaveBeenCalledWith(peerA, true);
+  });
+
+  test("closeAllPeers delegates to syncManager.closeAllPeers", () => {
+    const node = createTestNode();
+    const closeAllPeersSpy = vi.spyOn(node.syncManager, "closeAllPeers");
+
+    node.closeAllPeers();
+
+    expect(closeAllPeersSpy).toHaveBeenCalled();
+  });
+
+  test("trackDirtyCoValues delegates to syncManager.trackDirtyCoValues", () => {
+    const node = createTestNode();
+    const trackDirtyCoValuesSpy = vi.spyOn(
+      node.syncManager,
+      "trackDirtyCoValues",
+    );
+
+    const tracking = node.trackDirtyCoValues();
+
+    expect(trackDirtyCoValuesSpy).toHaveBeenCalled();
+    expect(tracking.done).toBeInstanceOf(Function);
+  });
+
+  test("waitForPeerSync delegates to syncManager.waitForSync", async () => {
+    const node = createTestNode();
+    const group = node.createGroup();
+    const waitForSyncSpy = vi.spyOn(node.syncManager, "waitForSync");
+
+    await node.waitForPeerSync(group.id, 1000);
+
+    expect(waitForSyncSpy).toHaveBeenCalledWith(group.id, 1000);
+  });
+
+  test("handleIncomingContent delegates to syncManager.handleNewContent", () => {
+    const node = createTestNode();
+    const group = node.createGroup();
+    const [piece] = group.core.newContentSince() ?? [];
+    const handleNewContentSpy = vi
+      .spyOn(node.syncManager, "handleNewContent")
+      .mockImplementation(() => {});
+
+    node.handleIncomingContent(piece!, "import");
+
+    expect(handleNewContentSpy).toHaveBeenCalledWith(piece, "import");
+  });
+});
