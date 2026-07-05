@@ -1,6 +1,6 @@
 import "jazz-tools/load-edge-wasm";
 import { createWebSocketPeer } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { Hono } from "hono";
 import { Account, co, z } from "jazz-tools";
 import { startWorker } from "jazz-tools/worker";
@@ -25,8 +25,8 @@ const MyAccount = co
 const syncServer = "wss://cloud.jazz.tools/?key=jazz@jazz.tools";
 
 app.get("/", async (c) => {
-  const crypto = await WasmCrypto.create();
-  const cryptoSync = WasmCrypto.createSync();
+  const crypto = await WasmNode.create();
+  const cryptoSync = WasmNode.createSync();
 
   const peer = createWebSocketPeer({
     id: "upstream",
@@ -58,8 +58,8 @@ app.get("/", async (c) => {
 
   return c.json({
     text: root.text,
-    isWasmCrypto: crypto instanceof WasmCrypto,
-    isWasmCryptoSync: cryptoSync instanceof WasmCrypto,
+    isWasmNode: crypto instanceof WasmNode,
+    isWasmNodeSync: cryptoSync instanceof WasmNode,
   });
 });
 

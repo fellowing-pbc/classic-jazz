@@ -5,14 +5,14 @@ import { dirname, join } from "path";
 import { LocalNode } from "cojson";
 import { getBetterSqliteStorage } from "cojson-storage-sqlite";
 import { createWebSocketPeer } from "cojson-transport-ws";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 import { mkdir, unlink } from "fs/promises";
 import { WebSocket, WebSocketServer } from "ws";
 
 export type TestSyncServer = Awaited<ReturnType<typeof startSyncServer>>;
 
 export const startSyncServer = async (port?: number, dbName?: string) => {
-  const crypto = await WasmCrypto.create();
+  const crypto = await WasmNode.create();
 
   const server = createServer((req, res) => {
     if (req.url === "/health") {

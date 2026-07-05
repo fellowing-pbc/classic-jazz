@@ -4,7 +4,7 @@ import { co, z } from "jazz-tools";
 import { Account } from "jazz-tools";
 import { startWorker } from "jazz-tools/worker";
 import { NextResponse } from "next/server";
-import { WasmCrypto } from "cojson/crypto/WasmCrypto";
+import { WasmNode } from "cojson/node/WasmNode";
 
 const MyAccountRoot = co.map({
   text: z.string(),
@@ -28,7 +28,7 @@ export const runtime = "edge"; // 'nodejs' is the default
 const syncServer = "wss://cloud.jazz.tools/?key=jazz@jazz.tools";
 
 export async function GET(request: Request) {
-  const crypto = await WasmCrypto.create();
+  const crypto = await WasmNode.create();
 
   const peer = createWebSocketPeer({
     id: "upstream",
@@ -60,6 +60,6 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     text: root.text,
-    isWasmCrypto: crypto instanceof WasmCrypto,
+    isWasmNode: crypto instanceof WasmNode,
   });
 }

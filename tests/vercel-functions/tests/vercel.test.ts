@@ -67,7 +67,7 @@ describe("GET /api/hello", () => {
     const data = await resp.json();
 
     expect(data).toEqual({
-      isWasmCrypto: true,
+      isWasmNode: true,
       text: "Hello world!",
     });
   });
