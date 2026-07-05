@@ -859,67 +859,52 @@ class RNNodeCoreAdapter implements NodeCoreImpl {
     return true;
   }
 
-  // The RN uniffi binding does not yet expose the coStream materialization
-  // surface (regenerated only by an `ubrn` build). `supportsNativeCoStream-
-  // Materialization` returns `false`, so the coStream path stays on the TS
-  // `getValidTransactions` materializer and these stubs are never reached.
-  streamMaterialize(_coId: string, _pending: NodeCorePendingTx[]): number {
-    throw new Error(
-      "native coStream materialization is not supported on this binding",
-    );
+  streamMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
+    return this.nodeCore.streamMaterialize(coId, this.#rnPending(pending));
   }
 
-  streamDelta(_coId: string, _sinceVersion: number): string {
-    throw new Error(
-      "native coStream materialization is not supported on this binding",
-    );
+  streamDelta(coId: string, sinceVersion: number): string {
+    return this.nodeCore.streamDelta(coId, sinceVersion);
   }
 
-  streamSnapshot(_coId: string): string {
-    throw new Error(
-      "native coStream materialization is not supported on this binding",
-    );
+  streamSnapshot(coId: string): string {
+    return this.nodeCore.streamSnapshot(coId);
   }
 
-  streamMissingKeyIds(_coId: string): string[] {
-    throw new Error(
-      "native coStream materialization is not supported on this binding",
-    );
+  streamMissingKeyIds(coId: string): string[] {
+    return this.nodeCore.streamMissingKeyIds(coId);
   }
 
+  // The RN uniffi binding now exposes the coStream materialization surface
+  // (stream_materialize/stream_snapshot/stream_delta/stream_missing_key_ids on
+  // NodeCore), so the native coStream path is enabled here on par with Node
+  // (napi) and browser (wasm).
   supportsNativeCoStreamMaterialization(): boolean {
-    return false;
+    return true;
   }
 
-  // Likewise, the RN uniffi binding does not yet expose the coList
-  // materialization surface. `supportsNativeCoListMaterialization` returns
-  // `false`, so the coList path stays on the TS RGA materializer and these
-  // stubs are never reached.
-  listMaterialize(_coId: string, _pending: NodeCorePendingTx[]): number {
-    throw new Error(
-      "native coList materialization is not supported on this binding",
-    );
+  listMaterialize(coId: string, pending: NodeCorePendingTx[]): number {
+    return this.nodeCore.listMaterialize(coId, this.#rnPending(pending));
   }
 
-  listDelta(_coId: string, _sinceVersion: number): string {
-    throw new Error(
-      "native coList materialization is not supported on this binding",
-    );
+  listDelta(coId: string, sinceVersion: number): string {
+    return this.nodeCore.listDelta(coId, sinceVersion);
   }
 
-  listSnapshot(_coId: string): string {
-    throw new Error(
-      "native coList materialization is not supported on this binding",
-    );
+  listSnapshot(coId: string): string {
+    return this.nodeCore.listSnapshot(coId);
   }
 
-  listMissingKeyIds(_coId: string): string[] {
-    throw new Error(
-      "native coList materialization is not supported on this binding",
-    );
+  listMissingKeyIds(coId: string): string[] {
+    return this.nodeCore.listMissingKeyIds(coId);
   }
 
+  // The RN uniffi binding now exposes the coList materialization surface
+  // (list_materialize/list_snapshot/list_delta/list_missing_key_ids on
+  // NodeCore), so the native coList (and coPlainText, which shares the RGA
+  // materializer) path is enabled here on par with Node (napi) and browser
+  // (wasm).
   supportsNativeCoListMaterialization(): boolean {
-    return false;
+    return true;
   }
 }
