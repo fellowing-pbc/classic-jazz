@@ -1,0 +1,25 @@
+{
+  "description": "internalCreateAccount bootstrap: set(agentID, 'admin') -> set(<readKeyId>_for_<agentID>, sealed) -> set('readKey', <readKeyId>)",
+  "secretSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+  "agentSecret": "sealerSecret_zBaw2EoDHYG4rPzonEs3nZqzEBATTzVaeRjRx9NB8mNUn/signerSecret_z99dCbepks3Ej4K3tVZ2J2JPNsjdo6xJHwNKCDH8Jrdf6",
+  "agentId": "sealer_z7ra3H2g69msrPwMdHF66aMk5K3kfABVVTC3YUebeZ8NN/signer_z9jY9srbVs37G7aVBD7ndn52pMmYtsCooZTN1DmdPuJ38",
+  "accountId": "co_z7ixSk22ySk96uarunG6Bqzpvy9",
+  "readKey": {
+    "id": "key_z6VerRakteU6bjiPv",
+    "secret": "keySecret_zCktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8"
+  },
+  "writes": [
+    {
+      "field": "sealer_z7ra3H2g69msrPwMdHF66aMk5K3kfABVVTC3YUebeZ8NN/signer_z9jY9srbVs37G7aVBD7ndn52pMmYtsCooZTN1DmdPuJ38",
+      "value": "admin"
+    },
+    {
+      "field": "key_z6VerRakteU6bjiPv_for_sealer_z7ra3H2g69msrPwMdHF66aMk5K3kfABVVTC3YUebeZ8NN/signer_z9jY9srbVs37G7aVBD7ndn52pMmYtsCooZTN1DmdPuJ38",
+      "value": "sealed_UxtFiNLN22IXZFqd5JmoquJJT-mm1xkG6NpmzypdwlZVMG-SXpjS7UnY-O9rPegdFux-vZdy-YoqlFEp4DjwwB13drpaL8pnM"
+    },
+    {
+      "field": "readKey",
+      "value": "key_z6VerRakteU6bjiPv"
+    }
+  ]
+}

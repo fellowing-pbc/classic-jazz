@@ -1,0 +1,104 @@
+[
+  {
+    "description": "agent-ID session: resolveAccountAgent(agentID) returns the agent id itself with no covalue lookup",
+    "id": "sealer_zGEiLTt4chXj5AcmHB63yVWNGHsCYvyxiAjBTVa2HgG1Y/signer_zDSFpjzDiXj97mVtUs2sMX5q9vaTaj2DKTVrWhaeeMacq",
+    "available": false,
+    "header": null,
+    "expected": {
+      "value": "sealer_zGEiLTt4chXj5AcmHB63yVWNGHsCYvyxiAjBTVa2HgG1Y/signer_zDSFpjzDiXj97mVtUs2sMX5q9vaTaj2DKTVrWhaeeMacq",
+      "errorKind": null
+    }
+  },
+  {
+    "description": "account session: resolveAccountAgent(accountID) reads the account header's ruleset.initialAdmin and returns that agent id",
+    "id": "co_z7ixSk22ySk96uarunG6Bqzpvy9",
+    "available": true,
+    "header": {
+      "type": "comap",
+      "ruleset": {
+        "type": "group",
+        "initialAdmin": "sealer_z7ra3H2g69msrPwMdHF66aMk5K3kfABVVTC3YUebeZ8NN/signer_z9jY9srbVs37G7aVBD7ndn52pMmYtsCooZTN1DmdPuJ38"
+      },
+      "meta": {
+        "type": "account"
+      },
+      "createdAt": null,
+      "uniqueness": null
+    },
+    "expected": {
+      "value": "sealer_z7ra3H2g69msrPwMdHF66aMk5K3kfABVVTC3YUebeZ8NN/signer_z9jY9srbVs37G7aVBD7ndn52pMmYtsCooZTN1DmdPuJ38",
+      "errorKind": null
+    }
+  },
+  {
+    "description": "plain group (valid group ruleset but meta is not { type: 'account' }) -> not_account",
+    "id": "co_znVvLSf9yAzgyZVTBGX5eMGMmKk",
+    "available": true,
+    "header": {
+      "type": "comap",
+      "ruleset": {
+        "type": "group",
+        "initialAdmin": "sealer_zGEiLTt4chXj5AcmHB63yVWNGHsCYvyxiAjBTVa2HgG1Y/signer_zDSFpjzDiXj97mVtUs2sMX5q9vaTaj2DKTVrWhaeeMacq"
+      },
+      "meta": null,
+      "createdAt": null,
+      "uniqueness": null
+    },
+    "expected": {
+      "value": null,
+      "errorKind": "not_account"
+    }
+  },
+  {
+    "description": "ownedByGroup comap (account-looking meta but ruleset.type is not 'group') -> not_account",
+    "id": "co_zFyVL4jnfERUWvGmpbUJQ86AvgB",
+    "available": true,
+    "header": {
+      "type": "comap",
+      "ruleset": {
+        "type": "ownedByGroup",
+        "group": "co_znVvLSf9yAzgyZVTBGX5eMGMmKk"
+      },
+      "meta": {
+        "type": "account"
+      },
+      "createdAt": null,
+      "uniqueness": null
+    },
+    "expected": {
+      "value": null,
+      "errorKind": "not_account"
+    }
+  },
+  {
+    "description": "malformed admin: comap + group ruleset + account meta, but ruleset.initialAdmin is a co id (not an agent id) -> not_account",
+    "id": "co_z9TTjVQEqyUXYmQtAZChFfhBtPh",
+    "available": true,
+    "header": {
+      "type": "comap",
+      "ruleset": {
+        "type": "group",
+        "initialAdmin": "co_znVvLSf9yAzgyZVTBGX5eMGMmKk"
+      },
+      "meta": {
+        "type": "account"
+      },
+      "createdAt": null,
+      "uniqueness": null
+    },
+    "expected": {
+      "value": null,
+      "errorKind": "not_account"
+    }
+  },
+  {
+    "description": "unavailable: resolveAccountAgent on an account id that was never loaded surfaces expectCoValueLoaded's error -> unavailable",
+    "id": "co_zopMU3hk1yAxgCm44SCFeJEhD6D",
+    "available": false,
+    "header": null,
+    "expected": {
+      "value": null,
+      "errorKind": "unavailable"
+    }
+  }
+]

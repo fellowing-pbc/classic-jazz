@@ -1,0 +1,17 @@
+[
+  {
+    "description": "account session id -> account id",
+    "sessionId": "co_z7ixSk22ySk96uarunG6Bqzpvy9_session_zFIXEDSESSION1",
+    "expected": "co_z7ixSk22ySk96uarunG6Bqzpvy9"
+  },
+  {
+    "description": "agent session id (agent id contains a '/') -> agent id, sliced at the first '_session'",
+    "sessionId": "sealer_zGEiLTt4chXj5AcmHB63yVWNGHsCYvyxiAjBTVa2HgG1Y/signer_zDSFpjzDiXj97mVtUs2sMX5q9vaTaj2DKTVrWhaeeMacq_session_zFIXEDSESSION2",
+    "expected": "sealer_zGEiLTt4chXj5AcmHB63yVWNGHsCYvyxiAjBTVa2HgG1Y/signer_zDSFpjzDiXj97mVtUs2sMX5q9vaTaj2DKTVrWhaeeMacq"
+  },
+  {
+    "description": "delete session id ('_session_d…$') -> account id (still contains '_session')",
+    "sessionId": "co_z7ixSk22ySk96uarunG6Bqzpvy9_session_dFIXEDDELETE$",
+    "expected": "co_z7ixSk22ySk96uarunG6Bqzpvy9"
+  }
+]
