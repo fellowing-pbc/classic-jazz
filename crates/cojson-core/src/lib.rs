@@ -28,6 +28,10 @@ pub mod core {
     pub use group_engine::*;
     pub mod group_key_state;
     pub use group_key_state::*;
+    // Test-only: shared serde fixture structs for the group-key golden-replay
+    // tests below. No production code path, so gated to `cfg(test)`.
+    #[cfg(test)]
+    pub(crate) mod group_key_test_support;
     pub mod group_key_rotation;
     pub use group_key_rotation::*;
     pub mod group_key_extend;

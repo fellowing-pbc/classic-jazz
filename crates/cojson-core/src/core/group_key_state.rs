@@ -22,16 +22,12 @@
 //! to TS; see `group_keys.rs`).
 
 use crate::core::group_engine::types::Role;
+use crate::core::identity_resolution::is_agent_id;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// The `"everyone"` member sentinel (group.ts `EVERYONE`).
 pub const EVERYONE: &str = "everyone";
-
-/// `isAgentID` — ids.ts:31-37. An agent id is `sealer_z…/signer_z…`.
-fn is_agent_id(id: &str) -> bool {
-    id.starts_with("sealer_") && id.contains("/signer_")
-}
 
 /// `getMemberKeys` predicate — group.ts:854-858: a map key is a member key iff it
 /// is an account id (`co_…`) or an agent id.

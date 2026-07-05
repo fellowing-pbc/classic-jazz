@@ -1065,32 +1065,8 @@ mod tests {
     mod fixtures {
         use super::super::*;
         use crate::core::group_key_state::GroupKeyState;
+        use crate::core::group_key_test_support::{KeyPairFx, MemberFx, ParentFx, WriteFx};
         use serde::Deserialize;
-
-        #[derive(Deserialize)]
-        struct KeyPairFx {
-            id: String,
-            secret: String,
-        }
-        #[derive(Deserialize)]
-        struct MemberFx {
-            #[serde(rename = "memberKey")]
-            member_key: String,
-            #[serde(rename = "agentSealerId")]
-            agent_sealer_id: String,
-        }
-        #[derive(Deserialize)]
-        struct ParentFx {
-            #[serde(rename = "readKeyId")]
-            read_key_id: String,
-            #[serde(rename = "readKeySecret")]
-            read_key_secret: String,
-        }
-        #[derive(Deserialize)]
-        struct WriteFx {
-            field: String,
-            value: String,
-        }
 
         fn to_members(v: &[MemberFx]) -> Vec<MemberResolution> {
             v.iter()

@@ -398,25 +398,9 @@ mod tests {
     // -----------------------------------------------------------------------
     mod fixtures {
         use super::super::*;
+        use crate::core::group_key_test_support::{KeyPairFx, ParentFx, WriteFx};
         use serde::Deserialize;
 
-        #[derive(Deserialize)]
-        struct KeyPairFx {
-            id: String,
-            secret: String,
-        }
-        #[derive(Deserialize)]
-        struct ParentFx {
-            #[serde(rename = "readKeyId")]
-            read_key_id: String,
-            #[serde(rename = "readKeySecret")]
-            read_key_secret: String,
-        }
-        #[derive(Deserialize)]
-        struct WriteFx {
-            field: String,
-            value: String,
-        }
         #[derive(Deserialize)]
         struct ExtendFx {
             #[allow(dead_code)]
