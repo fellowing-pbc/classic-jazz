@@ -180,9 +180,9 @@ struct TriggerWire {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RotateInputWire {
+pub(crate) struct RotateInputWire {
     trigger: TriggerWire,
-    group_id: String,
+    pub(crate) group_id: String,
     session_id: String,
     start_tx_index: u64,
     from_sealer_secret: String,
@@ -191,14 +191,31 @@ struct RotateInputWire {
     members: Vec<MemberWire>,
     write_only_fresh_keys: Vec<KeyPairWire>,
     parents: Vec<ParentWire>,
-    snapshot: serde_json::Value,
+    /// The materialized group CoMap snapshot. Optional on the wire: when omitted
+    /// (`null`) the caller (a `NodeCore` method) supplies the [`GroupKeyState`]
+    /// from its own already-materialized coMap view via
+    /// [`rotate_read_key_from_wire`], so the snapshot never has to be re-serialized
+    /// in TS and marshaled across the FFI boundary on every write.
+    #[serde(default)]
+    pub(crate) snapshot: serde_json::Value,
 }
 
 /// Wire wrapper for [`rotate_read_key`]. Returns
-/// `{ "skipped": bool, "writes": [...] }`.
+/// `{ "skipped": bool, "writes": [...] }`. Builds the [`GroupKeyState`] from the
+/// snapshot embedded in the input JSON.
 pub fn rotate_read_key_json(input_json: &str) -> Result<String, String> {
     let inp: RotateInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
     let state = GroupKeyState::from_snapshot(&inp.snapshot);
+    rotate_read_key_from_wire(&inp, &state)
+}
+
+/// Run [`rotate_read_key`] over an already-parsed wire input and an externally
+/// provided [`GroupKeyState`] (from a `NodeCore` coMap view). Returns
+/// `{ "skipped": bool, "writes": [...] }`.
+pub(crate) fn rotate_read_key_from_wire(
+    inp: &RotateInputWire,
+    state: &GroupKeyState,
+) -> Result<String, String> {
     let trigger = match inp.trigger.kind.as_str() {
         "rotate" => RotationTrigger::Rotate,
         "removeEveryone" => RotationTrigger::RemoveEveryone,
@@ -215,7 +232,7 @@ pub fn rotate_read_key_json(input_json: &str) -> Result<String, String> {
     let parents = to_parents(&inp.parents);
 
     let rotate_input = RotateReadKeyInput {
-        state: &state,
+        state,
         group_id: &inp.group_id,
         session_id: &inp.session_id,
         start_tx_index: inp.start_tx_index,
@@ -246,8 +263,8 @@ pub fn rotate_read_key_json(input_json: &str) -> Result<String, String> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AddMemberInputWire {
-    group_id: String,
+pub(crate) struct AddMemberInputWire {
+    pub(crate) group_id: String,
     session_id: String,
     start_tx_index: u64,
     member_key: String,
@@ -264,13 +281,25 @@ struct AddMemberInputWire {
     rotation_write_only_fresh_keys: Vec<KeyPairWire>,
     members: Vec<MemberWire>,
     parents: Vec<ParentWire>,
-    snapshot: serde_json::Value,
+    /// Optional on the wire — see [`RotateInputWire::snapshot`].
+    #[serde(default)]
+    pub(crate) snapshot: serde_json::Value,
 }
 
 /// Wire wrapper for [`add_member_internal`]. Returns a JSON array of writes.
+/// Builds the [`GroupKeyState`] from the snapshot embedded in the input JSON.
 pub fn add_member_internal_json(input_json: &str) -> Result<String, String> {
     let inp: AddMemberInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
     let state = GroupKeyState::from_snapshot(&inp.snapshot);
+    add_member_internal_from_wire(&inp, &state)
+}
+
+/// Run [`add_member_internal`] over an already-parsed wire input and an
+/// externally provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+pub(crate) fn add_member_internal_from_wire(
+    inp: &AddMemberInputWire,
+    state: &GroupKeyState,
+) -> Result<String, String> {
     let role = parse_role(&inp.role)?;
     let members = to_members(&inp.members);
     let parents = to_parents(&inp.parents);
@@ -283,7 +312,7 @@ pub fn add_member_internal_json(input_json: &str) -> Result<String, String> {
         .map(KeyPairWire::to_key_pair);
 
     let input = AddMemberInput {
-        state: &state,
+        state,
         group_id: &inp.group_id,
         session_id: &inp.session_id,
         start_tx_index: inp.start_tx_index,
@@ -309,8 +338,8 @@ pub fn add_member_internal_json(input_json: &str) -> Result<String, String> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct EveryoneWriteOnlyInputWire {
-    group_id: String,
+pub(crate) struct EveryoneWriteOnlyInputWire {
+    pub(crate) group_id: String,
     session_id: String,
     start_tx_index: u64,
     from_sealer_secret: String,
@@ -321,15 +350,27 @@ struct EveryoneWriteOnlyInputWire {
     rotation_write_only_fresh_keys: Vec<KeyPairWire>,
     members: Vec<MemberWire>,
     parents: Vec<ParentWire>,
-    snapshot: serde_json::Value,
+    /// Optional on the wire — see [`RotateInputWire::snapshot`].
+    #[serde(default)]
+    pub(crate) snapshot: serde_json::Value,
 }
 
 /// Wire wrapper for [`add_everyone_write_only`]. Returns a JSON array of
-/// mutations `[{ "op": "set"|"del", "field", "value"? }, …]`.
+/// mutations `[{ "op": "set"|"del", "field", "value"? }, …]`. Builds the
+/// [`GroupKeyState`] from the snapshot embedded in the input JSON.
 pub fn add_everyone_write_only_json(input_json: &str) -> Result<String, String> {
     let inp: EveryoneWriteOnlyInputWire =
         serde_json::from_str(input_json).map_err(|e| e.to_string())?;
     let state = GroupKeyState::from_snapshot(&inp.snapshot);
+    add_everyone_write_only_from_wire(&inp, &state)
+}
+
+/// Run [`add_everyone_write_only`] over an already-parsed wire input and an
+/// externally provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+pub(crate) fn add_everyone_write_only_from_wire(
+    inp: &EveryoneWriteOnlyInputWire,
+    state: &GroupKeyState,
+) -> Result<String, String> {
     let members = to_members(&inp.members);
     let parents = to_parents(&inp.parents);
     let rotation_wo = to_keys(&inp.rotation_write_only_fresh_keys);
@@ -339,7 +380,7 @@ pub fn add_everyone_write_only_json(input_json: &str) -> Result<String, String> 
         .map(KeyPairWire::to_key_pair);
 
     let input = EveryoneWriteOnlyInput {
-        state: &state,
+        state,
         group_id: &inp.group_id,
         session_id: &inp.session_id,
         start_tx_index: inp.start_tx_index,
@@ -361,10 +402,10 @@ pub fn add_everyone_write_only_json(input_json: &str) -> Result<String, String> 
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RemoveMemberInputWire {
+pub(crate) struct RemoveMemberInputWire {
     member_key: String,
     caller_is_admin_or_manager: bool,
-    group_id: String,
+    pub(crate) group_id: String,
     session_id: String,
     start_tx_index: u64,
     from_sealer_secret: String,
@@ -373,21 +414,33 @@ struct RemoveMemberInputWire {
     members: Vec<MemberWire>,
     write_only_fresh_keys: Vec<KeyPairWire>,
     parents: Vec<ParentWire>,
-    snapshot: serde_json::Value,
+    /// Optional on the wire — see [`RotateInputWire::snapshot`].
+    #[serde(default)]
+    pub(crate) snapshot: serde_json::Value,
 }
 
 /// Wire wrapper for [`remove_member`]. The rotation trigger is always
 /// `RemoveMember(member_key)` (as in `RawGroup.removeMember`). Returns a JSON
-/// array of writes.
+/// array of writes. Builds the [`GroupKeyState`] from the snapshot embedded in
+/// the input JSON.
 pub fn remove_member_json(input_json: &str) -> Result<String, String> {
     let inp: RemoveMemberInputWire = serde_json::from_str(input_json).map_err(|e| e.to_string())?;
     let state = GroupKeyState::from_snapshot(&inp.snapshot);
+    remove_member_from_wire(&inp, &state)
+}
+
+/// Run [`remove_member`] over an already-parsed wire input and an externally
+/// provided [`GroupKeyState`] (from a `NodeCore` coMap view).
+pub(crate) fn remove_member_from_wire(
+    inp: &RemoveMemberInputWire,
+    state: &GroupKeyState,
+) -> Result<String, String> {
     let members = to_members(&inp.members);
     let wo = to_keys(&inp.write_only_fresh_keys);
     let parents = to_parents(&inp.parents);
 
     let rotate_input = RotateReadKeyInput {
-        state: &state,
+        state,
         group_id: &inp.group_id,
         session_id: &inp.session_id,
         start_tx_index: inp.start_tx_index,

@@ -790,6 +790,71 @@ impl NodeCore {
         Ok(GroupKeyState::from_snapshot(&snapshot))
     }
 
+    // === group key-management write path (native snapshot lookup) ===
+    //
+    // These four methods are the NodeCore-resident entry points for the group
+    // key-management write FFI. Unlike the stateless
+    // [`crate::core::group_key_ffi`] `*_json` functions — which require the caller
+    // to embed a full materialized-group snapshot in the input JSON — these look
+    // the [`GroupKeyState`] up from this node's OWN already-materialized coMap view
+    // (via [`NodeCore::group_key_state`]) whenever the input omits `snapshot`
+    // (`null`). That lets `group.ts` skip re-serializing the group's whole CoMap
+    // (an O(fields) cost per write, O(n^2) over a long rotation run) and marshaling
+    // it across the FFI boundary on every key-management write. If the input DOES
+    // carry a snapshot (the coMap-materialization-off fallback), it is honored
+    // as-is, so behavior is identical to the stateless functions in that mode.
+
+    /// [`crate::core::group_key_ffi::rotate_read_key_json`] with the group state
+    /// sourced from this node's coMap view when the input omits `snapshot`.
+    pub fn group_rotate_read_key(&mut self, input_json: &str) -> Result<String, String> {
+        let inp: crate::core::group_key_ffi::RotateInputWire =
+            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
+        crate::core::group_key_ffi::rotate_read_key_from_wire(&inp, &state)
+    }
+
+    /// [`crate::core::group_key_ffi::add_member_internal_json`] with the group
+    /// state sourced from this node's coMap view when the input omits `snapshot`.
+    pub fn group_add_member_internal(&mut self, input_json: &str) -> Result<String, String> {
+        let inp: crate::core::group_key_ffi::AddMemberInputWire =
+            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
+        crate::core::group_key_ffi::add_member_internal_from_wire(&inp, &state)
+    }
+
+    /// [`crate::core::group_key_ffi::add_everyone_write_only_json`] with the group
+    /// state sourced from this node's coMap view when the input omits `snapshot`.
+    pub fn group_add_everyone_write_only(&mut self, input_json: &str) -> Result<String, String> {
+        let inp: crate::core::group_key_ffi::EveryoneWriteOnlyInputWire =
+            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
+        crate::core::group_key_ffi::add_everyone_write_only_from_wire(&inp, &state)
+    }
+
+    /// [`crate::core::group_key_ffi::remove_member_json`] with the group state
+    /// sourced from this node's coMap view when the input omits `snapshot`.
+    pub fn group_remove_member(&mut self, input_json: &str) -> Result<String, String> {
+        let inp: crate::core::group_key_ffi::RemoveMemberInputWire =
+            serde_json::from_str(input_json).map_err(|e| e.to_string())?;
+        let state = self.resolve_group_key_state(&inp.group_id, &inp.snapshot)?;
+        crate::core::group_key_ffi::remove_member_from_wire(&inp, &state)
+    }
+
+    /// Build the [`GroupKeyState`] for a group-key write: from `snapshot` when the
+    /// caller provided one (a non-null JSON object), otherwise from this node's own
+    /// materialized coMap view for `group_id`.
+    fn resolve_group_key_state(
+        &mut self,
+        group_id: &str,
+        snapshot: &serde_json::Value,
+    ) -> Result<GroupKeyState, String> {
+        if snapshot.is_null() {
+            self.group_key_state(group_id, &[]).map_err(|e| e.to_string())
+        } else {
+            Ok(GroupKeyState::from_snapshot(snapshot))
+        }
+    }
+
     /// SHADOW-ONLY native content decision. Delegates to
     /// [`SessionMapImpl::content_to_send`] for `co_id`, parsing the optional
     /// peer known-state JSON (`{id, header, sessions}`) the TS sync layer would

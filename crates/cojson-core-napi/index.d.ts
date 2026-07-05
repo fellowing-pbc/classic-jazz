@@ -132,6 +132,13 @@ export declare class NodeCore {
    */
   mapDeltaRich(coId: string, sinceVersion: number): string
   /**
+   * Boundary (batch): materialize MANY coMap views and return ALL their rich
+   * deltas in ONE FFI crossing. Mirrors `mapMaterialize` + `mapDeltaRich` run
+   * per covalue, but amortizes the boundary over the whole `$each` child set.
+   * See `NodeCore::map_materialize_batch_json` for the wire shape.
+   */
+  mapMaterializeBatch(inputJson: string): string
+  /**
    * Boundary (c-lazy): the full ordered `MapOp[]` for a SINGLE key as a JSON
    * array string (`[]` if absent). The lazy per-key counterpart to
    * `mapDeltaRich`: a TS `RawCoMap` pulls this ONLY when a rich accessor first
@@ -210,6 +217,10 @@ export declare class NodeCore {
   hasKeySecret(keyId: string): boolean
   /** The `KeyID`s `co_id`'s materialized view still needs a secret for. */
   missingKeyIds(coId: string): Array<string>
+  groupRotateReadKey(inputJson: string): string
+  groupAddMemberInternal(inputJson: string): string
+  groupAddEveryoneWriteOnly(inputJson: string): string
+  groupRemoveMember(inputJson: string): string
 }
 
 export declare class SessionMap {
@@ -493,6 +504,12 @@ export interface PendingTx {
   metaJson?: string
   sourceTxId?: SourceTxId
 }
+
+/**
+ * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
+ * `SessionWritePlan` JSON.
+ */
+export declare function planSessionWrite(inputJson: string): string
 
 /**
  * NAPI-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.

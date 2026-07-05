@@ -1221,6 +1221,45 @@ impl NodeCore {
   pub fn missing_key_ids(&self, co_id: String) -> Vec<String> {
     self.internal.missing_key_ids(&co_id)
   }
+
+  // === group key-management write path (native snapshot lookup) ===
+  //
+  // NodeCore-resident counterparts of the module-level `groupRotateReadKey` etc.
+  // functions below. These source the group's key state from THIS node's own
+  // materialized coMap view when the input omits `snapshot`, so `group.ts` need
+  // not re-serialize the whole group CoMap on every key-management write.
+
+  #[napi(js_name = "groupRotateReadKey")]
+  pub fn group_rotate_read_key(&mut self, input_json: String) -> napi::Result<String> {
+    self
+      .internal
+      .group_rotate_read_key(&input_json)
+      .map_err(to_napi_err)
+  }
+
+  #[napi(js_name = "groupAddMemberInternal")]
+  pub fn group_add_member_internal(&mut self, input_json: String) -> napi::Result<String> {
+    self
+      .internal
+      .group_add_member_internal(&input_json)
+      .map_err(to_napi_err)
+  }
+
+  #[napi(js_name = "groupAddEveryoneWriteOnly")]
+  pub fn group_add_everyone_write_only(&mut self, input_json: String) -> napi::Result<String> {
+    self
+      .internal
+      .group_add_everyone_write_only(&input_json)
+      .map_err(to_napi_err)
+  }
+
+  #[napi(js_name = "groupRemoveMember")]
+  pub fn group_remove_member(&mut self, input_json: String) -> napi::Result<String> {
+    self
+      .internal
+      .group_remove_member(&input_json)
+      .map_err(to_napi_err)
+  }
 }
 
 // ============================================================================

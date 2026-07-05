@@ -30,8 +30,6 @@ const encodeString = (typeof cachedTextEncoder.encodeInto === 'function'
 
 function passStringToWasm0(arg, malloc, realloc) {
 
-    if (typeof(arg) !== 'string') throw new Error(`expected a string argument, found ${typeof(arg)}`);
-
     if (realloc === undefined) {
         const buf = cachedTextEncoder.encode(arg);
         const ptr = malloc(buf.length, 1) >>> 0;
@@ -60,7 +58,7 @@ function passStringToWasm0(arg, malloc, realloc) {
         ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
         const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
         const ret = encodeString(arg, view);
-        if (ret.read !== arg.length) throw new Error('failed to pass whole string');
+
         offset += ret.written;
         ptr = realloc(ptr, len, offset, 1) >>> 0;
     }
@@ -78,22 +76,6 @@ function getDataViewMemory0() {
     return cachedDataViewMemory0;
 }
 
-function logError(f, args) {
-    try {
-        return f.apply(this, args);
-    } catch (e) {
-        let error = (function () {
-            try {
-                return e instanceof Error ? `${e.message}\n\nStack:\n${e.stack}` : e.toString();
-            } catch(_) {
-                return "<failed to stringify thrown value>";
-            }
-        }());
-        console.error("wasm-bindgen: imported JS function that was not marked as `catch` threw an error:", error);
-        throw e;
-    }
-}
-
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();
     wasm.__wbindgen_export_4.set(idx, obj);
@@ -109,12 +91,6 @@ function handleError(f, args) {
     }
 }
 
-function _assertBoolean(n) {
-    if (typeof(n) !== 'boolean') {
-        throw new Error(`expected a boolean argument, found ${typeof(n)}`);
-    }
-}
-
 const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
 
 if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
@@ -122,10 +98,6 @@ if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
 function getStringFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
-}
-
-function _assertNum(n) {
-    if (typeof(n) !== 'number') throw new Error(`expected a number argument, found ${typeof(n)}`);
 }
 
 function isLikeNone(x) {
@@ -197,11 +169,15 @@ function debugString(val) {
     return className;
 }
 
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_4.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
 }
 
 function takeFromExternrefTable0(idx) {
@@ -209,6 +185,658 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function groupRotateReadKey(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.groupRotateReadKey(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function groupAddMemberInternal(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.groupAddMemberInternal(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+export function init() {
+    wasm.init();
+}
+
+/**
+ * Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
+ * write array.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function groupExtend(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.groupExtend(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Reproduce `RawGroup.removeMember` — JSON write array.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function groupRemoveMember(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.groupRemoveMember(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function groupAddEveryoneWriteOnly(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.groupAddEveryoneWriteOnly(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Reproduce `storeSingle`+`putNewTxs`'s per-session write decision — returns a
+ * `SessionWritePlan` JSON.
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function planSessionWrite(input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.planSessionWrite(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+/**
+ * WASM-exposed function to verify an Ed25519 signature.
+ * - `verifying_key`: 32 bytes of verifying key material
+ * - `message`: Raw bytes that were signed
+ * - `signature`: 64 bytes of signature material
+ * Returns true if signature is valid, false otherwise, or throws JsError if verification fails.
+ * @param {Uint8Array} verifying_key
+ * @param {Uint8Array} message
+ * @param {Uint8Array} signature
+ * @returns {boolean}
+ */
+export function ed25519Verify(verifying_key, message, signature) {
+    const ptr0 = passArray8ToWasm0(verifying_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(signature, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519Verify(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+/**
+ * WASM-exposed function to sign a message with an Ed25519 signing key.
+ * - `signing_key`: 32 bytes of signing key material
+ * - `message`: Raw bytes to sign
+ * Returns 64 bytes of signature material or throws JsError if signing fails.
+ * @param {Uint8Array} signing_key
+ * @param {Uint8Array} message
+ * @returns {Uint8Array}
+ */
+export function ed25519SigningKeySign(signing_key, message) {
+    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519SigningKeySign(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * WASM-exposed function to validate and copy Ed25519 signing key bytes.
+ * - `bytes`: 32 bytes of signing key material to validate
+ * Returns the same 32 bytes if valid or throws JsError if invalid.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function ed25519SigningKeyFromBytes(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519SigningKeyFromBytes(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * WASM-exposed function to sign a message using Ed25519.
+ * - `signing_key`: 32 bytes of signing key material
+ * - `message`: Raw bytes to sign
+ * Returns 64 bytes of signature material or throws JsError if signing fails.
+ * @param {Uint8Array} signing_key
+ * @param {Uint8Array} message
+ * @returns {Uint8Array}
+ */
+export function ed25519Sign(signing_key, message) {
+    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519Sign(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * WASM-exposed function to validate and copy Ed25519 signature bytes.
+ * - `bytes`: 64 bytes of signature material to validate
+ * Returns the same 64 bytes if valid or throws JsError if invalid.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function ed25519SignatureFromBytes(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519SignatureFromBytes(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * WASM-exposed function to validate and copy Ed25519 verifying key bytes.
+ * - `bytes`: 32 bytes of verifying key material to validate
+ * Returns the same 32 bytes if valid or throws JsError if invalid.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function ed25519VerifyingKeyFromBytes(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519VerifyingKeyFromBytes(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Generate a new Ed25519 signing key using secure random number generation.
+ * Returns 32 bytes of raw key material suitable for use with other Ed25519 functions.
+ * @returns {Uint8Array}
+ */
+export function newEd25519SigningKey() {
+    const ret = wasm.newEd25519SigningKey();
+    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v1;
+}
+
+/**
+ * WASM-exposed function to derive the public key from an Ed25519 signing key.
+ * - `signing_key`: 32 bytes of signing key material
+ * Returns 32 bytes of public key material or throws JsError if key is invalid.
+ * @param {Uint8Array} signing_key
+ * @returns {Uint8Array}
+ */
+export function ed25519SigningKeyToPublic(signing_key) {
+    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519SigningKeyToPublic(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * WASM-exposed function to derive an Ed25519 verifying key from a signing key.
+ * - `signing_key`: 32 bytes of signing key material
+ * Returns 32 bytes of verifying key material or throws JsError if key is invalid.
+ * @param {Uint8Array} signing_key
+ * @returns {Uint8Array}
+ */
+export function ed25519VerifyingKey(signing_key) {
+    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.ed25519VerifyingKey(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * WASM-exposed function for XSalsa20 decryption without authentication.
+ * - `key`: 32-byte key for decryption (must match encryption key)
+ * - `nonce_material`: Raw bytes used to generate a 24-byte nonce (must match encryption)
+ * - `ciphertext`: Encrypted bytes to decrypt
+ * Returns the decrypted bytes or throws a JsError if decryption fails.
+ * Note: This function does not provide authentication. Use decrypt_xsalsa20_poly1305 for authenticated decryption.
+ * @param {Uint8Array} key
+ * @param {Uint8Array} nonce_material
+ * @param {Uint8Array} ciphertext
+ * @returns {Uint8Array}
+ */
+export function decryptXsalsa20(key, nonce_material, ciphertext) {
+    const ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.decryptXsalsa20(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * WASM-exposed function for XSalsa20 encryption without authentication.
+ * - `key`: 32-byte key for encryption
+ * - `nonce_material`: Raw bytes used to generate a 24-byte nonce via BLAKE3
+ * - `plaintext`: Raw bytes to encrypt
+ * Returns the encrypted bytes or throws a JsError if encryption fails.
+ * Note: This function does not provide authentication. Use encrypt_xsalsa20_poly1305 for authenticated encryption.
+ * @param {Uint8Array} key
+ * @param {Uint8Array} nonce_material
+ * @param {Uint8Array} plaintext
+ * @returns {Uint8Array}
+ */
+export function encryptXsalsa20(key, nonce_material, plaintext) {
+    const ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(plaintext, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.encryptXsalsa20(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Hash data once using BLAKE3.
+ * - `data`: Raw bytes to hash
+ * Returns 32 bytes of hash output.
+ * This is the simplest way to compute a BLAKE3 hash of a single piece of data.
+ * @param {Uint8Array} data
+ * @returns {Uint8Array}
+ */
+export function blake3HashOnce(data) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.blake3HashOnce(ptr0, len0);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Generate a 24-byte nonce from input material using BLAKE3.
+ * - `nonce_material`: Raw bytes to derive the nonce from
+ * Returns 24 bytes suitable for use as a nonce in cryptographic operations.
+ * This function is deterministic - the same input will produce the same nonce.
+ * @param {Uint8Array} nonce_material
+ * @returns {Uint8Array}
+ */
+export function generateNonce(nonce_material) {
+    const ptr0 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.generateNonce(ptr0, len0);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Compute a short hash of a stable-stringified JSON value.
+ * The input should already be serialized using stableStringify on the JS side.
+ * Returns a string prefixed with "shortHash_z" followed by base58-encoded hash.
+ * @param {string} value
+ * @returns {string}
+ */
+export function shortHash(value) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(value, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.shortHash(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Hash data once using BLAKE3 with a context prefix.
+ * - `data`: Raw bytes to hash
+ * - `context`: Context bytes to prefix to the data
+ * Returns 32 bytes of hash output.
+ * This is useful for domain separation - the same data hashed with different contexts will produce different outputs.
+ * @param {Uint8Array} data
+ * @param {Uint8Array} context
+ * @returns {Uint8Array}
+ */
+export function blake3HashOnceWithContext(data, context) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(context, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.blake3HashOnceWithContext(ptr0, len0, ptr1, len1);
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * WASM-exposed function to derive a sealer ID from a sealer secret.
+ * - `secret`: Raw bytes of the sealer secret
+ * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
+ * @param {Uint8Array} secret
+ * @returns {string}
+ */
+export function getSealerId(secret) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(secret, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.getSealerId(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Generate a new X25519 private key using secure random number generation.
+ * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
+ * This key can be reused for multiple Diffie-Hellman exchanges.
+ * @returns {Uint8Array}
+ */
+export function newX25519PrivateKey() {
+    const ret = wasm.newX25519PrivateKey();
+    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v1;
+}
+
+/**
+ * WASM-exposed function to derive an X25519 public key from a private key.
+ * - `private_key`: 32 bytes of private key material
+ * Returns 32 bytes of public key material or throws JsError if key is invalid.
+ * @param {Uint8Array} private_key
+ * @returns {Uint8Array}
+ */
+export function x25519PublicKey(private_key) {
+    const ptr0 = passArray8ToWasm0(private_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.x25519PublicKey(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
+ * - `private_key`: 32 bytes of private key material
+ * - `public_key`: 32 bytes of public key material
+ * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
+ * @param {Uint8Array} private_key
+ * @param {Uint8Array} public_key
+ * @returns {Uint8Array}
+ */
+export function x25519DiffieHellman(private_key, public_key) {
+    const ptr0 = passArray8ToWasm0(private_key, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(public_key, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.x25519DiffieHellman(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * WASM-exposed function to encrypt bytes with a key secret and nonce material.
+ * - `value`: The raw bytes to encrypt
+ * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce
+ * Returns the encrypted bytes or throws a JsError if encryption fails.
+ * @param {Uint8Array} value
+ * @param {string} key_secret
+ * @param {Uint8Array} nonce_material
+ * @returns {Uint8Array}
+ */
+export function encrypt(value, key_secret, nonce_material) {
+    const ptr0 = passArray8ToWasm0(value, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.encrypt(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * WASM-exposed function to decrypt bytes with a key secret and nonce material.
+ * - `ciphertext`: The encrypted bytes to decrypt
+ * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce (must match encryption)
+ * Returns the decrypted bytes or throws a JsError if decryption fails.
+ * @param {Uint8Array} ciphertext
+ * @param {string} key_secret
+ * @param {Uint8Array} nonce_material
+ * @returns {Uint8Array}
+ */
+export function decrypt(ciphertext, key_secret, nonce_material) {
+    const ptr0 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.decrypt(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * WASM-exposed function to sign a message using Ed25519.
+ * - `message`: Raw bytes to sign
+ * - `secret`: Raw Ed25519 signing key bytes
+ * Returns base58-encoded signature with "signature_z" prefix or throws JsError if signing fails.
+ * @param {Uint8Array} message
+ * @param {Uint8Array} secret
+ * @returns {string}
+ */
+export function sign(message, secret) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray8ToWasm0(secret, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.sign(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
 /**
  * WASM-exposed function to derive a signer ID from a signing key.
  * - `secret`: Raw Ed25519 signing key bytes
@@ -260,247 +888,6 @@ export function verify(signature, message, id) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ret[0] !== 0;
-}
-
-/**
- * WASM-exposed function to sign a message using Ed25519.
- * - `message`: Raw bytes to sign
- * - `secret`: Raw Ed25519 signing key bytes
- * Returns base58-encoded signature with "signature_z" prefix or throws JsError if signing fails.
- * @param {Uint8Array} message
- * @param {Uint8Array} secret
- * @returns {string}
- */
-export function sign(message, secret) {
-    let deferred4_0;
-    let deferred4_1;
-    try {
-        const ptr0 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ptr1 = passArray8ToWasm0(secret, wasm.__wbindgen_malloc);
-        const len1 = WASM_VECTOR_LEN;
-        const ret = wasm.sign(ptr0, len0, ptr1, len1);
-        var ptr3 = ret[0];
-        var len3 = ret[1];
-        if (ret[3]) {
-            ptr3 = 0; len3 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred4_0 = ptr3;
-        deferred4_1 = len3;
-        return getStringFromWasm0(ptr3, len3);
-    } finally {
-        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
-    }
-}
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_4.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
-/**
- * Reproduce `addMember(everyone, "writeOnly")` — JSON `[{ op, field, value? }]`.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupAddEveryoneWriteOnly(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupAddEveryoneWriteOnly(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `RawGroup.extend` (standard/account-member parent path) — JSON
- * write array.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupExtend(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupExtend(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `RawGroup.addMemberInternal` (add/createInvite) — JSON write array.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupAddMemberInternal(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupAddMemberInternal(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Reproduce `RawGroup.removeMember` — JSON write array.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupRemoveMember(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupRemoveMember(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-export function init() {
-    wasm.init();
-}
-
-/**
- * Reproduce `RawGroup.rotateReadKey` — returns `{ skipped, writes }` JSON.
- * @param {string} input_json
- * @returns {string}
- */
-export function groupRotateReadKey(input_json) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.groupRotateReadKey(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-function getArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-/**
- * WASM-exposed function for unsealing a message sealed for a group (anonymous box pattern).
- * Extracts the ephemeral public key and decrypts the message.
- * - `sealed_message`: ephemeral_public_key (32 bytes) || ciphertext
- * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
- * Returns unsealed bytes or throws JsError if unsealing fails.
- * @param {Uint8Array} sealed_message
- * @param {string} recipient_secret
- * @param {Uint8Array} nonce_material
- * @returns {Uint8Array}
- */
-export function unsealForGroup(sealed_message, recipient_secret, nonce_material) {
-    const ptr0 = passArray8ToWasm0(sealed_message, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(recipient_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.unsealForGroup(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v4;
-}
-
-/**
- * WASM-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.
- * Provides authenticated encryption with perfect forward secrecy.
- * - `message`: Raw bytes to seal
- * - `sender_secret`: Base58-encoded sender's private key with "sealerSecret_z" prefix
- * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce
- * Returns sealed bytes or throws JsError if sealing fails.
- * @param {Uint8Array} message
- * @param {string} sender_secret
- * @param {string} recipient_id
- * @param {Uint8Array} nonce_material
- * @returns {Uint8Array}
- */
-export function seal(message, sender_secret, recipient_id, nonce_material) {
-    const ptr0 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(sender_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(recipient_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.seal(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v5;
 }
 
 /**
@@ -564,451 +951,63 @@ export function sealForGroup(message, recipient_id, nonce_material) {
 }
 
 /**
- * WASM-exposed function for XSalsa20 decryption without authentication.
- * - `key`: 32-byte key for decryption (must match encryption key)
- * - `nonce_material`: Raw bytes used to generate a 24-byte nonce (must match encryption)
- * - `ciphertext`: Encrypted bytes to decrypt
- * Returns the decrypted bytes or throws a JsError if decryption fails.
- * Note: This function does not provide authentication. Use decrypt_xsalsa20_poly1305 for authenticated decryption.
- * @param {Uint8Array} key
- * @param {Uint8Array} nonce_material
- * @param {Uint8Array} ciphertext
- * @returns {Uint8Array}
- */
-export function decryptXsalsa20(key, nonce_material, ciphertext) {
-    const ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.decryptXsalsa20(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v4;
-}
-
-/**
- * WASM-exposed function for XSalsa20 encryption without authentication.
- * - `key`: 32-byte key for encryption
- * - `nonce_material`: Raw bytes used to generate a 24-byte nonce via BLAKE3
- * - `plaintext`: Raw bytes to encrypt
- * Returns the encrypted bytes or throws a JsError if encryption fails.
- * Note: This function does not provide authentication. Use encrypt_xsalsa20_poly1305 for authenticated encryption.
- * @param {Uint8Array} key
- * @param {Uint8Array} nonce_material
- * @param {Uint8Array} plaintext
- * @returns {Uint8Array}
- */
-export function encryptXsalsa20(key, nonce_material, plaintext) {
-    const ptr0 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(plaintext, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.encryptXsalsa20(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v4;
-}
-
-/**
- * Generate a new X25519 private key using secure random number generation.
- * Returns 32 bytes of raw key material suitable for use with other X25519 functions.
- * This key can be reused for multiple Diffie-Hellman exchanges.
- * @returns {Uint8Array}
- */
-export function newX25519PrivateKey() {
-    const ret = wasm.newX25519PrivateKey();
-    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v1;
-}
-
-/**
- * WASM-exposed function to derive a sealer ID from a sealer secret.
- * - `secret`: Raw bytes of the sealer secret
- * Returns a base58-encoded sealer ID with "sealer_z" prefix or throws JsError if derivation fails.
- * @param {Uint8Array} secret
- * @returns {string}
- */
-export function getSealerId(secret) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const ptr0 = passArray8ToWasm0(secret, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.getSealerId(ptr0, len0);
-        var ptr2 = ret[0];
-        var len2 = ret[1];
-        if (ret[3]) {
-            ptr2 = 0; len2 = 0;
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        deferred3_0 = ptr2;
-        deferred3_1 = len2;
-        return getStringFromWasm0(ptr2, len2);
-    } finally {
-        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * WASM-exposed function to perform X25519 Diffie-Hellman key exchange.
- * - `private_key`: 32 bytes of private key material
- * - `public_key`: 32 bytes of public key material
- * Returns 32 bytes of shared secret material or throws JsError if key exchange fails.
- * @param {Uint8Array} private_key
- * @param {Uint8Array} public_key
- * @returns {Uint8Array}
- */
-export function x25519DiffieHellman(private_key, public_key) {
-    const ptr0 = passArray8ToWasm0(private_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(public_key, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.x25519DiffieHellman(ptr0, len0, ptr1, len1);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v3;
-}
-
-/**
- * WASM-exposed function to derive an X25519 public key from a private key.
- * - `private_key`: 32 bytes of private key material
- * Returns 32 bytes of public key material or throws JsError if key is invalid.
- * @param {Uint8Array} private_key
- * @returns {Uint8Array}
- */
-export function x25519PublicKey(private_key) {
-    const ptr0 = passArray8ToWasm0(private_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.x25519PublicKey(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Generate a new Ed25519 signing key using secure random number generation.
- * Returns 32 bytes of raw key material suitable for use with other Ed25519 functions.
- * @returns {Uint8Array}
- */
-export function newEd25519SigningKey() {
-    const ret = wasm.newEd25519SigningKey();
-    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v1;
-}
-
-/**
- * WASM-exposed function to validate and copy Ed25519 signature bytes.
- * - `bytes`: 64 bytes of signature material to validate
- * Returns the same 64 bytes if valid or throws JsError if invalid.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-export function ed25519SignatureFromBytes(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519SignatureFromBytes(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * WASM-exposed function to derive the public key from an Ed25519 signing key.
- * - `signing_key`: 32 bytes of signing key material
- * Returns 32 bytes of public key material or throws JsError if key is invalid.
- * @param {Uint8Array} signing_key
- * @returns {Uint8Array}
- */
-export function ed25519SigningKeyToPublic(signing_key) {
-    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519SigningKeyToPublic(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * WASM-exposed function to derive an Ed25519 verifying key from a signing key.
- * - `signing_key`: 32 bytes of signing key material
- * Returns 32 bytes of verifying key material or throws JsError if key is invalid.
- * @param {Uint8Array} signing_key
- * @returns {Uint8Array}
- */
-export function ed25519VerifyingKey(signing_key) {
-    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519VerifyingKey(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * WASM-exposed function to sign a message with an Ed25519 signing key.
- * - `signing_key`: 32 bytes of signing key material
- * - `message`: Raw bytes to sign
- * Returns 64 bytes of signature material or throws JsError if signing fails.
- * @param {Uint8Array} signing_key
- * @param {Uint8Array} message
- * @returns {Uint8Array}
- */
-export function ed25519SigningKeySign(signing_key, message) {
-    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519SigningKeySign(ptr0, len0, ptr1, len1);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v3;
-}
-
-/**
- * WASM-exposed function to validate and copy Ed25519 signing key bytes.
- * - `bytes`: 32 bytes of signing key material to validate
- * Returns the same 32 bytes if valid or throws JsError if invalid.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-export function ed25519SigningKeyFromBytes(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519SigningKeyFromBytes(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * WASM-exposed function to validate and copy Ed25519 verifying key bytes.
- * - `bytes`: 32 bytes of verifying key material to validate
- * Returns the same 32 bytes if valid or throws JsError if invalid.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-export function ed25519VerifyingKeyFromBytes(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519VerifyingKeyFromBytes(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * WASM-exposed function to verify an Ed25519 signature.
- * - `verifying_key`: 32 bytes of verifying key material
- * - `message`: Raw bytes that were signed
- * - `signature`: 64 bytes of signature material
- * Returns true if signature is valid, false otherwise, or throws JsError if verification fails.
- * @param {Uint8Array} verifying_key
- * @param {Uint8Array} message
- * @param {Uint8Array} signature
- * @returns {boolean}
- */
-export function ed25519Verify(verifying_key, message, signature) {
-    const ptr0 = passArray8ToWasm0(verifying_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(signature, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519Verify(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return ret[0] !== 0;
-}
-
-/**
- * WASM-exposed function to sign a message using Ed25519.
- * - `signing_key`: 32 bytes of signing key material
- * - `message`: Raw bytes to sign
- * Returns 64 bytes of signature material or throws JsError if signing fails.
- * @param {Uint8Array} signing_key
- * @param {Uint8Array} message
- * @returns {Uint8Array}
- */
-export function ed25519Sign(signing_key, message) {
-    const ptr0 = passArray8ToWasm0(signing_key, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.ed25519Sign(ptr0, len0, ptr1, len1);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v3;
-}
-
-/**
- * WASM-exposed function to decrypt bytes with a key secret and nonce material.
- * - `ciphertext`: The encrypted bytes to decrypt
- * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
- * - `nonce_material`: Raw bytes used to generate the nonce (must match encryption)
- * Returns the decrypted bytes or throws a JsError if decryption fails.
- * @param {Uint8Array} ciphertext
- * @param {string} key_secret
- * @param {Uint8Array} nonce_material
- * @returns {Uint8Array}
- */
-export function decrypt(ciphertext, key_secret, nonce_material) {
-    const ptr0 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.decrypt(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v4;
-}
-
-/**
- * WASM-exposed function to encrypt bytes with a key secret and nonce material.
- * - `value`: The raw bytes to encrypt
- * - `key_secret`: A base58-encoded key secret with "keySecret_z" prefix
+ * WASM-exposed function for sealing a message using X25519 + XSalsa20-Poly1305.
+ * Provides authenticated encryption with perfect forward secrecy.
+ * - `message`: Raw bytes to seal
+ * - `sender_secret`: Base58-encoded sender's private key with "sealerSecret_z" prefix
+ * - `recipient_id`: Base58-encoded recipient's public key with "sealer_z" prefix
  * - `nonce_material`: Raw bytes used to generate the nonce
- * Returns the encrypted bytes or throws a JsError if encryption fails.
- * @param {Uint8Array} value
- * @param {string} key_secret
+ * Returns sealed bytes or throws JsError if sealing fails.
+ * @param {Uint8Array} message
+ * @param {string} sender_secret
+ * @param {string} recipient_id
  * @param {Uint8Array} nonce_material
  * @returns {Uint8Array}
  */
-export function encrypt(value, key_secret, nonce_material) {
-    const ptr0 = passArray8ToWasm0(value, wasm.__wbindgen_malloc);
+export function seal(message, sender_secret, recipient_id, nonce_material) {
+    const ptr0 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const ptr1 = passStringToWasm0(sender_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(recipient_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.seal(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * WASM-exposed function for unsealing a message sealed for a group (anonymous box pattern).
+ * Extracts the ephemeral public key and decrypts the message.
+ * - `sealed_message`: ephemeral_public_key (32 bytes) || ciphertext
+ * - `recipient_secret`: Base58-encoded recipient's private key with "sealerSecret_z" prefix
+ * - `nonce_material`: Raw bytes used to generate the nonce (must match sealing)
+ * Returns unsealed bytes or throws JsError if unsealing fails.
+ * @param {Uint8Array} sealed_message
+ * @param {string} recipient_secret
+ * @param {Uint8Array} nonce_material
+ * @returns {Uint8Array}
+ */
+export function unsealForGroup(sealed_message, recipient_secret, nonce_material) {
+    const ptr0 = passArray8ToWasm0(sealed_message, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(recipient_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.encrypt(ptr0, len0, ptr1, len1, ptr2, len2);
+    const ret = wasm.unsealForGroup(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
     var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v4;
-}
-
-/**
- * Hash data once using BLAKE3.
- * - `data`: Raw bytes to hash
- * Returns 32 bytes of hash output.
- * This is the simplest way to compute a BLAKE3 hash of a single piece of data.
- * @param {Uint8Array} data
- * @returns {Uint8Array}
- */
-export function blake3HashOnce(data) {
-    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.blake3HashOnce(ptr0, len0);
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Hash data once using BLAKE3 with a context prefix.
- * - `data`: Raw bytes to hash
- * - `context`: Context bytes to prefix to the data
- * Returns 32 bytes of hash output.
- * This is useful for domain separation - the same data hashed with different contexts will produce different outputs.
- * @param {Uint8Array} data
- * @param {Uint8Array} context
- * @returns {Uint8Array}
- */
-export function blake3HashOnceWithContext(data, context) {
-    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(context, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.blake3HashOnceWithContext(ptr0, len0, ptr1, len1);
-    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v3;
-}
-
-/**
- * Generate a 24-byte nonce from input material using BLAKE3.
- * - `nonce_material`: Raw bytes to derive the nonce from
- * Returns 24 bytes suitable for use as a nonce in cryptographic operations.
- * This function is deterministic - the same input will produce the same nonce.
- * @param {Uint8Array} nonce_material
- * @returns {Uint8Array}
- */
-export function generateNonce(nonce_material) {
-    const ptr0 = passArray8ToWasm0(nonce_material, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.generateNonce(ptr0, len0);
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Compute a short hash of a stable-stringified JSON value.
- * The input should already be serialized using stableStringify on the JS side.
- * Returns a string prefixed with "shortHash_z" followed by base58-encoded hash.
- * @param {string} value
- * @returns {string}
- */
-export function shortHash(value) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const ptr0 = passStringToWasm0(value, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.shortHash(ptr0, len0);
-        deferred2_0 = ret[0];
-        deferred2_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-    }
 }
 
 const Blake3HasherFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -1046,8 +1045,6 @@ export class Blake3Hasher {
      * @returns {Blake3Hasher}
      */
     clone() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.blake3hasher_clone(this.__wbg_ptr);
         return Blake3Hasher.__wrap(ret);
     }
@@ -1055,8 +1052,6 @@ export class Blake3Hasher {
      * @param {Uint8Array} data
      */
     update(data) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.blake3hasher_update(this.__wbg_ptr, ptr0, len0);
@@ -1065,8 +1060,6 @@ export class Blake3Hasher {
      * @returns {Uint8Array}
      */
     finalize() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.blake3hasher_finalize(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -1100,8 +1093,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_getHeader(this.__wbg_ptr, ptr0, len0);
@@ -1124,8 +1115,6 @@ export class NodeCore {
      * @returns {boolean}
      */
     isDeleted(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_isDeleted(this.__wbg_ptr, ptr0, len0);
@@ -1143,8 +1132,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_listDelta(this.__wbg_ptr, ptr0, len0, since_version);
@@ -1169,15 +1156,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     mapGetAt(co_id, key, at_time) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        if (!isLikeNone(at_time)) {
-            _assertNum(at_time);
-        }
         const ret = wasm.nodecore_mapGetAt(this.__wbg_ptr, ptr0, len0, ptr1, len1, !isLikeNone(at_time), isLikeNone(at_time) ? 0 : at_time);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -1194,8 +1176,6 @@ export class NodeCore {
      * @returns {boolean}
      */
     hasCoValue(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_hasCoValue(this.__wbg_ptr, ptr0, len0);
@@ -1207,8 +1187,6 @@ export class NodeCore {
      * @returns {boolean}
      */
     isStreaming(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_isStreaming(this.__wbg_ptr, ptr0, len0);
@@ -1225,8 +1203,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_listEntries(this.__wbg_ptr, ptr0, len0);
@@ -1252,8 +1228,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_mapSnapshot(this.__wbg_ptr, ptr0, len0);
@@ -1281,8 +1255,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_streamDelta(this.__wbg_ptr, ptr0, len0, since_version);
@@ -1307,8 +1279,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_listSnapshot(this.__wbg_ptr, ptr0, len0);
@@ -1329,8 +1299,6 @@ export class NodeCore {
      * @returns {number}
      */
     coValueCount() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.nodecore_coValueCount(this.__wbg_ptr);
         return ret >>> 0;
     }
@@ -1340,8 +1308,6 @@ export class NodeCore {
      * @returns {boolean}
      */
     hasKeySecret(key_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(key_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_hasKeySecret(this.__wbg_ptr, ptr0, len0);
@@ -1359,8 +1325,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_mapDeltaRich(this.__wbg_ptr, ptr0, len0, since_version);
@@ -1390,8 +1354,6 @@ export class NodeCore {
      * @returns {any}
      */
     contentToSend(co_id, known_state_json) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         var ptr1 = isLikeNone(known_state_json) ? 0 : passStringToWasm0(known_state_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1412,18 +1374,10 @@ export class NodeCore {
      * @param {boolean | null} [skip_verify]
      */
     createCoValue(co_id, header_json, max_tx_size, skip_verify) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(header_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        if (!isLikeNone(max_tx_size)) {
-            _assertNum(max_tx_size);
-        }
-        if (!isLikeNone(skip_verify)) {
-            _assertBoolean(skip_verify);
-        }
         const ret = wasm.nodecore_createCoValue(this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(max_tx_size) ? 0x100000001 : (max_tx_size) >>> 0, isLikeNone(skip_verify) ? 0xFFFFFF : skip_verify ? 1 : 0);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
@@ -1435,8 +1389,6 @@ export class NodeCore {
      * @returns {any}
      */
     getKnownState(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_getKnownState(this.__wbg_ptr, ptr0, len0);
@@ -1451,8 +1403,6 @@ export class NodeCore {
      * @returns {string[]}
      */
     getSessionIds(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_getSessionIds(this.__wbg_ptr, ptr0, len0);
@@ -1471,13 +1421,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     getTransaction(co_id, session_id, tx_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ret = wasm.nodecore_getTransaction(this.__wbg_ptr, ptr0, len0, ptr1, len1, tx_index);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -1498,8 +1445,6 @@ export class NodeCore {
      * @returns {number}
      */
     mapMaterialize(co_id, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_mapMaterialize(this.__wbg_ptr, ptr0, len0, pending);
@@ -1513,8 +1458,6 @@ export class NodeCore {
      * @param {string} co_id
      */
     markAsDeleted(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_markAsDeleted(this.__wbg_ptr, ptr0, len0);
@@ -1528,8 +1471,6 @@ export class NodeCore {
      * @returns {string[]}
      */
     missingKeyIds(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_missingKeyIds(this.__wbg_ptr, ptr0, len0);
@@ -1542,8 +1483,6 @@ export class NodeCore {
      * @returns {boolean}
      */
     removeCoValue(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_removeCoValue(this.__wbg_ptr, ptr0, len0);
@@ -1558,8 +1497,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_streamSnapshot(this.__wbg_ptr, ptr0, len0);
@@ -1586,8 +1523,6 @@ export class NodeCore {
      * @param {boolean} skip_verify
      */
     addTransactions(co_id, session_id, signer_id, transactions_json, signature, skip_verify) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1598,7 +1533,6 @@ export class NodeCore {
         const len3 = WASM_VECTOR_LEN;
         const ptr4 = passStringToWasm0(signature, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len4 = WASM_VECTOR_LEN;
-        _assertBoolean(skip_verify);
         const ret = wasm.nodecore_addTransactions(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, skip_verify);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
@@ -1610,8 +1544,6 @@ export class NodeCore {
      * @returns {number}
      */
     listMaterialize(co_id, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_listMaterialize(this.__wbg_ptr, ptr0, len0, pending);
@@ -1628,8 +1560,6 @@ export class NodeCore {
      * @param {string} co_id
      */
     resetValidation(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.nodecore_resetValidation(this.__wbg_ptr, ptr0, len0);
@@ -1641,8 +1571,6 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     getLastSignature(co_id, session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1664,8 +1592,6 @@ export class NodeCore {
      * @param {string} key_secret
      */
     provideKeySecret(key_id, key_secret) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(key_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1680,8 +1606,6 @@ export class NodeCore {
      * @returns {number}
      */
     streamMaterialize(co_id, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_streamMaterialize(this.__wbg_ptr, ptr0, len0, pending);
@@ -1699,13 +1623,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     decryptTransaction(co_id, session_id, tx_index, key_secret) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ptr2 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len2 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_decryptTransaction(this.__wbg_ptr, ptr0, len0, ptr1, len1, tx_index, ptr2, len2);
@@ -1727,13 +1648,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     getSignatureAfter(co_id, session_id, tx_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ret = wasm.nodecore_getSignatureAfter(this.__wbg_ptr, ptr0, len0, ptr1, len1, tx_index);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -1746,6 +1664,30 @@ export class NodeCore {
         return v3;
     }
     /**
+     * @param {string} input_json
+     * @returns {string}
+     */
+    groupRemoveMember(input_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_groupRemoveMember(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Frontier read: latest frontier-visible value of `key` (undefined =
      * absent). `frontier_json` is `{ sessionID: txCount }`.
      * @param {string} co_id
@@ -1754,8 +1696,6 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     mapGetAtFrontier(co_id, key, frontier_json) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1778,8 +1718,6 @@ export class NodeCore {
      * @returns {string[]}
      */
     listMissingKeyIds(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_listMissingKeyIds(this.__wbg_ptr, ptr0, len0);
@@ -1794,8 +1732,6 @@ export class NodeCore {
      * @returns {number}
      */
     getTransactionCount(co_id, session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1805,6 +1741,58 @@ export class NodeCore {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0];
+    }
+    /**
+     * @param {string} input_json
+     * @returns {string}
+     */
+    groupRotateReadKey(input_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_groupRotateReadKey(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Boundary (batch): materialize MANY coMap views and return ALL their rich
+     * deltas in ONE FFI crossing. Mirrors `mapMaterialize` + `mapDeltaRich` run
+     * per covalue, amortized over the whole `$each` child set. See
+     * `NodeCore::map_materialize_batch_json` for the wire shape.
+     * @param {string} input_json
+     * @returns {string}
+     */
+    mapMaterializeBatch(input_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_mapMaterializeBatch(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
     }
     /**
      * Validate a group/account CoValue; verdicts for ALL its transactions in
@@ -1818,8 +1806,6 @@ export class NodeCore {
      * @returns {any}
      */
     validateTransactions(co_id, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_validateTransactions(this.__wbg_ptr, ptr0, len0, pending);
@@ -1846,8 +1832,6 @@ export class NodeCore {
      * @returns {any}
      */
     ingestAndMaterialize(co_id, session_id, signer_id, transactions_json, signature, skip_verify, since_version, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1858,7 +1842,6 @@ export class NodeCore {
         const len3 = WASM_VECTOR_LEN;
         const ptr4 = passStringToWasm0(signature, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len4 = WASM_VECTOR_LEN;
-        _assertBoolean(skip_verify);
         const ret = wasm.nodecore_ingestAndMaterialize(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, skip_verify, since_version, pending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -1871,8 +1854,6 @@ export class NodeCore {
      * @returns {string[]}
      */
     streamMissingKeyIds(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_streamMissingKeyIds(this.__wbg_ptr, ptr0, len0);
@@ -1889,13 +1870,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     decryptTransactionMeta(co_id, session_id, tx_index, key_secret) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ptr2 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len2 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_decryptTransactionMeta(this.__wbg_ptr, ptr0, len0, ptr1, len1, tx_index, ptr2, len2);
@@ -1917,13 +1895,10 @@ export class NodeCore {
      * @returns {string[] | undefined}
      */
     getSessionTransactions(co_id, session_id, from_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        _assertNum(from_index);
         const ret = wasm.nodecore_getSessionTransactions(this.__wbg_ptr, ptr0, len0, ptr1, len1, from_index);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -1946,8 +1921,6 @@ export class NodeCore {
         let deferred4_0;
         let deferred4_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(frontier_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1967,13 +1940,35 @@ export class NodeCore {
         }
     }
     /**
+     * @param {string} input_json
+     * @returns {string}
+     */
+    groupAddMemberInternal(input_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_groupAddMemberInternal(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Set streaming known state
      * @param {string} co_id
      * @param {string} streaming_json
      */
     setStreamingKnownState(co_id, streaming_json) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(streaming_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -1994,8 +1989,6 @@ export class NodeCore {
         let deferred4_0;
         let deferred4_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(frontier_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2028,11 +2021,8 @@ export class NodeCore {
      * @returns {any}
      */
     validateTransactionsDelta(co_id, since_generation, since_count, pending) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(since_count);
         const ret = wasm.nodecore_validateTransactionsDelta(this.__wbg_ptr, ptr0, len0, since_generation, since_count, pending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -2056,8 +2046,6 @@ export class NodeCore {
         let deferred9_0;
         let deferred9_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2093,8 +2081,6 @@ export class NodeCore {
      * @returns {number | undefined}
      */
     getLastSignatureCheckpoint(co_id, session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2104,6 +2090,30 @@ export class NodeCore {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] === 0x100000001 ? undefined : ret[0];
+    }
+    /**
+     * @param {string} input_json
+     * @returns {string}
+     */
+    groupAddEveryoneWriteOnly(input_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.nodecore_groupAddEveryoneWriteOnly(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
     }
     /**
      * Create new trusting transaction (for local writes)
@@ -2120,8 +2130,6 @@ export class NodeCore {
         let deferred7_0;
         let deferred7_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2152,8 +2160,6 @@ export class NodeCore {
      * @returns {any}
      */
     getKnownStateWithStreaming(co_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.nodecore_getKnownStateWithStreaming(this.__wbg_ptr, ptr0, len0);
@@ -2178,8 +2184,6 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     mapGet(co_id, key) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2206,15 +2210,10 @@ export class NodeCore {
      * @returns {string | undefined}
      */
     roleOf(group_id, member, at_time) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(group_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(member, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        if (!isLikeNone(at_time)) {
-            _assertNum(at_time);
-        }
         const ret = wasm.nodecore_roleOf(this.__wbg_ptr, ptr0, len0, ptr1, len1, !isLikeNone(at_time), isLikeNone(at_time) ? 0 : at_time);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -2236,8 +2235,6 @@ export class NodeCore {
         let deferred3_0;
         let deferred3_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(co_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.nodecore_mapDelta(this.__wbg_ptr, ptr0, len0, since_version);
@@ -2281,8 +2278,6 @@ export class SessionMap {
         let deferred1_0;
         let deferred1_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ret = wasm.sessionmap_getHeader(this.__wbg_ptr);
             deferred1_0 = ret[0];
             deferred1_1 = ret[1];
@@ -2296,8 +2291,6 @@ export class SessionMap {
      * @returns {boolean}
      */
     isDeleted() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.sessionmap_isDeleted(this.__wbg_ptr);
         return ret !== 0;
     }
@@ -2306,8 +2299,6 @@ export class SessionMap {
      * @returns {boolean}
      */
     isStreaming() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.sessionmap_isStreaming(this.__wbg_ptr);
         return ret !== 0;
     }
@@ -2316,8 +2307,6 @@ export class SessionMap {
      * @returns {any}
      */
     getKnownState() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.sessionmap_getKnownState(this.__wbg_ptr);
         return ret;
     }
@@ -2326,8 +2315,6 @@ export class SessionMap {
      * @returns {string[]}
      */
     getSessionIds() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.sessionmap_getSessionIds(this.__wbg_ptr);
         var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
@@ -2340,11 +2327,8 @@ export class SessionMap {
      * @returns {string | undefined}
      */
     getTransaction(session_id, tx_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ret = wasm.sessionmap_getTransaction(this.__wbg_ptr, ptr0, len0, tx_index);
         let v2;
         if (ret[0] !== 0) {
@@ -2357,8 +2341,6 @@ export class SessionMap {
      * Mark this CoValue as deleted
      */
     markAsDeleted() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         wasm.sessionmap_markAsDeleted(this.__wbg_ptr);
     }
     /**
@@ -2370,8 +2352,6 @@ export class SessionMap {
      * @param {boolean} skip_verify
      */
     addTransactions(session_id, signer_id, transactions_json, signature, skip_verify) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         var ptr1 = isLikeNone(signer_id) ? 0 : passStringToWasm0(signer_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2380,7 +2360,6 @@ export class SessionMap {
         const len2 = WASM_VECTOR_LEN;
         const ptr3 = passStringToWasm0(signature, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len3 = WASM_VECTOR_LEN;
-        _assertBoolean(skip_verify);
         const ret = wasm.sessionmap_addTransactions(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, skip_verify);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
@@ -2392,8 +2371,6 @@ export class SessionMap {
      * @returns {string | undefined}
      */
     getLastSignature(session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_getLastSignature(this.__wbg_ptr, ptr0, len0);
@@ -2412,11 +2389,8 @@ export class SessionMap {
      * @returns {string | undefined}
      */
     decryptTransaction(session_id, tx_index, key_secret) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_decryptTransaction(this.__wbg_ptr, ptr0, len0, tx_index, ptr1, len1);
@@ -2437,11 +2411,8 @@ export class SessionMap {
      * @returns {string | undefined}
      */
     getSignatureAfter(session_id, tx_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ret = wasm.sessionmap_getSignatureAfter(this.__wbg_ptr, ptr0, len0, tx_index);
         let v2;
         if (ret[0] !== 0) {
@@ -2456,8 +2427,6 @@ export class SessionMap {
      * @returns {number}
      */
     getTransactionCount(session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_getTransactionCount(this.__wbg_ptr, ptr0, len0);
@@ -2471,11 +2440,8 @@ export class SessionMap {
      * @returns {string | undefined}
      */
     decryptTransactionMeta(session_id, tx_index, key_secret) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(tx_index);
         const ptr1 = passStringToWasm0(key_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_decryptTransactionMeta(this.__wbg_ptr, ptr0, len0, tx_index, ptr1, len1);
@@ -2496,11 +2462,8 @@ export class SessionMap {
      * @returns {string[] | undefined}
      */
     getSessionTransactions(session_id, from_index) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        _assertNum(from_index);
         const ret = wasm.sessionmap_getSessionTransactions(this.__wbg_ptr, ptr0, len0, from_index);
         let v2;
         if (ret[0] !== 0) {
@@ -2514,8 +2477,6 @@ export class SessionMap {
      * @param {string} streaming_json
      */
     setStreamingKnownState(streaming_json) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(streaming_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_setStreamingKnownState(this.__wbg_ptr, ptr0, len0);
@@ -2539,8 +2500,6 @@ export class SessionMap {
         let deferred8_0;
         let deferred8_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(signer_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2573,8 +2532,6 @@ export class SessionMap {
      * @returns {number | undefined}
      */
     getLastSignatureCheckpoint(session_id) {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.sessionmap_getLastSignatureCheckpoint(this.__wbg_ptr, ptr0, len0);
@@ -2594,8 +2551,6 @@ export class SessionMap {
         let deferred6_0;
         let deferred6_1;
         try {
-            if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-            _assertNum(this.__wbg_ptr);
             const ptr0 = passStringToWasm0(session_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(signer_secret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -2623,8 +2578,6 @@ export class SessionMap {
      * @returns {any}
      */
     getKnownStateWithStreaming() {
-        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
-        _assertNum(this.__wbg_ptr);
         const ret = wasm.sessionmap_getKnownStateWithStreaming(this.__wbg_ptr);
         return ret;
     }
@@ -2645,12 +2598,6 @@ export class SessionMap {
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(header_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        if (!isLikeNone(max_tx_size)) {
-            _assertNum(max_tx_size);
-        }
-        if (!isLikeNone(skip_verify)) {
-            _assertBoolean(skip_verify);
-        }
         const ret = wasm.sessionmap_new(ptr0, len0, ptr1, len1, isLikeNone(max_tx_size) ? 0x100000001 : (max_tx_size) >>> 0, isLikeNone(skip_verify) ? 0xFFFFFF : skip_verify ? 1 : 0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -2695,17 +2642,17 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
-    imports.wbg.__wbg_String_8f0eb39a4a4c2f66 = function() { return logError(function (arg0, arg1) {
+    imports.wbg.__wbg_String_8f0eb39a4a4c2f66 = function(arg0, arg1) {
         const ret = String(arg1);
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-    }, arguments) };
-    imports.wbg.__wbg_buffer_609cc3eee51ed158 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_buffer_609cc3eee51ed158 = function(arg0) {
         const ret = arg0.buffer;
         return ret;
-    }, arguments) };
+    };
     imports.wbg.__wbg_call_672a4d21634d4a24 = function() { return handleError(function (arg0, arg1) {
         const ret = arg0.call(arg1);
         return ret;
@@ -2714,19 +2661,18 @@ function __wbg_get_imports() {
         const ret = arg0.call(arg1, arg2);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_crypto_574e78ad8b13b65f = function() { return logError(function (arg0) {
+    imports.wbg.__wbg_crypto_574e78ad8b13b65f = function(arg0) {
         const ret = arg0.crypto;
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_done_769e5ede4b31c67b = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_done_769e5ede4b31c67b = function(arg0) {
         const ret = arg0.done;
-        _assertBoolean(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_dumpWasmPanic_a39b8272e193aa3d = function() { return logError(function (arg0, arg1) {
+    };
+    imports.wbg.__wbg_dumpWasmPanic_a39b8272e193aa3d = function(arg0, arg1) {
         dumpWasmPanic(getStringFromWasm0(arg0, arg1));
-    }, arguments) };
-    imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function() { return logError(function (arg0, arg1) {
+    };
+    imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function(arg0, arg1) {
         let deferred0_0;
         let deferred0_1;
         try {
@@ -2736,7 +2682,7 @@ function __wbg_get_imports() {
         } finally {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
-    }, arguments) };
+    };
     imports.wbg.__wbg_getRandomValues_b8f5dbd5f3995a9e = function() { return handleError(function (arg0, arg1) {
         arg0.getRandomValues(arg1);
     }, arguments) };
@@ -2744,15 +2690,15 @@ function __wbg_get_imports() {
         const ret = Reflect.get(arg0, arg1);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_get_b9b93047fe3cf45b = function() { return logError(function (arg0, arg1) {
+    imports.wbg.__wbg_get_b9b93047fe3cf45b = function(arg0, arg1) {
         const ret = arg0[arg1 >>> 0];
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_getwithrefkey_1dc361bd10053bfe = function() { return logError(function (arg0, arg1) {
+    };
+    imports.wbg.__wbg_getwithrefkey_1dc361bd10053bfe = function(arg0, arg1) {
         const ret = arg0[arg1];
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_instanceof_ArrayBuffer_e14585432e3737fc = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_instanceof_ArrayBuffer_e14585432e3737fc = function(arg0) {
         let result;
         try {
             result = arg0 instanceof ArrayBuffer;
@@ -2760,10 +2706,9 @@ function __wbg_get_imports() {
             result = false;
         }
         const ret = result;
-        _assertBoolean(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_instanceof_Uint8Array_17156bcf118086a9 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_instanceof_Uint8Array_17156bcf118086a9 = function(arg0) {
         let result;
         try {
             result = arg0 instanceof Uint8Array;
@@ -2771,85 +2716,80 @@ function __wbg_get_imports() {
             result = false;
         }
         const ret = result;
-        _assertBoolean(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_isArray_a1eab7e0d067391b = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_isArray_a1eab7e0d067391b = function(arg0) {
         const ret = Array.isArray(arg0);
-        _assertBoolean(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_isSafeInteger_343e2beeeece1bb0 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_isSafeInteger_343e2beeeece1bb0 = function(arg0) {
         const ret = Number.isSafeInteger(arg0);
-        _assertBoolean(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_iterator_9a24c88df860dc65 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_iterator_9a24c88df860dc65 = function() {
         const ret = Symbol.iterator;
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_length_a446193dc22c12f8 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
         const ret = arg0.length;
-        _assertNum(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_length_e2d2a49132c1b256 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_length_e2d2a49132c1b256 = function(arg0) {
         const ret = arg0.length;
-        _assertNum(ret);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_msCrypto_a61aeb35a24c1329 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_msCrypto_a61aeb35a24c1329 = function(arg0) {
         const ret = arg0.msCrypto;
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_new_405e22f390576ce2 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_new_405e22f390576ce2 = function() {
         const ret = new Object();
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_new_5e0be73521bc8c17 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_new_5e0be73521bc8c17 = function() {
         const ret = new Map();
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_new_78feb108b6472713 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_new_78feb108b6472713 = function() {
         const ret = new Array();
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
         const ret = new Error();
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_new_a12002a7f91c75be = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_new_a12002a7f91c75be = function(arg0) {
         const ret = new Uint8Array(arg0);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_newnoargs_105ed471475aaf50 = function() { return logError(function (arg0, arg1) {
+    };
+    imports.wbg.__wbg_newnoargs_105ed471475aaf50 = function(arg0, arg1) {
         const ret = new Function(getStringFromWasm0(arg0, arg1));
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function() { return logError(function (arg0, arg1, arg2) {
+    };
+    imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {
         const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_newwithlength_a381634e90c276d4 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_newwithlength_a381634e90c276d4 = function(arg0) {
         const ret = new Uint8Array(arg0 >>> 0);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_next_25feadfc0913fea9 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_next_25feadfc0913fea9 = function(arg0) {
         const ret = arg0.next;
         return ret;
-    }, arguments) };
+    };
     imports.wbg.__wbg_next_6574e1a8a62d1055 = function() { return handleError(function (arg0) {
         const ret = arg0.next();
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_node_905d3e251edff8a2 = function() { return logError(function (arg0) {
+    imports.wbg.__wbg_node_905d3e251edff8a2 = function(arg0) {
         const ret = arg0.node;
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_process_dc0fbacc7c1c06f7 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_process_dc0fbacc7c1c06f7 = function(arg0) {
         const ret = arg0.process;
         return ret;
-    }, arguments) };
+    };
     imports.wbg.__wbg_randomFillSync_ac0988aba3254290 = function() { return handleError(function (arg0, arg1) {
         arg0.randomFillSync(arg1);
     }, arguments) };
@@ -2857,54 +2797,54 @@ function __wbg_get_imports() {
         const ret = module.require;
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_set_37837023f3d740e8 = function() { return logError(function (arg0, arg1, arg2) {
+    imports.wbg.__wbg_set_37837023f3d740e8 = function(arg0, arg1, arg2) {
         arg0[arg1 >>> 0] = arg2;
-    }, arguments) };
-    imports.wbg.__wbg_set_3f1d0b984ed272ed = function() { return logError(function (arg0, arg1, arg2) {
+    };
+    imports.wbg.__wbg_set_3f1d0b984ed272ed = function(arg0, arg1, arg2) {
         arg0[arg1] = arg2;
-    }, arguments) };
-    imports.wbg.__wbg_set_65595bdd868b3009 = function() { return logError(function (arg0, arg1, arg2) {
+    };
+    imports.wbg.__wbg_set_65595bdd868b3009 = function(arg0, arg1, arg2) {
         arg0.set(arg1, arg2 >>> 0);
-    }, arguments) };
-    imports.wbg.__wbg_set_8fc6bf8a5b1071d1 = function() { return logError(function (arg0, arg1, arg2) {
+    };
+    imports.wbg.__wbg_set_8fc6bf8a5b1071d1 = function(arg0, arg1, arg2) {
         const ret = arg0.set(arg1, arg2);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_stack_0ed75d68575b0f3c = function() { return logError(function (arg0, arg1) {
+    };
+    imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
         const ret = arg1.stack;
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-    }, arguments) };
-    imports.wbg.__wbg_static_accessor_GLOBAL_88a902d13a557d07 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_static_accessor_GLOBAL_88a902d13a557d07 = function() {
         const ret = typeof global === 'undefined' ? null : global;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-    }, arguments) };
-    imports.wbg.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0 = function() {
         const ret = typeof globalThis === 'undefined' ? null : globalThis;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-    }, arguments) };
-    imports.wbg.__wbg_static_accessor_SELF_37c5d418e4bf5819 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_static_accessor_SELF_37c5d418e4bf5819 = function() {
         const ret = typeof self === 'undefined' ? null : self;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-    }, arguments) };
-    imports.wbg.__wbg_static_accessor_WINDOW_5de37043a91a9c40 = function() { return logError(function () {
+    };
+    imports.wbg.__wbg_static_accessor_WINDOW_5de37043a91a9c40 = function() {
         const ret = typeof window === 'undefined' ? null : window;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-    }, arguments) };
-    imports.wbg.__wbg_subarray_aa9065fa9dc5df96 = function() { return logError(function (arg0, arg1, arg2) {
+    };
+    imports.wbg.__wbg_subarray_aa9065fa9dc5df96 = function(arg0, arg1, arg2) {
         const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_value_cd1ffa7b1ab794f1 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_value_cd1ffa7b1ab794f1 = function(arg0) {
         const ret = arg0.value;
         return ret;
-    }, arguments) };
-    imports.wbg.__wbg_versions_c01dfd4722a88165 = function() { return logError(function (arg0) {
+    };
+    imports.wbg.__wbg_versions_c01dfd4722a88165 = function(arg0) {
         const ret = arg0.versions;
         return ret;
-    }, arguments) };
+    };
     imports.wbg.__wbindgen_as_number = function(arg0) {
         const ret = +arg0;
         return ret;
@@ -2912,7 +2852,6 @@ function __wbg_get_imports() {
     imports.wbg.__wbindgen_boolean_get = function(arg0) {
         const v = arg0;
         const ret = typeof(v) === 'boolean' ? (v ? 1 : 0) : 2;
-        _assertNum(ret);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
@@ -2928,7 +2867,6 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbindgen_in = function(arg0, arg1) {
         const ret = arg0 in arg1;
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_init_externref_table = function() {
@@ -2943,28 +2881,23 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbindgen_is_function = function(arg0) {
         const ret = typeof(arg0) === 'function';
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_is_object = function(arg0) {
         const val = arg0;
         const ret = typeof(val) === 'object' && val !== null;
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_is_string = function(arg0) {
         const ret = typeof(arg0) === 'string';
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_is_undefined = function(arg0) {
         const ret = arg0 === undefined;
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_jsval_loose_eq = function(arg0, arg1) {
         const ret = arg0 == arg1;
-        _assertBoolean(ret);
         return ret;
     };
     imports.wbg.__wbindgen_memory = function() {
@@ -2974,9 +2907,6 @@ function __wbg_get_imports() {
     imports.wbg.__wbindgen_number_get = function(arg0, arg1) {
         const obj = arg1;
         const ret = typeof(obj) === 'number' ? obj : undefined;
-        if (!isLikeNone(ret)) {
-            _assertNum(ret);
-        }
         getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
     };
