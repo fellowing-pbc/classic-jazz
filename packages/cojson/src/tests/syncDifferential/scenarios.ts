@@ -15,6 +15,7 @@
  * TEST-ONLY. No production import.
  */
 import type { RawCoMap } from "../../coValues/coMap.js";
+import { emptyKnownState } from "../../knownState.js";
 import { CO_VALUE_PRIORITY } from "../../priority.js";
 import { fillCoMapWithLargeData, waitFor } from "../testUtils.js";
 import type { Scenario } from "./harness.js";
@@ -661,6 +662,86 @@ export const correctionAfterFullContentRequest: Scenario = {
   },
 };
 
+/** 13. Content arrives for a CoValue whose dependency (its owning group) isn't
+ * loaded yet on the receiving node -- exercises `handleNewContent`'s
+ * dependency-gating branch (sync.ts:1176-1205): `coValue.addDependenciesFrom
+ * ContentMessage(msg)` finds a missing dependency, so the content is deferred
+ * into `newContentQueue` and an immediate `load` for the dependency is issued
+ * FROM WITHIN content-handling, before the deferred content is ever applied.
+ *
+ * The plan's initial idea -- have `clientB` cold-load `map` directly via
+ * `loadCoValueCore` without ever touching `group` first -- does NOT reach
+ * this branch. `#sendNewContent`'s `includeDependencies` (sync.ts:322-327)
+ * sends a dependency's CONTENT ahead of the dependent's CONTENT to any peer
+ * with `role !== "server"`, and message processing is a strict, non-reentrant
+ * FIFO drain (see the note on `correction_after_full_content_request`'s
+ * sibling comment above about `IncomingMessagesQueue`/`processQueues`), so by
+ * the time `map`'s CONTENT reaches `handleNewContent`, `group`'s CONTENT has
+ * already been fully processed and `group` is already `isAvailable()` --
+ * `hasMissingDependencies()` is never true. A normal cold load transparently
+ * resolves the dependency first; it never arrives "out of order" on the wire.
+ *
+ * So instead, reuse the hand-crafted low-level peer-push technique from
+ * `correction_after_full_content_request` (and `known_state_merge_triggers_*`
+ * above), but for a FULL content push rather than a headerless one: `clientB`
+ * connects to `server` but never loads or subscribes to `group` or `map` at
+ * all, so it starts with zero in-memory knowledge of either. `server`
+ * proactively pushes ONLY `map`'s full content (header + all sessions, built
+ * directly off `server`'s own settled copy via `newContentSince`) straight
+ * onto its outgoing queue to `clientB` -- `group`'s content is never sent.
+ * `clientB`'s `handleNewContent` genuinely receives `map`'s CONTENT first,
+ * with `group` still an empty, never-touched shell, so
+ * `addDependenciesFromContentMessage` (which reads the dependency straight
+ * off `msg.header.ruleset.group`, independent of any already-verified state)
+ * finds `group` missing and takes the defer-and-load path for real.
+ *
+ * We wait on `clientB.node.getCoValue(map.core.id)` rather than calling
+ * `loadCoValueCore` -- same reasoning as the sibling hand-crafted-message
+ * scenarios: an explicit top-level `loadCoValueCore` call would itself issue
+ * a competing top-level `load` for `map`, muddying which LOAD in the trace is
+ * the one the dependency-gating branch issues for `group`. */
+export const contentMissingDependencies: Scenario = {
+  name: "content_missing_dependencies_deferred",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    const clientB = makeNode("clientB");
+    connect(server, clientA);
+    connect(server, clientB);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(server, clientA);
+
+    // clientB is connected but has never loaded or subscribed to group or map
+    // -- zero in-memory knowledge of either. Hand-craft a bare CONTENT push
+    // carrying ONLY map's full content, sourced from server's own settled
+    // copy, straight onto server's outgoing queue to clientB -- group's
+    // content is never sent alongside it, unlike a real load reply would.
+    const serverMapCore = server.node.expectCoValueLoaded(map.core.id);
+    const mapContent = serverMapCore.newContentSince(
+      emptyKnownState(map.core.id),
+    );
+    const serverPeerToClientB = peerStateFor(server, clientB);
+    for (const msg of mapContent ?? []) {
+      serverPeerToClientB.pushOutgoingMessage(msg);
+    }
+
+    await waitFor(() => {
+      const core = clientB.node.getCoValue(map.core.id);
+      if (!core.isAvailable()) throw new Error("map not yet on clientB");
+    });
+    await stabilize([server, clientA, clientB], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
 /** On "correction ordering under concurrent arrival" -- a scenario was
  * attempted here (`correction_ordering_interleaved_with_known`, since
  * removed) meant to prove that when two messages for the SAME (peer,
@@ -728,4 +809,5 @@ export const scenarios: Scenario[] = [
   knownStateTriggersSend,
   knownStateTriggersDeferredLoad,
   correctionAfterFullContentRequest,
+  contentMissingDependencies,
 ];
