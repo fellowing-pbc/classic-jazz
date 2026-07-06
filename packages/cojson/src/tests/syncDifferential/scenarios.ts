@@ -15,6 +15,7 @@
  * TEST-ONLY. No production import.
  */
 import { expectMap } from "../../coValue.js";
+import type { RawCoList } from "../../coValues/coList.js";
 import type { RawCoMap } from "../../coValues/coMap.js";
 import type { Signature } from "../../crypto/crypto.js";
 import { emptyKnownState } from "../../knownState.js";
@@ -1051,6 +1052,53 @@ export const privateTransactionSync: Scenario = {
   },
 };
 
+/** 17. CoList (RGA) concurrent append convergence: unlike every scenario above
+ * (all `RawCoMap`), this exercises `RawCoList`'s RGA-based ordering semantics --
+ * genuinely different convergence machinery than map key overwrite. Two clients
+ * each append a distinct item at the same anchor position (`after: 0`,
+ * immediately following the shared, already-synced `"first"` item) concurrently,
+ * with no coordination between them. The RGA algorithm's tie-breaking (ordering
+ * concurrent insertions at the same anchor by a deterministic rule, not by
+ * arrival order) must still make every node converge on the identical resulting
+ * order. */
+export const colistConcurrentAppend: Scenario = {
+  name: "colist_concurrent_append_convergence",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    const clientB = makeNode("clientB");
+    connect(server, clientA);
+    connect(server, clientB);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "writer");
+    const list = group.createList<RawCoList<string>>();
+    list.append("first", 0, "trusting");
+    await settle(server, clientA);
+
+    await waitFor(async () => {
+      const core = await clientB.node.loadCoValueCore(list.core.id);
+      if (!core.isAvailable()) throw new Error("list not yet on clientB");
+    });
+
+    const listOnB = clientB.node
+      .getCoValue(list.core.id)
+      .getCurrentContent() as RawCoList<string>;
+
+    // Concurrent appends from both clients at the same anchor position.
+    list.append("fromA", 0, "trusting");
+    listOnB.append("fromB", 0, "trusting");
+
+    await settle(server, clientA, clientB);
+    await stabilize([server, clientA, clientB], [group.core.id, list.core.id]);
+
+    return {
+      coValues: { Group: group.core, List: list.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -1068,4 +1116,5 @@ export const scenarios: Scenario[] = [
   contentInvalidSessionRejectedOthersContinue,
   contentFanoutDirectVsLoadRequest,
   privateTransactionSync,
+  colistConcurrentAppend,
 ];
