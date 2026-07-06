@@ -294,6 +294,41 @@ export const storageBackedResponse: Scenario = {
   },
 };
 
+/** 8. Load with no storage forwards to peers: a peer requests a CoValue this
+ * node has never heard of and has no storage for — it must forward the
+ * request to its own server peers (`loadFromPeersAndRespond`) rather than
+ * answering directly. */
+export const loadForwardsToPeers: Scenario = {
+  name: "load_no_storage_forwards_to_peers",
+  run: async () => {
+    const origin = makeNode("origin");
+    const relay = makeNode("relay");
+    const requester = makeNode("requester");
+    connect(origin, relay);
+    connect(relay, requester);
+
+    const group = origin.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(origin, relay);
+
+    // requester asks relay for a CoValue relay has never independently
+    // touched from requester's session — relay has no storage, so it must
+    // forward the request to its own server peer (origin).
+    const loaded = await requester.node.loadCoValueCore(map.core.id);
+    await waitFor(() => {
+      if (!loaded.isAvailable()) throw new Error("not yet loaded");
+    });
+    await stabilize([origin, relay, requester], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(origin, relay, requester),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -302,4 +337,5 @@ export const scenarios: Scenario[] = [
   correctionInvalidState,
   concurrentFanOut,
   storageBackedResponse,
+  loadForwardsToPeers,
 ];
