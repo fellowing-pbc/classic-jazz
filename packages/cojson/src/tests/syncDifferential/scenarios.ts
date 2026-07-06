@@ -1009,6 +1009,48 @@ export const contentFanoutDirectVsLoadRequest: Scenario = {
   },
 };
 
+/** 16. Every other scenario in this harness uses `"trusting"` (plaintext)
+ * transactions. `Group.createMap`'s default privacy is actually `"private"`
+ * (encrypted) -- every scenario above explicitly opts OUT of that default.
+ * This scenario exercises the encrypted path instead: `map.set(..., "private")`
+ * produces an encrypted transaction, and `handleNewContent` on the receiving
+ * side has a materially different decryption/validation branch for it than
+ * for trusting transactions. `group.addMember("everyone", "reader")` already
+ * grants every node the read key needed to decrypt via the "everyone"
+ * read-key-sharing mechanism, so no extra wiring is needed for clientB to
+ * decrypt -- confirmed by the explicit decrypted-value assertion below. */
+export const privateTransactionSync: Scenario = {
+  name: "private_transaction_sync",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    const clientB = makeNode("clientB");
+    connect(server, clientA);
+    connect(server, clientB);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("secret", "shh", "private");
+    await settle(server, clientA);
+
+    await waitFor(async () => {
+      const core = await clientB.node.loadCoValueCore(map.core.id);
+      if (!core.isAvailable()) throw new Error("map not yet on clientB");
+      const content = expectMap(core.getCurrentContent());
+      if (content.get("secret") !== "shh") {
+        throw new Error("clientB could not decrypt private content");
+      }
+    });
+    await stabilize([server, clientA, clientB], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -1025,4 +1067,5 @@ export const scenarios: Scenario[] = [
   contentMissingDependencies,
   contentInvalidSessionRejectedOthersContinue,
   contentFanoutDirectVsLoadRequest,
+  privateTransactionSync,
 ];
