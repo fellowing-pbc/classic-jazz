@@ -1216,6 +1216,95 @@ export const reconcileHashMismatch: Scenario = {
   },
 };
 
+/** 19. Peer reconciliation fills missing known-state entries:
+ * `startPeerReconciliation`'s per-CoValue loop (sync.ts:683-702) walks EVERY
+ * CoValue the local node knows about and, for any that don't yet have a
+ * known-state entry for the peer this reconciliation run is for, fills in an
+ * "empty" entry (`peer.setKnownState(coValue.id, "empty")`) before the
+ * ordered dependency-aware send loop below it (sync.ts:704-715) issues LOAD
+ * requests for each.
+ *
+ * The plan's initial idea -- have `server` hold pre-synced CoValues and have
+ * a brand-new `clientB` connect to it -- does NOT reach this loop with any
+ * real CoValue at all. `addPeer` (sync.ts:823) only calls
+ * `startPeerReconciliation` when the newly-added `PeerState`'s OWN role is
+ * `"server"` -- i.e. reconciliation always runs on the side that sees the
+ * other as its upstream server, using THAT side's own `this.local.
+ * allCoValues()`. In `connect(server, client)` (mesh.ts), it is always the
+ * *client* argument whose `addPeer` call gets a peer with role `"server"`;
+ * the *server* argument's own `addPeer` call for the new connection gets role
+ * `"client"` and never calls `startPeerReconciliation` at all. So targeting
+ * `server` (the pre-existing-data holder) as the connect-time recipient of a
+ * new peer, as in the original idea, never runs this loop over `server`'s own
+ * CoValues -- confirmed by direct instrumentation: with that shape, every
+ * `startPeerReconciliation` call in the scenario fired with
+ * `this.local.allCoValues()` empty (0 entries) on the connecting side, so the
+ * loop body never executed for a single real CoValue.
+ *
+ * So this scenario inverts which side plays which mesh role: `clientA`
+ * creates `group`/`mapA`/`mapB`/`mapC` entirely on its own, with NO peer
+ * connected at all yet -- all four are fully `isAvailable()` in memory
+ * immediately (CoValue creation is a local operation, no network needed). A
+ * brand-new `server` node then connects, with `clientA` passed as the
+ * *client* argument to `connect()` -- so `clientA`'s own `addPeer` call for
+ * the new peer has role `"server"`, and its automatic
+ * `startPeerReconciliation` call runs synchronously with all four CoValues
+ * already resident in `this.local.allCoValues()`. Each is `isAvailable()`, so
+ * each takes the `buildOrderedCoValueList` branch (dependency order: group,
+ * then mapA/mapB/mapC), gets its known-state entry filled to `"empty"`, and
+ * is then proactively sent a low-priority LOAD by the ordered-send loop --
+ * `clientA -> server | LOAD Group/MapA/MapB/MapC`, all four, in one
+ * reconciliation pass, before `server` has asked for anything at all. */
+export const peerReconciliationFillsEntries: Scenario = {
+  name: "peer_reconciliation_fills_missing_known_state_entries",
+  run: async () => {
+    // clientA creates several CoValues entirely on its own, with no peer
+    // connected yet -- all fully in-memory/available before any reconciliation
+    // can run.
+    const clientA = makeNode("clientA");
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const mapA = group.createMap();
+    mapA.set("a", "1", "trusting");
+    const mapB = group.createMap();
+    mapB.set("b", "2", "trusting");
+    const mapC = group.createMap();
+    mapC.set("c", "3", "trusting");
+
+    // A brand-new peer connects. clientA is passed as the *client* argument
+    // so its own `addPeer` call sees the new peer with role "server" --
+    // the only role that makes `addPeer` auto-run `startPeerReconciliation`
+    // (sync.ts:823) -- and that reconciliation runs over clientA's own
+    // already-populated `allCoValues()`, exercising the entry-fill loop for
+    // real.
+    const server = makeNode("server");
+    connect(server, clientA);
+
+    await waitFor(async () => {
+      for (const map of [mapA, mapB, mapC]) {
+        const core = await server.node.loadCoValueCore(map.core.id);
+        if (!core.isAvailable()) {
+          throw new Error(`${map.core.id} not yet on server`);
+        }
+      }
+    });
+    await stabilize(
+      [server, clientA],
+      [group.core.id, mapA.core.id, mapB.core.id, mapC.core.id],
+    );
+
+    return {
+      coValues: {
+        Group: group.core,
+        MapA: mapA.core,
+        MapB: mapB.core,
+        MapC: mapC.core,
+      },
+      nodes: nodeMap(server, clientA),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -1235,4 +1324,5 @@ export const scenarios: Scenario[] = [
   privateTransactionSync,
   colistConcurrentAppend,
   reconcileHashMismatch,
+  peerReconciliationFillsEntries,
 ];
