@@ -3,7 +3,7 @@ import {
   AvailableCoValueCore,
   DecryptedTransaction,
 } from "../coValueCore/coValueCore.js";
-import { AgentID, SessionID, TransactionID, RawCoID } from "../ids.js";
+import { AgentID, TransactionID, RawCoID } from "../ids.js";
 import { JsonObject, JsonValue } from "../jsonValue.js";
 import { accountOrAgentIDfromSessionID } from "../typeUtils/accountOrAgentIDfromSessionID.js";
 import { isCoValue } from "../typeUtils/isCoValue.js";
@@ -38,8 +38,13 @@ type InsertionEntry<T extends JsonValue> = {
   madeAt: number;
   /** The OpID of this insertion, stored once so it can be reused in results */
   opID: OpID;
-  /** Direct references to the entries inserted before/after this one */
+  /** Entries inserted directly before this one ("pre" ops targeting it) */
   predecessors: InsertionEntry<T>[];
+  /**
+   * Entries inserted directly after this one ("app" ops targeting it).
+   * Successors render newest-first (see `fillArrayFromEntry`), which is why
+   * `appendItems` writes multi-item appends in reverse order.
+   */
   successors: InsertionEntry<T>[];
   change: InsertionOpPayload<T>;
   /** Whether this entry comes from a valid transaction */
@@ -56,6 +61,47 @@ type DeletionEntry = {
   change: DeletionOpPayload;
 };
 
+/**
+ * Summary of one `processNewTransactions` batch, used afterwards by
+ * `computeCacheTailSuffix` to decide whether `_cachedEntries` can be
+ * extended in place instead of being invalidated.
+ *
+ * Only created when there is a live cache to maintain (see
+ * `beginBatchSummary`). The `prior*` snapshots are taken before the batch
+ * touches the graph, so the entries the batch attached at the tail region
+ * can be identified by iterating past them.
+ */
+class BatchSummary<Item extends JsonValue> {
+  /**
+   * Set when the batch contains an op that in-place cache extension doesn't
+   * support: deletions and prepends (which can affect entries before the
+   * tail) and duplicate ops (double merges).
+   */
+  hasUnsupportedOps = false;
+  /**
+   * Number of valid "app" insertions added by this batch. The cache can only
+   * be kept if all of them render after the previous tail.
+   */
+  newValidAppends = 0;
+
+  constructor(
+    /** The insertion entry of the last cached (visible) item, if any. */
+    readonly tail: InsertionEntry<Item> | undefined,
+    /** `tail.successors.length` before the batch. */
+    readonly priorTailSuccessors: number,
+    /** `afterStart.length` before the batch. */
+    readonly priorAfterStartRoots: number,
+  ) {}
+
+  record(change: ListOpPayload<Item>, isValid: boolean, applied: boolean) {
+    if (!applied || change.op === "del" || change.op === "pre") {
+      this.hasUnsupportedOps = true;
+    } else if (isValid) {
+      this.newValidAppends++;
+    }
+  }
+}
+
 export class RawCoList<
   Item extends JsonValue = JsonValue,
   Meta extends JsonObject | null = null,
@@ -71,22 +117,12 @@ export class RawCoList<
   /** The internal state of the RawCoList */
   afterStart: InsertionEntry<Item>[] = [];
   beforeEnd: InsertionEntry<Item>[] = [];
-  insertions: {
-    [sessionID: SessionIndex]: {
-      [txIdx: number]: {
-        [changeIdx: number]: InsertionEntry<Item>;
-      };
-    };
-  } = {};
-  /** Traversal generation counter, bumped on every full traversal */
+  /** All insertion entries, keyed by their encoded OpID */
+  insertions: Map<OpIDKey, InsertionEntry<Item>> = new Map();
+  /** Traversal generation counter, bumped on every traversal (full or suffix) */
   private traversalGen = 0;
-  deletionsByInsertion: {
-    [deletedSessionID: SessionIndex]: {
-      [deletedTxIdx: number]: {
-        [deletedChangeIdx: number]: DeletionEntry[];
-      };
-    };
-  } = {};
+  /** Deletion ops targeting an insertion, keyed by the insertion's encoded OpID */
+  deletionsByInsertion: Map<OpIDKey, DeletionEntry[]> = new Map();
 
   /** @internal */
   atTimeFilter?: number = undefined;
@@ -113,8 +149,8 @@ export class RawCoList<
   private resetInternalState() {
     this.afterStart = [];
     this.beforeEnd = [];
-    this.insertions = {};
-    this.deletionsByInsertion = {};
+    this.insertions = new Map();
+    this.deletionsByInsertion = new Map();
     this._cachedEntries = undefined;
     this.knownTransactions = { [this.core.id]: 0 };
     this.lastValidTransaction = undefined;
@@ -132,8 +168,8 @@ export class RawCoList<
     this.id = core.id as CoID<this>;
     this.core = core;
 
-    this.insertions = {};
-    this.deletionsByInsertion = {};
+    this.insertions = new Map();
+    this.deletionsByInsertion = new Map();
     this.afterStart = [];
     this.beforeEnd = [];
     this.knownTransactions = { [core.id]: 0 };
@@ -148,76 +184,37 @@ export class RawCoList<
   }
 
   private getInsertionsEntry(opID: OpID) {
-    const index = getSessionIndex(opID);
-
-    const sessionEntry = this.insertions[index];
-    if (!sessionEntry) {
-      return undefined;
-    }
-
-    const txEntry = sessionEntry[opID.txIndex];
-    if (!txEntry) {
-      return undefined;
-    }
-
-    return txEntry[opID.changeIdx];
+    return this.insertions.get(encodeOpID(opID));
   }
 
   private createInsertionsEntry(opID: OpID, value: InsertionEntry<Item>) {
-    const index = getSessionIndex(opID);
+    const key = encodeOpID(opID);
 
-    let sessionEntry = this.insertions[index];
-    if (!sessionEntry) {
-      sessionEntry = {};
-      this.insertions[index] = sessionEntry;
-    }
-
-    let txEntry = sessionEntry[opID.txIndex];
-    if (!txEntry) {
-      txEntry = {};
-      sessionEntry[opID.txIndex] = txEntry;
-    }
-
-    // Check if the change index already exists, may be the case of double merges
-    if (txEntry[opID.changeIdx]) {
+    // The key may already exist in case of double merges
+    if (this.insertions.has(key)) {
       return false;
     }
 
     // Deletions targeting this insertion may have been processed first
-    value.deletionsCount =
-      this.deletionsByInsertion[index]?.[opID.txIndex]?.[opID.changeIdx]
-        ?.length ?? 0;
+    value.deletionsCount = this.deletionsByInsertion.get(key)?.length ?? 0;
 
-    txEntry[opID.changeIdx] = value;
+    this.insertions.set(key, value);
     return true;
   }
 
   private pushDeletionsByInsertionEntry(opID: OpID, value: DeletionEntry) {
-    const index = getSessionIndex(opID);
+    const key = encodeOpID(opID);
 
-    let sessionEntry = this.deletionsByInsertion[index];
-    if (!sessionEntry) {
-      sessionEntry = {};
-      this.deletionsByInsertion[index] = sessionEntry;
-    }
-
-    let txEntry = sessionEntry[opID.txIndex];
-    if (!txEntry) {
-      txEntry = {};
-      sessionEntry[opID.txIndex] = txEntry;
-    }
-
-    let list = txEntry[opID.changeIdx];
-
+    let list = this.deletionsByInsertion.get(key);
     if (!list) {
       list = [];
-      txEntry[opID.changeIdx] = list;
+      this.deletionsByInsertion.set(key, list);
     }
 
     list.push(value);
 
-    // Keep the deletion flag on the insertion entry in sync, if it exists
-    const insertionEntry = this.getInsertionsEntry(opID);
+    // Keep the deletion count on the insertion entry in sync, if it exists
+    const insertionEntry = this.insertions.get(key);
     if (insertionEntry) {
       insertionEntry.deletionsCount++;
     }
@@ -236,66 +233,17 @@ export class RawCoList<
       return;
     }
 
+    const batch = this.beginBatchSummary();
+
     let lastValidTransaction: number | undefined = undefined;
     let oldestValidTransaction: number | undefined = undefined;
 
-    // Incremental fast path: when the cached entries are only extended at the
-    // tail by the new transactions (the common case: appends arriving in
-    // order, e.g. while streaming or on local appendItems), we append to the
-    // cache instead of invalidating it and re-traversing the whole graph.
-    //
-    // `fastVisible` collects the already-closed append blocks in visible
-    // order. `block` is the currently open block: a run of insertions
-    // attached to the same parent. Blocks attached to an OpID parent are
-    // written by appendItems in reverse order (they become successors, which
-    // are traversed in reverse), so they are reversed when the block closes.
-    // Blocks attached to "start" render in insertion order.
-    let fastVisible: InsertionEntry<Item>[] | null =
-      this._cachedEntries !== undefined && !this.isTimeTravelEntity()
-        ? []
-        : null;
-    // A block attached to a parent entry is reversed on close; a block
-    // attached to "start" (no parent entry) keeps insertion order.
-    let block: InsertionEntry<Item>[] | null = null;
-    let blockParentEntry: InsertionEntry<Item> | undefined = undefined;
-    let tailEntry: InsertionEntry<Item> | undefined =
-      fastVisible && this._cachedEntries!.length > 0
-        ? this.getInsertionsEntry(
-            this._cachedEntries![this._cachedEntries!.length - 1]!.opID,
-          )
-        : undefined;
-
-    const closeBlock = () => {
-      if (block) {
-        if (blockParentEntry) {
-          block.reverse();
-        }
-        for (const entry of block) {
-          fastVisible!.push(entry);
-        }
-        block = null;
-      }
-    };
-
     for (const tx of transactions) {
-      if (this.isFilteredOut(tx)) {
+      if (this.isFilteredOut(tx) || this.isDeletionDenied(tx)) {
         continue;
       }
 
-      const { txID, changes, madeAt, isValid } = tx;
-
-      if (
-        isValid &&
-        this.#isDeletionRestricted &&
-        this.transactionContainsDeletion(changes as ListOpPayload<Item>[])
-      ) {
-        const author = accountOrAgentIDfromSessionID(txID.sessionID);
-        const role = this.group.atTime(madeAt).roleOfInternal(author);
-
-        if (role !== "admin" && role !== "manager") {
-          continue;
-        }
-      }
+      const { changes, madeAt, isValid } = tx;
 
       // Only track valid transactions for the lastValidTransaction/oldestValidTransaction
       if (isValid) {
@@ -308,116 +256,8 @@ export class RawCoList<
 
       for (let changeIdx = 0; changeIdx < changes.length; changeIdx++) {
         const change = changes[changeIdx] as ListOpPayload<Item>;
-
-        const opID = {
-          sessionID: txID.sessionID,
-          txIndex: txID.txIndex,
-          branch: txID.branch,
-          changeIdx,
-        };
-
-        if (change.op === "pre" || change.op === "app") {
-          const entry: InsertionEntry<Item> = {
-            madeAt,
-            opID,
-            predecessors: [],
-            successors: [],
-            change,
-            isValid,
-            deletionsCount: 0,
-            visitedGen: 0,
-          };
-          const created = this.createInsertionsEntry(opID, entry);
-
-          // If the change index already exists, we don't need to process it again
-          if (!created) {
-            // Duplicate ops (double merges) are rare: fall back to a rebuild
-            fastVisible = null;
-            continue;
-          }
-
-          if (change.op === "pre") {
-            // Prepends are rare: fall back to a full re-traversal
-            fastVisible = null;
-
-            if (change.before === "end") {
-              this.beforeEnd.push(entry);
-            } else {
-              const beforeEntry = this.getInsertionsEntry(change.before);
-
-              if (!beforeEntry) {
-                continue;
-              }
-
-              beforeEntry.predecessors.push(entry);
-            }
-          } else {
-            if (change.after === "start") {
-              this.afterStart.push(entry);
-
-              // A new root at the end of afterStart renders after every other
-              // item only if there are no beforeEnd roots.
-              if (fastVisible && isValid) {
-                if (this.beforeEnd.length === 0) {
-                  if (block && blockParentEntry) {
-                    closeBlock();
-                  }
-                  if (!block) {
-                    block = [];
-                    blockParentEntry = undefined;
-                  }
-                  block.push(entry);
-                  tailEntry = entry;
-                } else {
-                  fastVisible = null;
-                }
-              }
-            } else {
-              const afterEntry = this.getInsertionsEntry(change.after);
-
-              if (!afterEntry) {
-                if (isValid) {
-                  // Orphaned valid op: it stays invisible, but later ops may
-                  // attach to it, so conservatively fall back
-                  fastVisible = null;
-                }
-                continue;
-              }
-
-              afterEntry.successors.push(entry);
-
-              if (fastVisible && isValid) {
-                if (block && afterEntry === blockParentEntry) {
-                  // Sibling of the open block: renders before its previously
-                  // processed siblings (successors traverse in reverse)
-                  block.push(entry);
-                } else if (afterEntry === tailEntry) {
-                  // Extends the current visible tail: start a new block
-                  closeBlock();
-                  block = [entry];
-                  blockParentEntry = tailEntry;
-                  tailEntry = entry;
-                } else {
-                  // Insertion somewhere else in the list: fall back
-                  fastVisible = null;
-                }
-              }
-            }
-          }
-        } else if (change.op === "del") {
-          // Deletions may remove items already in the cache: fall back
-          fastVisible = null;
-
-          this.pushDeletionsByInsertionEntry(change.insertion, {
-            madeAt,
-            deletionID: opID,
-            change,
-          });
-        } else {
-          throw new Error(
-            "Unknown list operation " + (change as { op: unknown }).op,
-          );
-        }
+        const applied = this.ingestChange(change, tx, changeIdx);
+        batch?.record(change, isValid, applied);
       }
     }
 
@@ -426,19 +266,17 @@ export class RawCoList<
       oldestValidTransaction &&
       oldestValidTransaction < this.lastValidTransaction
     ) {
+      // The batch contains transactions older than already-processed ones:
+      // rebuild so everything is applied in order (this also re-attaches ops
+      // that arrived before their target and were dropped as orphans).
       this.rebuildFromCore();
     } else {
       this.lastValidTransaction = lastValidTransaction;
 
-      if (fastVisible) {
-        closeBlock();
-        const cachedEntries = this._cachedEntries!;
-        for (const entry of fastVisible as InsertionEntry<Item>[]) {
-          cachedEntries.push({
-            value: entry.change.value,
-            madeAt: entry.madeAt,
-            opID: entry.opID,
-          });
+      const suffix = batch ? this.computeCacheTailSuffix(batch) : null;
+      if (suffix) {
+        for (const entry of suffix) {
+          this._cachedEntries!.push(entry);
         }
       } else {
         this._cachedEntries = undefined;
@@ -448,8 +286,173 @@ export class RawCoList<
     this.totalValidTransactions += transactions.length;
   }
 
-  private transactionContainsDeletion(changes: ListOpPayload<Item>[]) {
-    return changes.some((change) => change.op === "del");
+  /**
+   * In groups with restricted deletion, deletion transactions from members
+   * that are not admins or managers are dropped entirely.
+   */
+  private isDeletionDenied(tx: DecryptedTransaction): boolean {
+    if (!tx.isValid || !this.#isDeletionRestricted) {
+      return false;
+    }
+
+    const changes = tx.changes as ListOpPayload<Item>[];
+    if (!changes.some((change) => change.op === "del")) {
+      return false;
+    }
+
+    const author = accountOrAgentIDfromSessionID(tx.txID.sessionID);
+    const role = this.group.atTime(tx.madeAt).roleOfInternal(author);
+
+    return role !== "admin" && role !== "manager";
+  }
+
+  /**
+   * Applies a single op to the insertion graph. Returns false when the op
+   * was already present (double merges) and nothing was applied.
+   */
+  private ingestChange(
+    change: ListOpPayload<Item>,
+    tx: DecryptedTransaction,
+    changeIdx: number,
+  ): boolean {
+    const opID: OpID = {
+      sessionID: tx.txID.sessionID,
+      txIndex: tx.txID.txIndex,
+      branch: tx.txID.branch,
+      changeIdx,
+    };
+
+    if (change.op === "del") {
+      this.pushDeletionsByInsertionEntry(change.insertion, {
+        madeAt: tx.madeAt,
+        deletionID: opID,
+        change,
+      });
+      return true;
+    }
+
+    if (change.op !== "pre" && change.op !== "app") {
+      throw new Error(
+        "Unknown list operation " + (change as { op: unknown }).op,
+      );
+    }
+
+    const entry: InsertionEntry<Item> = {
+      madeAt: tx.madeAt,
+      opID,
+      predecessors: [],
+      successors: [],
+      change,
+      isValid: tx.isValid,
+      deletionsCount: 0,
+      visitedGen: 0,
+    };
+
+    if (!this.createInsertionsEntry(opID, entry)) {
+      return false;
+    }
+
+    if (change.op === "pre") {
+      if (change.before === "end") {
+        this.beforeEnd.push(entry);
+      } else {
+        this.getInsertionsEntry(change.before)?.predecessors.push(entry);
+      }
+    } else if (change.after === "start") {
+      this.afterStart.push(entry);
+    } else {
+      // When `after` is unknown the op stays orphaned and invisible until a
+      // rebuild re-processes it after its target arrives
+      this.getInsertionsEntry(change.after)?.successors.push(entry);
+    }
+
+    return true;
+  }
+
+  /**
+   * A batch summary is only worth keeping when there is a cache to maintain:
+   * without one (or on a time-travel view, whose cache is conservatively
+   * invalidated on any new transactions) the batch always ends in
+   * invalidation.
+   */
+  private beginBatchSummary(): BatchSummary<Item> | undefined {
+    if (this._cachedEntries === undefined || this.isTimeTravelEntity()) {
+      return undefined;
+    }
+
+    const lastCached = this._cachedEntries[this._cachedEntries.length - 1];
+    const tail = lastCached
+      ? this.getInsertionsEntry(lastCached.opID)
+      : undefined;
+
+    return new BatchSummary(
+      tail,
+      tail?.successors.length ?? 0,
+      this.afterStart.length,
+    );
+  }
+
+  /**
+   * Called after a batch has been ingested into the graph: returns the
+   * entries to append to `_cachedEntries` when the batch is a pure tail
+   * extension (the common case: appends arriving in order, e.g. while
+   * streaming or on local appendItems), or null when it isn't and the cache
+   * must be invalidated.
+   *
+   * A batch is a pure tail extension when every entry it made visible
+   * renders after the previously last visible entry. Instead of proving
+   * this op by op, we collect the subtrees the batch attached at the tail
+   * region (new successors of the old tail, then new afterStart roots), run
+   * the regular traversal over just those subtrees, and check that it
+   * emitted exactly the batch's valid appends: an op that attached anywhere
+   * else leaves the traversal short. Reusing `fillArrayFromEntry` for the
+   * suffix keeps the incremental order in agreement with a full rebuild by
+   * construction.
+   */
+  private computeCacheTailSuffix(
+    batch: BatchSummary<Item>,
+  ): { value: Item; madeAt: number; opID: OpID }[] | null {
+    if (batch.hasUnsupportedOps) {
+      return null;
+    }
+
+    // New roots render after all old afterStart subtrees but before any
+    // beforeEnd subtree, so they only extend the tail if beforeEnd is empty.
+    const hasNewAfterStartRoots =
+      this.afterStart.length > batch.priorAfterStartRoots;
+    if (hasNewAfterStartRoots && this.beforeEnd.length > 0) {
+      return null;
+    }
+
+    // The subtrees the batch attached at the tail region, in the order the
+    // full traversal reaches them: successors of the old tail newest-first,
+    // then the new afterStart roots.
+    const suffixRoots: InsertionEntry<Item>[] = [];
+    if (batch.tail) {
+      const successors = batch.tail.successors;
+      for (let i = successors.length - 1; i >= batch.priorTailSuccessors; i--) {
+        suffixRoots.push(successors[i]!);
+      }
+    }
+    for (let i = batch.priorAfterStartRoots; i < this.afterStart.length; i++) {
+      suffixRoots.push(this.afterStart[i]!);
+    }
+
+    const suffix: { value: Item; madeAt: number; opID: OpID }[] = [];
+    const gen = ++this.traversalGen;
+    for (const root of suffixRoots) {
+      this.fillArrayFromEntry(root, suffix, gen);
+    }
+
+    // Every valid append of the batch must have landed in the suffix:
+    // anything else (an append to a mid-list entry, an orphaned append, an
+    // insertion that a previous batch already deleted) means the cached
+    // prefix can no longer be trusted.
+    if (suffix.length !== batch.newValidAppends) {
+      return null;
+    }
+
+    return suffix;
   }
 
   rebuildFromCore() {
@@ -655,24 +658,13 @@ export class RawCoList<
       at: Date;
     }[] = [];
 
-    for (const sessionID in this.deletionsByInsertion) {
-      const sessionEntry = this.deletionsByInsertion[sessionID as SessionID];
-      for (const txIdx in sessionEntry) {
-        const txEntry = sessionEntry[Number(txIdx)];
-        for (const changeIdx in txEntry) {
-          const changeEntry = txEntry[Number(changeIdx)];
-          for (const deletion of changeEntry || []) {
-            const madeAt = new Date(deletion.madeAt);
-            const by = accountOrAgentIDfromSessionID(
-              deletion.deletionID.sessionID,
-            );
-            edits.push({
-              by,
-              tx: deletion.deletionID,
-              at: madeAt,
-            });
-          }
-        }
+    for (const deletions of this.deletionsByInsertion.values()) {
+      for (const deletion of deletions) {
+        edits.push({
+          by: accountOrAgentIDfromSessionID(deletion.deletionID.sessionID),
+          tx: deletion.deletionID,
+          at: new Date(deletion.madeAt),
+        });
       }
     }
 
@@ -873,11 +865,13 @@ export class RawCoList<
   }
 }
 
-type SessionIndex = SessionID | `${SessionID}_branch_${RawCoID}`;
+type OpIDKey = `${string}/${number}/${number}`;
 
-function getSessionIndex(txID: TransactionID): SessionIndex {
-  if (txID.branch) {
-    return `${txID.sessionID}_branch_${txID.branch}`;
-  }
-  return txID.sessionID;
+// Unlike the public `stringifyOpID` (coPlainText.ts), this key includes the
+// branch, so ops from a branch and its source session can't collide.
+function encodeOpID(opID: OpID): OpIDKey {
+  const session = opID.branch
+    ? `${opID.sessionID}_branch_${opID.branch}`
+    : opID.sessionID;
+  return `${session}/${opID.txIndex}/${opID.changeIdx}`;
 }
