@@ -14,6 +14,7 @@
 import type { RawCoID } from "../../ids.js";
 import type { CoValueKnownState } from "../../knownState.js";
 import type { LocalNode } from "../../localNode.js";
+import type { PeerState } from "../../PeerState.js";
 import type { Peer } from "../../sync.js";
 import {
   connectedPeersWithMessagesTracking,
@@ -72,6 +73,23 @@ export function connect(server: MeshNode, client: MeshNode): void {
   // peer (peer1) — exactly as the production helpers do.
   server.node.syncManager.addPeer(peer2);
   client.node.syncManager.addPeer(peer1);
+}
+
+/**
+ * Look up the `PeerState` that `from` holds for its connection to `to` (i.e.
+ * how `from` sees `to`), throwing if the two aren't connected. Several
+ * scenarios need to hand-craft a low-level wire message — bypassing the
+ * normal load/known/content APIs — to reach a specific sync.ts branch that
+ * those APIs never produce on their own; this is the repeated "peer lookup +
+ * null check" half of that technique, factored out once it showed up a third
+ * time.
+ */
+export function peerStateFor(from: MeshNode, to: MeshNode): PeerState {
+  const peer = from.node.syncManager.peers[to.node.currentSessionID];
+  if (!peer) {
+    throw new Error(`${from.name} has no peer state for ${to.name}`);
+  }
+  return peer;
 }
 
 /** Gracefully close the peer connections between two nodes without deleting

@@ -15,6 +15,7 @@
  * TEST-ONLY. No production import.
  */
 import type { RawCoMap } from "../../coValues/coMap.js";
+import { CO_VALUE_PRIORITY } from "../../priority.js";
 import { fillCoMapWithLargeData, waitFor } from "../testUtils.js";
 import type { Scenario } from "./harness.js";
 import {
@@ -22,6 +23,7 @@ import {
   connect,
   disconnect,
   makeNode,
+  peerStateFor,
   stabilize,
   type MeshNode,
 } from "./mesh.js";
@@ -471,11 +473,7 @@ export const knownStateTriggersSend: Scenario = {
     // `combineWith`-merge branch (sync.ts:1027,1038) fires directly off the
     // incoming KNOWN and immediately pushes full content back -- no LOAD
     // round-trip anywhere in the exchange.
-    const serverPeerFromClientB =
-      clientB.node.syncManager.peers[server.node.currentSessionID];
-    if (!serverPeerFromClientB) {
-      throw new Error("clientB has no peer state for server");
-    }
+    const serverPeerFromClientB = peerStateFor(clientB, server);
     for (const id of [group.core.id, map.core.id]) {
       serverPeerFromClientB.pushOutgoingMessage({
         action: "known",
@@ -558,11 +556,7 @@ export const knownStateTriggersDeferredLoad: Scenario = {
     // has `group` fully in memory (hits the sibling immediate-send branch)
     // but only a knownState shell for `map` (hits the deferred-load branch
     // this scenario targets).
-    const serverPeerFromClientB =
-      clientB.node.syncManager.peers[server.node.currentSessionID];
-    if (!serverPeerFromClientB) {
-      throw new Error("clientB has no peer state for server");
-    }
+    const serverPeerFromClientB = peerStateFor(clientB, server);
     for (const id of [group.core.id, map.core.id]) {
       serverPeerFromClientB.pushOutgoingMessage({
         action: "known",
@@ -571,6 +565,88 @@ export const knownStateTriggersDeferredLoad: Scenario = {
         sessions: {},
       });
     }
+
+    await waitFor(() => {
+      const core = clientB.node.getCoValue(map.core.id);
+      if (!core.isAvailable()) throw new Error("map not yet on clientB");
+    });
+    await stabilize([server, clientA, clientB], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
+/** 12. Correction after full-content request: the OTHER production call site
+ * for a KNOWN CORRECTION -- `requestFullContent` (sync.ts:1006-1014), reached
+ * from inside `handleNewContent` (sync.ts:1210-1244) when a peer sends a
+ * CONTENT message with no header for a CoValue we have neither in memory nor
+ * in storage ("the peer/import has assumed we already have the CoValue").
+ *
+ * This is a DIFFERENT branch from `correction_invalid_state_assumed` above:
+ * that scenario's correction comes from `invalidStateAssumed`, deep inside the
+ * per-session transaction loop (sync.ts:1318,1389) -- the CoValue IS already
+ * verified/in-memory there, but a session's transactions don't line up with
+ * what we already have. Here, the CoValue has never been instantiated at
+ * all -- the correction fires purely off the missing header, before any
+ * transaction is ever looked at.
+ *
+ * It is ALSO different from a normal cold load (`basic_two_peer_sync`'s
+ * third-peer case): a real `loadCoValueCore` call sends a `load` message,
+ * which is handled entirely by `handleLoad` -- `requestFullContent` is never
+ * called from there. A from-scratch peer's cold-load "not found" reply
+ * (`handleLoadNotFound`, sync.ts:993-1001) sends a plain `known` with
+ * `header: false` and NO `isCorrection` flag. `requestFullContent` is only
+ * reachable via `handleNewContent`, which requires an inbound CONTENT
+ * message -- something the ordinary load path never sends to a peer that has
+ * nothing. So we hand-craft that CONTENT message directly (same low-level
+ * peer-push technique as `known_state_merge_triggers_immediate_send` /
+ * `..._deferred_load` above, but pushed the other direction -- server to
+ * clientB), simulating a peer that wrongly assumes clientB already holds
+ * map's header and sends only incremental (headerless) content. clientB has
+ * no storage and no in-memory knowledge of map at all, so `loadFromStorage`
+ * reports not-found synchronously and `requestFullContent` fires, replying
+ * with a KNOWN CORRECTION (`isCorrection: true, header: false, sessions: {}`)
+ * attributable to this call site specifically. Server then merges that
+ * (empty) corrected known-state and -- because it already holds map in
+ * memory -- immediately re-sends the full content (including the `group`
+ * dependency) back to clientB via the ordinary `handleKnownState` ->
+ * `sendNewContent` path. */
+export const correctionAfterFullContentRequest: Scenario = {
+  name: "correction_after_full_content_request",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    connect(server, clientA);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(server, clientA);
+
+    // clientB is a fresh peer with NO storage and NO in-memory knowledge of
+    // map at all -- not even a header.
+    const clientB = makeNode("clientB");
+    connect(server, clientB);
+
+    // Hand-craft a bare CONTENT message with no header, as if server
+    // wrongly assumed clientB already held map's header and were only
+    // sending incremental content. On clientB, `handleNewContent` sees
+    // `!coValue.hasVerifiedContent() && !msg.header`, tries
+    // `loadFromStorage` (no storage attached -> reports not-found
+    // synchronously), and calls `requestFullContent`, replying with a KNOWN
+    // CORRECTION.
+    const serverPeerToClientB = peerStateFor(server, clientB);
+    serverPeerToClientB.pushOutgoingMessage({
+      action: "content",
+      id: map.core.id,
+      header: undefined,
+      priority: CO_VALUE_PRIORITY.MEDIUM,
+      new: {},
+    });
 
     await waitFor(() => {
       const core = clientB.node.getCoValue(map.core.id);
@@ -597,4 +673,5 @@ export const scenarios: Scenario[] = [
   loadPeerHasAllContent,
   knownStateTriggersSend,
   knownStateTriggersDeferredLoad,
+  correctionAfterFullContentRequest,
 ];
