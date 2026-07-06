@@ -661,6 +661,57 @@ export const correctionAfterFullContentRequest: Scenario = {
   },
 };
 
+/** 13. Correction ordering interleaved with a regular known-state update:
+ * `decide_on_correction`'s safety (an unconditional known-state overwrite,
+ * trusted at face value) depends entirely on `processQueues`' single-threaded
+ * ordering guarantee -- a correction and an ordinary `known` message for the
+ * SAME (peer, CoValue) pair must be applied in strict arrival order. This is
+ * a DIFFERENT scenario from `correction_invalid_state_assumed` above: that one
+ * proves a single correction is issued and recovered from in isolation. This
+ * one proves that when server's own recovery-driven correction lands in the
+ * same message queue as clientA's very next ordinary write (both keyed on the
+ * same map/clientA-peer pair), they still apply in the order they actually
+ * arrived rather than racing -- so a future native port has a real oracle to
+ * catch an ordering regression against, not just an isolated-message test. */
+export const correctionOrderingInterleaved: Scenario = {
+  name: "correction_ordering_interleaved_with_known",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    connect(server, clientA);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("k1", "v1", "trusting");
+    await settle(server, clientA);
+
+    // Simulate server losing its record of clientA's progress (forces a
+    // future correction), then in quick succession: (1) clientA makes a new
+    // write producing an ordinary `known` update, and (2) server's own
+    // recovery logic produces a correction for the SAME coValue/peer pair.
+    // Both land in server's single message queue; processQueues must apply
+    // them in the order they actually arrived, not race them.
+    server.node.internalDeleteCoValue(map.core.id);
+
+    map.set("k2", "v2", "trusting");
+    await settle(server, clientA);
+
+    await waitFor(async () => {
+      const core = await server.node.loadCoValueCore(map.core.id);
+      if (!core.isAvailable()) throw new Error("not recovered on server");
+      const content = core.getCurrentContent();
+      if (content.type !== "comap") throw new Error("wrong type");
+    });
+    await stabilize([server, clientA], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -674,4 +725,5 @@ export const scenarios: Scenario[] = [
   knownStateTriggersSend,
   knownStateTriggersDeferredLoad,
   correctionAfterFullContentRequest,
+  correctionOrderingInterleaved,
 ];
