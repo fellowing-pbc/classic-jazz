@@ -64,6 +64,11 @@ export function attachStorage(node: MeshNode, dbPath?: string): string {
  * own. Scenarios that manually drive `startStorageReconciliation` need that
  * suppressed, or the automatic path races (and usually wins) ahead of the
  * manual call, masking whatever the manual call would otherwise prove.
+ *
+ * Note: automatic `startPeerReconciliation` fires only for the `client`
+ * argument's own node — it sees peer1 with role `"server"`, and `addPeer`
+ * auto-reconciles only when the peer's role is `"server"` (sync.ts:823). The
+ * `server` argument's node never auto-reconciles from this call.
  */
 export function connect(
   server: MeshNode,
