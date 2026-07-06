@@ -8,9 +8,9 @@
  *
  * Run: pnpm exec tsx bench/colist.load.bench.ts [items] [itemsPerTx]
  */
-import { LocalNode, ControlledAgent } from "cojson";
 import { WasmCrypto } from "cojson/crypto/WasmCrypto";
 import type { RawCoList } from "cojson";
+import { createNode, measureLoad, ms } from "./loadBenchUtils.js";
 
 const ITEMS = Number(process.argv[2] ?? 100_000);
 const ITEMS_PER_TX = Number(process.argv[3] ?? 100);
@@ -18,22 +18,8 @@ const PRIVACY = (process.env.PRIVACY ?? "private") as "private" | "trusting";
 
 const crypto = await WasmCrypto.create();
 
-function ms(n: number) {
-  return `${n.toFixed(1)}ms`;
-}
-
-function createNode(agentSecret = crypto.newRandomAgentSecret()) {
-  const agent = new ControlledAgent(agentSecret, crypto);
-  const node = new LocalNode(
-    agentSecret,
-    crypto.newRandomSessionID(agent.id),
-    crypto,
-  );
-  return { node, agentSecret };
-}
-
 // --- Node A: create the list ---------------------------------------------
-const { node: nodeA, agentSecret } = createNode();
+const { node: nodeA, agentSecret } = createNode(crypto);
 const group = nodeA.createGroup();
 
 const tCreate0 = performance.now();
@@ -62,7 +48,7 @@ console.log(
 const SUBSCRIBED = Boolean(process.env.SUBSCRIBED);
 
 async function loadOnFreshNode() {
-  const { node: nodeB } = createNode(agentSecret);
+  const { node: nodeB } = createNode(crypto, agentSecret);
   if (process.env.SKIP_VERIFY) {
     nodeB.syncManager.disableTransactionVerification();
   }
@@ -130,45 +116,4 @@ async function loadOnFreshNode() {
   };
 }
 
-// warmup
-await loadOnFreshNode();
-
-let stopProfiler: (() => Promise<void>) | undefined;
-if (process.env.PROFILE) {
-  const inspector = await import("node:inspector");
-  const fs = await import("node:fs");
-  const session = new inspector.Session();
-  session.connect();
-  const post = (method: string, params?: object) =>
-    new Promise<any>((resolve, reject) =>
-      session.post(method, params, (err, res) =>
-        err ? reject(err) : resolve(res),
-      ),
-    );
-  await post("Profiler.enable");
-  await post("Profiler.start");
-  stopProfiler = async () => {
-    const { profile } = await post("Profiler.stop");
-    fs.writeFileSync(process.env.PROFILE!, JSON.stringify(profile));
-    console.log(`profile written to ${process.env.PROFILE}`);
-  };
-}
-
-const runs: Awaited<ReturnType<typeof loadOnFreshNode>>[] = [];
-for (let i = 0; i < 5; i++) {
-  runs.push(await loadOnFreshNode());
-}
-
-await stopProfiler?.();
-
-const best = runs.reduce((a, b) => (a.total < b.total ? a : b));
-const median = [...runs].sort((a, b) => a.total - b.total)[
-  Math.floor(runs.length / 2)
-]!;
-
-console.log(
-  `load (import+read) best:   import=${ms(best.import)} read=${ms(best.read)} total=${ms(best.total)}`,
-);
-console.log(
-  `load (import+read) median: import=${ms(median.import)} read=${ms(median.read)} total=${ms(median.total)}`,
-);
+await measureLoad(loadOnFreshNode);
