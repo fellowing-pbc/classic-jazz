@@ -19,6 +19,7 @@ import {
   connectedPeersWithMessagesTracking,
   nodeWithRandomAgentAndSessionID,
 } from "../testUtils.js";
+import { createSyncStorage, getDbPath } from "../testStorage.js";
 
 export type MeshNode = {
   name: string;
@@ -27,6 +28,23 @@ export type MeshNode = {
 
 export function makeNode(name: string): MeshNode {
   return { name, node: nodeWithRandomAgentAndSessionID() };
+}
+
+/**
+ * Attaches a fresh SQLite-backed storage to `node`, at a caller-supplied
+ * `dbPath` (so a second, independent node can attach to the SAME file to
+ * simulate "storage has this content, but I never loaded it into memory").
+ * Returns the path used, generating one if not supplied.
+ */
+export function attachStorage(node: MeshNode, dbPath?: string): string {
+  const path = dbPath ?? getDbPath();
+  const storage = createSyncStorage({
+    filename: path,
+    nodeName: node.name,
+    storageName: `${node.name}-storage`,
+  });
+  node.node.setStorage(storage);
+  return path;
 }
 
 /**

@@ -18,6 +18,7 @@ import type { RawCoMap } from "../../coValues/coMap.js";
 import { fillCoMapWithLargeData, waitFor } from "../testUtils.js";
 import type { Scenario } from "./harness.js";
 import {
+  attachStorage,
   connect,
   disconnect,
   makeNode,
@@ -256,6 +257,43 @@ export const concurrentFanOut: Scenario = {
   },
 };
 
+/** 7. Storage-backed response: a node with a real SQLite storage but zero
+ * in-memory knowledge of a CoValue answers a fresh peer's load purely from
+ * disk. */
+export const storageBackedResponse: Scenario = {
+  name: "load_storage_backed_response",
+  run: async () => {
+    const writer = makeNode("writer");
+    const dbPath = attachStorage(writer);
+
+    const group = writer.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await map.core.waitForSync();
+    await writer.node.gracefulShutdown();
+
+    // A fresh, unrelated node attaches to the SAME storage file — it has
+    // zero in-memory knowledge of this CoValue, only what's in the DB.
+    const storageOnly = makeNode("storageOnly");
+    attachStorage(storageOnly, dbPath);
+
+    const requester = makeNode("requester");
+    connect(storageOnly, requester);
+
+    const loaded = await requester.node.loadCoValueCore(map.core.id);
+    await waitFor(() => {
+      if (!loaded.isAvailable()) throw new Error("not yet loaded");
+    });
+    await stabilize([storageOnly, requester], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(storageOnly, requester),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -263,4 +301,5 @@ export const scenarios: Scenario[] = [
   deletion,
   correctionInvalidState,
   concurrentFanOut,
+  storageBackedResponse,
 ];
