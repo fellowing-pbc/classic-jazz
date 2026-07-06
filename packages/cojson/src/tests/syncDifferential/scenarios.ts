@@ -329,6 +329,68 @@ export const loadForwardsToPeers: Scenario = {
   },
 };
 
+/** 9. Peer already has all content: a node whose only knowledge of a CoValue
+ * comes from storage (never loaded it into memory) receives a `load` message
+ * from a peer that has already fully synced that CoValue elsewhere. The
+ * storage-check inside `handleLoad` (`sync.ts:924-936`) finds the peer's
+ * reported known-state already covers everything storage holds, so it
+ * replies with a KNOWN ack — not a CONTENT resend — and calls
+ * `coValue.loadFromPeers(serverPeers, "low-priority")` to keep the
+ * subscription alive for future updates rather than dropping it.
+ *
+ * Note: a node re-requesting a CoValue it created itself never produces this
+ * branch — its own in-memory copy short-circuits `handleLoad`'s fast path
+ * before the storage check ever runs. Instead, `requester` primes itself by
+ * loading the CoValue from `writer` first (so it holds full content in
+ * memory), then `writer` is torn down and a brand-new `storageOnly` node
+ * attaches to the same on-disk storage (zero in-memory knowledge, only what
+ * `writer` persisted). Reconnecting `requester` to `storageOnly` makes
+ * `requester`'s own peer-reconciliation resend a `load` message carrying its
+ * own full known-state — exactly the condition `peerHasAllContent` checks
+ * for against `storageOnly`'s storage-backed known-state. */
+export const loadPeerHasAllContent: Scenario = {
+  name: "load_peer_has_all_content_keeps_subscription",
+  run: async () => {
+    const writer = makeNode("writer");
+    const dbPath = attachStorage(writer);
+
+    const group = writer.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await map.core.waitForSync();
+
+    // requester loads the CoValue directly from writer (still in memory
+    // there), so requester ends up holding the full content itself.
+    const requester = makeNode("requester");
+    connect(writer, requester);
+    const primed = await requester.node.loadCoValueCore(map.core.id);
+    await waitFor(() => {
+      if (!primed.isAvailable()) throw new Error("not primed on requester");
+    });
+
+    disconnect(writer, requester);
+    await writer.node.gracefulShutdown();
+
+    // A fresh node attaches to the SAME storage file — it has zero in-memory
+    // knowledge of group/map, only what writer persisted to disk.
+    const storageOnly = makeNode("storageOnly");
+    attachStorage(storageOnly, dbPath);
+
+    // requester still holds group/map fully in memory, so reconnecting it as
+    // a client of storageOnly makes it resend LOAD messages carrying its own
+    // full known-state for both — the peer-has-all-content condition.
+    connect(storageOnly, requester);
+    await settle(storageOnly, requester);
+    await stabilize([storageOnly, requester], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(storageOnly, requester),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -338,4 +400,5 @@ export const scenarios: Scenario[] = [
   concurrentFanOut,
   storageBackedResponse,
   loadForwardsToPeers,
+  loadPeerHasAllContent,
 ];
