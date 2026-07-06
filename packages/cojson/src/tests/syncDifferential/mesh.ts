@@ -13,7 +13,7 @@
  */
 import type { RawCoID } from "../../ids.js";
 import type { CoValueKnownState } from "../../knownState.js";
-import type { LocalNode } from "../../localNode.js";
+import { LocalNode } from "../../localNode.js";
 import type { PeerState } from "../../PeerState.js";
 import type { Peer } from "../../sync.js";
 import {
@@ -54,8 +54,22 @@ export function attachStorage(node: MeshNode, dbPath?: string): string {
  * peer persistent, client peer not). Safe to call again with the same nodes to
  * model a reconnect: the peer ids are stable (node session ids), so the server's
  * persistent `PeerState` is reused via `newPeerStateFrom`.
+ *
+ * `opts.skipReconciliation`, forwarded to the client's own `addPeer` call,
+ * mirrors `connectToSyncServer({ skipReconciliation: true })`: it suppresses
+ * the automatic `startPeerReconciliation` that would otherwise fire the
+ * moment this (persistent, "server"-role) peer is added — including
+ * `resumeUnsyncedCoValues`, which would eagerly load any storage-flagged
+ * "unsynced" CoValue into memory and sync it via an ordinary `load` on its
+ * own. Scenarios that manually drive `startStorageReconciliation` need that
+ * suppressed, or the automatic path races (and usually wins) ahead of the
+ * manual call, masking whatever the manual call would otherwise prove.
  */
-export function connect(server: MeshNode, client: MeshNode): void {
+export function connect(
+  server: MeshNode,
+  client: MeshNode,
+  opts?: { skipReconciliation?: boolean },
+): void {
   const { peer1, peer2 } = connectedPeersWithMessagesTracking({
     peer1: {
       id: server.node.currentSessionID,
@@ -72,7 +86,7 @@ export function connect(server: MeshNode, client: MeshNode): void {
   // Server holds the client-facing peer (peer2); client holds the server-facing
   // peer (peer1) — exactly as the production helpers do.
   server.node.syncManager.addPeer(peer2);
-  client.node.syncManager.addPeer(peer1);
+  client.node.syncManager.addPeer(peer1, opts?.skipReconciliation);
 }
 
 /**
@@ -99,6 +113,29 @@ export function disconnect(a: MeshNode, b: MeshNode): void {
   const bPeer = b.node.syncManager.peers[a.node.currentSessionID];
   aPeer?.gracefulShutdown();
   bPeer?.gracefulShutdown();
+}
+
+/**
+ * Simulate a real process restart of `node`: tears down its current
+ * `LocalNode` and replaces it with a fresh instance that reuses the SAME
+ * agent secret and session ID — so any peer's book-keeping about this
+ * session (and the transactions already signed under it) stays valid — with
+ * its previously-attached storage (if any) reattached. Every in-memory
+ * `CoValueCore` is gone afterwards; only what storage persisted survives.
+ *
+ * This is a "session-continuity" break, NOT a full identity change: contrast
+ * with wiring a brand-new `makeNode(...)`-created node against the same db
+ * file (as `storageBackedResponse`/`loadPeerHasAllContent` do in
+ * scenarios.ts), which models an entirely different actor picking up
+ * someone else's storage rather than the same actor restarting.
+ */
+export async function restartNode(node: MeshNode): Promise<void> {
+  const { agentSecret, currentSessionID, crypto, storage } = node.node;
+  await node.node.gracefulShutdown();
+  node.node = new LocalNode(agentSecret, currentSessionID, crypto);
+  if (storage) {
+    node.node.setStorage(storage);
+  }
 }
 
 /** Canonical, order-independent serialization of a known-state for comparison. */

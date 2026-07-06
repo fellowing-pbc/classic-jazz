@@ -30,6 +30,7 @@ import {
   disconnect,
   makeNode,
   peerStateFor,
+  restartNode,
   stabilize,
   type MeshNode,
 } from "./mesh.js";
@@ -1118,6 +1119,103 @@ export const colistConcurrentAppend: Scenario = {
   },
 };
 
+/** 18. Storage-reconciliation decision path (`handleReconcile`, sync.ts:
+ * 1052-1125): a manually-triggered `startStorageReconciliation` call surfaces
+ * a hash mismatch and the server responds with a `load` for the CoValue it's
+ * behind on.
+ *
+ * `startStorageReconciliation` (sync.ts:422-428) has two preconditions that
+ * dictate which side calls it and how: (1) `this.local.storage` must be
+ * truthy for the CALLING side — i.e. it is called ON the side that has
+ * storage, not targeting a peer that has storage; (2) the `peer` argument
+ * must be a persistent "server"-role `PeerState` from the CALLER's own
+ * perspective (`isPersistentServerPeer`, sync.ts:135-137). In this mesh,
+ * `connect(server, client)` gives `client` a `role: "server", persistent:
+ * true` peer for `server` (mirroring the real client -> sync-server wiring,
+ * see `connectedPeersWithMessagesTracking`'s default persistence rule) — so
+ * it is `client.node.syncManager.startStorageReconciliation(peerToServer)`
+ * that is meaningful here, never the reverse (`server`'s peer for `client` is
+ * `role: "client"`, so `isPersistentServerPeer` would immediately reject it
+ * and the call would be a silent no-op).
+ *
+ * There's a second precondition, easy to miss: `buildStorageReconciliationEntries`
+ * (sync.ts:506-542) filters the reconciled batch down to CoValues NOT
+ * currently in the CALLER's own memory. `client` created `map` itself, so it
+ * never naturally leaves client's memory — calling reconciliation while `map`
+ * is still in-memory would enumerate zero entries and reconcile nothing.
+ * `restartNode` (mesh.ts) closes this gap the same way the referenced
+ * production test does it (`sync.storageReconciliation.test.ts`'s "...for
+ * outdated CoValues"): tear down and recreate `client`'s `LocalNode` reusing
+ * the same agent + session identity (so the already-synced first transaction
+ * and the reconnect are still recognized as the same session) with the same
+ * on-disk storage reattached — a "session-continuity" break, not the
+ * full-identity-swap technique `storageBackedResponse`/
+ * `loadPeerHasAllContent` use for an unrelated fresh peer picking up someone
+ * else's storage. After the restart, `map` (and `group`) exist only in
+ * client's storage, so reconciliation's storage-backed hash for `map` (2
+ * sessions: header/2) genuinely disagrees with what `server` still has in
+ * memory (1 transaction, from before the disconnect) — the mismatch
+ * `handleReconcile` is built to detect. */
+export const reconcileHashMismatch: Scenario = {
+  name: "reconcile_hash_mismatch_triggers_load",
+  run: async () => {
+    const client = makeNode("client");
+    attachStorage(client);
+    const server = makeNode("server");
+    connect(server, client);
+
+    const group = client.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("k1", "v1", "trusting");
+    await map.core.waitForSync();
+
+    // A second transaction reaches client's own storage but is deliberately
+    // NOT synced to server: disconnect first, so there's no window for it to
+    // propagate.
+    disconnect(server, client);
+    map.set("k2", "v2", "trusting");
+    await flush();
+
+    // Simulate the client process restarting (same agent + session identity,
+    // storage reattached) so `map`/`group` are storage-only on client, not
+    // in-memory -- required for startStorageReconciliation to consider them
+    // at all.
+    await restartNode(client);
+
+    // Reconnect (server's persistent PeerState for this session id is
+    // reused) with automatic reconciliation suppressed on the client's side:
+    // otherwise `addPeer`'s own `startPeerReconciliation` -> `resumeUnsyncedCoValues`
+    // would eagerly load `map` back into memory and sync it via an ordinary
+    // `load` before our manual call below ever runs, masking whether
+    // reconciliation itself does anything.
+    connect(server, client, { skipReconciliation: true });
+    const peerToServer = peerStateFor(client, server);
+    await new Promise<void>((resolve) => {
+      client.node.syncManager.startStorageReconciliation(
+        peerToServer,
+        0,
+        resolve,
+      );
+    });
+
+    await waitFor(async () => {
+      const core = await server.node.loadCoValueCore(map.core.id);
+      if (!core.isAvailable()) throw new Error("not yet reconciled");
+      const content = expectMap(core.getCurrentContent());
+      if (content.get("k2") !== "v2") {
+        throw new Error("k2 not yet reconciled");
+      }
+    });
+    await stabilize([server, client], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, client),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -1136,4 +1234,5 @@ export const scenarios: Scenario[] = [
   contentFanoutDirectVsLoadRequest,
   privateTransactionSync,
   colistConcurrentAppend,
+  reconcileHashMismatch,
 ];

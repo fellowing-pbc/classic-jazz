@@ -1,0 +1,137 @@
+{
+  "scenario": "reconcile_hash_mismatch_triggers_load",
+  "trace": [
+    "client -> client-storage | CONTENT Group header: true new: After: 0 New: 6",
+    "client -> server | CONTENT Group header: true new: After: 0 New: 6",
+    "server -> client | KNOWN Group sessions: header/6",
+    "client -> server | KNOWN Group sessions: header/6",
+    "client -> client-storage | CONTENT Map header: true new: After: 0 New: 1",
+    "client -> server | CONTENT Map header: true new: After: 0 New: 1",
+    "server -> client | KNOWN Map sessions: header/1",
+    "client -> server | KNOWN Map sessions: header/1",
+    "client -> client-storage | CONTENT Map header: false new: After: 1 New: 1",
+    "client -> client-storage | GET_KNOWN_STATE Group",
+    "client-storage -> client | GET_KNOWN_STATE_RESULT Group sessions: header/6",
+    "client -> client-storage | GET_KNOWN_STATE Map",
+    "client-storage -> client | GET_KNOWN_STATE_RESULT Map sessions: header/2",
+    "client -> server | RECONCILE",
+    "server -> client | LOAD Map sessions: header/1",
+    "client -> client-storage | GET_KNOWN_STATE Map",
+    "client-storage -> client | GET_KNOWN_STATE_RESULT Map sessions: header/2",
+    "client -> client-storage | LOAD Map sessions: empty",
+    "client-storage -> client | CONTENT Group header: true new: After: 0 New: 6",
+    "client -> server | LOAD Group sessions: header/6",
+    "client-storage -> client | CONTENT Map header: true new: After: 0 New: 2",
+    "client -> server | CONTENT Map header: false new: After: 1 New: 1",
+    "client -> server | KNOWN Map sessions: header/2",
+    "server -> client | KNOWN Group sessions: header/6",
+    "server -> client | KNOWN Map sessions: header/2",
+    "server -> client | RECONCILE_ACK",
+    "server -> client | CONTENT Map header: true new: ",
+    "client -> server | KNOWN Map sessions: header/2",
+    "client -> client-storage | CONTENT Map header: true new: "
+  ],
+  "nodes": {
+    "client": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "client": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "client": 2
+          }
+        }
+      },
+      "peers": {
+        "server": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    "server": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "client": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "client": 2
+          }
+        }
+      },
+      "peers": {
+        "client": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "client": 2
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "convergence": {
+    "Group": true,
+    "Map": true
+  },
+  "converged": true
+}
