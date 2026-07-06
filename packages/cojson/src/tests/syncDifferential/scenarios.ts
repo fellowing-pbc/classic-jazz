@@ -1052,15 +1052,34 @@ export const privateTransactionSync: Scenario = {
   },
 };
 
-/** 17. CoList (RGA) concurrent append convergence: unlike every scenario above
- * (all `RawCoMap`), this exercises `RawCoList`'s RGA-based ordering semantics --
- * genuinely different convergence machinery than map key overwrite. Two clients
- * each append a distinct item at the same anchor position (`after: 0`,
- * immediately following the shared, already-synced `"first"` item) concurrently,
- * with no coordination between them. The RGA algorithm's tie-breaking (ordering
- * concurrent insertions at the same anchor by a deterministic rule, not by
- * arrival order) must still make every node converge on the identical resulting
- * order. */
+/** 17. CoList (RGA) concurrent append -- transaction-set convergence only:
+ * unlike every scenario above (all `RawCoMap`), this exercises `RawCoList`'s
+ * RGA-based sync path -- genuinely different machinery than map key overwrite.
+ * Two clients each append a distinct item at the same anchor position
+ * (`after: 0`, immediately following the shared, already-synced `"first"`
+ * item) concurrently, with no coordination between them.
+ *
+ * What this scenario DOES demonstrate: both concurrent appends propagate to
+ * every node and no transaction is lost or rejected -- i.e. the mechanical
+ * CRDT sync (transaction delivery/merge) converges. `stabilize()` here only
+ * confirms matching known-state transaction counts across nodes; it does not
+ * inspect materialized list content or order.
+ *
+ * What this scenario does NOT demonstrate: that all nodes materialize the
+ * same final item ORDER. When two different sessions insert at the same
+ * anchor with tied `effective_made_at` timestamps, the RGA tie-break falls
+ * back to `arrival_seq` (see `co_list.rs`, mirrored by the equivalent
+ * ordering in `coValueCore.ts`'s `compareTransactions` /
+ * `getValidSortedTransactions`), which reflects each node's own local
+ * processing order rather than a value agreed on by all nodes. Repeated
+ * reproduction (20 runs with realistic async delivery) found nodes can
+ * permanently land on different final orders for such same-millisecond ties,
+ * even though every node ends up holding byte-identical transaction sets.
+ * This is a pre-existing characteristic of cojson's CoList implementation
+ * (present in both the native and TypeScript code paths), not a regression
+ * and not something this scenario is asserting or fixing -- it is simply not
+ * safe to read this scenario's pass as evidence either way about final order
+ * agreement. */
 export const colistConcurrentAppend: Scenario = {
   name: "colist_concurrent_append_convergence",
   run: async () => {
