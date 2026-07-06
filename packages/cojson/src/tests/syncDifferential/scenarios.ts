@@ -347,18 +347,51 @@ export const loadForwardsToPeers: Scenario = {
  * `writer` persisted). Reconnecting `requester` to `storageOnly` makes
  * `requester`'s own peer-reconciliation resend a `load` message carrying its
  * own full known-state — exactly the condition `peerHasAllContent` checks
- * for against `storageOnly`'s storage-backed known-state. */
+ * for against `storageOnly`'s storage-backed known-state.
+ *
+ * `core` is layered in upstream of both `writer` and `storageOnly` as a
+ * *persistent server-role peer* (present before `requester` ever connects to
+ * `storageOnly`) so that the branch's `getServerPeers(msg.id, peer.id)` call
+ * resolves to a non-empty list — without it, `storageOnly` would have no
+ * server peer of its own and `coValue.loadFromPeers([], "low-priority")`
+ * would be an unobservable no-op.
+ *
+ * `writer` connects to `core` as a CLIENT (not the other way around) for two
+ * reasons: (1) it lets `core` pick up the content automatically as `writer`
+ * writes it — a client's local writes push straight to its connected
+ * peers — with no separate priming step; (2) it makes `core` a *persistent*
+ * server peer of `writer`, so once `map.core.waitForSync()` resolves the
+ * durability tracker records the CoValues as synced-to-a-persistent-peer in
+ * `writer`'s storage file. That matters because `storageOnly` reopens that
+ * very file: if the CoValues were still flagged unsynced on disk, wiring
+ * `core` in as `storageOnly`'s own persistent server peer below would make
+ * `storageOnly`'s connection-time reconciliation (`resumeUnsyncedCoValues`)
+ * eagerly reload them into memory on its own — which would make the
+ * CoValues already `isAvailable()` by the time `requester`'s load arrives,
+ * short-circuiting `handleLoad`'s fast path (`sync.ts:896`) before the
+ * `peerHasAllContent` branch under test ever runs. */
 export const loadPeerHasAllContent: Scenario = {
   name: "load_peer_has_all_content_keeps_subscription",
   run: async () => {
     const writer = makeNode("writer");
     const dbPath = attachStorage(writer);
 
+    // core is writer's persistent server peer, so writer's writes below
+    // propagate to it automatically, and the durability tracker in writer's
+    // storage file records the CoValues as synced once core acks them.
+    const core = makeNode("core");
+    connect(core, writer);
+
     const group = writer.node.createGroup();
     group.addMember("everyone", "reader");
     const map = group.createMap();
     map.set("hello", "world", "trusting");
     await map.core.waitForSync();
+
+    const coreMap = core.node.getCoValue(map.core.id);
+    await waitFor(() => {
+      if (!coreMap.isAvailable()) throw new Error("not synced to core");
+    });
 
     // requester loads the CoValue directly from writer (still in memory
     // there), so requester ends up holding the full content itself.
@@ -369,6 +402,7 @@ export const loadPeerHasAllContent: Scenario = {
       if (!primed.isAvailable()) throw new Error("not primed on requester");
     });
 
+    disconnect(core, writer);
     disconnect(writer, requester);
     await writer.node.gracefulShutdown();
 
@@ -377,16 +411,27 @@ export const loadPeerHasAllContent: Scenario = {
     const storageOnly = makeNode("storageOnly");
     attachStorage(storageOnly, dbPath);
 
+    // Wire storageOnly to core FIRST — as core's client, so core is a
+    // persistent server-role peer on storageOnly's side by the time
+    // requester's load arrives below. This is the peer the
+    // peerHasAllContent branch's loadFromPeers(serverPeers, ...) call will
+    // target.
+    connect(core, storageOnly);
+    await settle(core, storageOnly);
+
     // requester still holds group/map fully in memory, so reconnecting it as
     // a client of storageOnly makes it resend LOAD messages carrying its own
     // full known-state for both — the peer-has-all-content condition.
     connect(storageOnly, requester);
     await settle(storageOnly, requester);
-    await stabilize([storageOnly, requester], [group.core.id, map.core.id]);
+    await stabilize(
+      [core, storageOnly, requester],
+      [group.core.id, map.core.id],
+    );
 
     return {
       coValues: { Group: group.core, Map: map.core },
-      nodes: nodeMap(storageOnly, requester),
+      nodes: nodeMap(core, storageOnly, requester),
     };
   },
 };
