@@ -498,6 +498,93 @@ export const knownStateTriggersSend: Scenario = {
   },
 };
 
+/** 11. Known-state merge triggers deferred load: `handleKnownState`'s OTHER
+ * branch (sync.ts:1039-1044) from `known_state_merge_triggers_immediate_send`
+ * above. There, the server held both CoValues in memory, so the incoming
+ * `known` fired `sendNewContent` directly off the merge. Here, the server has
+ * unmounted its in-memory copy of `map` down to a knownState-only shell
+ * (`internalUnmountCoValue` -- garbage-collected/shell state: not
+ * `isAvailable()`, but `isKnownStateAvailable()`), so the merge instead falls
+ * through to `this.local.loadCoValueCore(msg.id).then(() =>
+ * this.sendNewContent(...))` -- a load (here, satisfied from the server's own
+ * attached storage, with no further wire traffic) THEN a send, rather than an
+ * immediate send off the merge.
+ *
+ * As with the immediate-send scenario, a normal cold-connecting peer's own
+ * reconciliation flow (`startPeerReconciliation` / `handleReconcile`'s
+ * `maybeSendLoadRequest`, sync.ts ~1088-1108) only ever emits an explicit
+ * `load`, never a spontaneous `known` -- so a plain
+ * `clientB.node.loadCoValueCore(...)` call would land in `handleLoad`, not
+ * `handleKnownState`, and never reach this branch at all. We reuse the same
+ * hand-crafted, bare KNOWN message technique from the immediate-send
+ * scenario, but aim it at the CoValue the server has unmounted. */
+export const knownStateTriggersDeferredLoad: Scenario = {
+  name: "known_state_merge_triggers_deferred_load",
+  run: async () => {
+    const server = makeNode("server");
+    attachStorage(server);
+    const clientA = makeNode("clientA");
+    connect(server, clientA);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(server, clientA);
+
+    // Force server's in-memory copy out (garbage-collected shell state, only
+    // knownState cached, not full content) so the next known-state message
+    // about it must go through the deferred-load-then-send path. Requires
+    // storage attached (`setGarbageCollectedState` is a no-op without it),
+    // no listeners/dependants on `map`, and `map` already synced to server's
+    // (zero) server peers -- all true right after `settle`.
+    const unmounted = server.node.internalUnmountCoValue(map.core.id);
+    if (!unmounted) {
+      throw new Error("failed to unmount map on server");
+    }
+    const shell = server.node.getCoValue(map.core.id);
+    if (shell.isAvailable() || !shell.isKnownStateAvailable()) {
+      throw new Error(
+        "expected map to be unavailable-but-known-state-available on server after unmount",
+      );
+    }
+
+    const clientB = makeNode("clientB");
+    connect(server, clientB);
+
+    // clientB announces its own (empty) state via a bare, unprompted KNOWN
+    // message for each CoValue -- not the LOAD its real reconciliation flow
+    // would send (see `known_state_merge_triggers_immediate_send`). Server
+    // has `group` fully in memory (hits the sibling immediate-send branch)
+    // but only a knownState shell for `map` (hits the deferred-load branch
+    // this scenario targets).
+    const serverPeerFromClientB =
+      clientB.node.syncManager.peers[server.node.currentSessionID];
+    if (!serverPeerFromClientB) {
+      throw new Error("clientB has no peer state for server");
+    }
+    for (const id of [group.core.id, map.core.id]) {
+      serverPeerFromClientB.pushOutgoingMessage({
+        action: "known",
+        id,
+        header: false,
+        sessions: {},
+      });
+    }
+
+    await waitFor(() => {
+      const core = clientB.node.getCoValue(map.core.id);
+      if (!core.isAvailable()) throw new Error("map not yet on clientB");
+    });
+    await stabilize([server, clientA, clientB], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -509,4 +596,5 @@ export const scenarios: Scenario[] = [
   loadForwardsToPeers,
   loadPeerHasAllContent,
   knownStateTriggersSend,
+  knownStateTriggersDeferredLoad,
 ];
