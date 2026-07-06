@@ -661,56 +661,59 @@ export const correctionAfterFullContentRequest: Scenario = {
   },
 };
 
-/** 13. Correction ordering interleaved with a regular known-state update:
- * `decide_on_correction`'s safety (an unconditional known-state overwrite,
- * trusted at face value) depends entirely on `processQueues`' single-threaded
- * ordering guarantee -- a correction and an ordinary `known` message for the
- * SAME (peer, CoValue) pair must be applied in strict arrival order. This is
- * a DIFFERENT scenario from `correction_invalid_state_assumed` above: that one
- * proves a single correction is issued and recovered from in isolation. This
- * one proves that when server's own recovery-driven correction lands in the
- * same message queue as clientA's very next ordinary write (both keyed on the
- * same map/clientA-peer pair), they still apply in the order they actually
- * arrived rather than racing -- so a future native port has a real oracle to
- * catch an ordering regression against, not just an isolated-message test. */
-export const correctionOrderingInterleaved: Scenario = {
-  name: "correction_ordering_interleaved_with_known",
-  run: async () => {
-    const server = makeNode("server");
-    const clientA = makeNode("clientA");
-    connect(server, clientA);
-
-    const group = clientA.node.createGroup();
-    group.addMember("everyone", "reader");
-    const map = group.createMap();
-    map.set("k1", "v1", "trusting");
-    await settle(server, clientA);
-
-    // Simulate server losing its record of clientA's progress (forces a
-    // future correction), then in quick succession: (1) clientA makes a new
-    // write producing an ordinary `known` update, and (2) server's own
-    // recovery logic produces a correction for the SAME coValue/peer pair.
-    // Both land in server's single message queue; processQueues must apply
-    // them in the order they actually arrived, not race them.
-    server.node.internalDeleteCoValue(map.core.id);
-
-    map.set("k2", "v2", "trusting");
-    await settle(server, clientA);
-
-    await waitFor(async () => {
-      const core = await server.node.loadCoValueCore(map.core.id);
-      if (!core.isAvailable()) throw new Error("not recovered on server");
-      const content = core.getCurrentContent();
-      if (content.type !== "comap") throw new Error("wrong type");
-    });
-    await stabilize([server, clientA], [group.core.id, map.core.id]);
-
-    return {
-      coValues: { Group: group.core, Map: map.core },
-      nodes: nodeMap(server, clientA),
-    };
-  },
-};
+/** On "correction ordering under concurrent arrival" -- a scenario was
+ * attempted here (`correction_ordering_interleaved_with_known`, since
+ * removed) meant to prove that when two messages for the SAME (peer,
+ * CoValue) pair are both independently queued before either is processed,
+ * `handleCorrection`'s unconditional known-state overwrite still applies
+ * them in strict arrival order rather than racing.
+ *
+ * That scenario turned out to be unfalsifiable, and worse, unnecessary: it
+ * was byte-for-byte structurally identical (confirmed via diff of the
+ * recorded trace) to `correction_invalid_state_assumed` above. Tracing
+ * through the actual queue mechanics in sync.ts and
+ * queue/IncomingMessagesQueue.ts shows why no such scenario CAN exist --
+ * this ordering property is enforced by construction, not by any
+ * processing discipline that needs a test to pin down:
+ *
+ * - `IncomingMessagesQueue.push()` (queue/IncomingMessagesQueue.ts:76-97)
+ *   unconditionally calls `this.processQueues()` as its last step (line 96),
+ *   on every single push, no exceptions.
+ * - `SyncManager.processQueues()` (sync.ts:747-805) is guarded by one
+ *   boolean, `this.processing` (declared sync.ts:719, checked/set
+ *   sync.ts:748-752, cleared sync.ts:804), and its `while (true)` loop
+ *   (sync.ts:757-802) drains the queue -- via `messagesQueue.pull()`,
+ *   sync.ts:759 -- until BOTH the incoming-message queue and the storage
+ *   streaming queue are empty (sync.ts:788-790) before it returns and
+ *   clears the flag.
+ * - The only call site of `SyncManager.pushMessage()`
+ *   (defined sync.ts:721-723) outside its own definition is sync.ts:833,
+ *   invoked from a peer's `incoming.onMessage` transport callback.
+ *
+ * Chain those three facts together: a second message for the same (peer,
+ * CoValue) pair can only be sitting in the queue while a first message is
+ * still unprocessed if that second message arrived DURING the synchronous
+ * drain triggered by the first message's own `push()` call -- i.e. it was
+ * produced as a direct, synchronous, causal consequence of processing the
+ * first message (a correction reply, a re-send triggered by a `known`
+ * merge, etc.). A second, genuinely independent arrival cannot land in the
+ * "still queued behind an unprocessed peer" state at all, because the
+ * auto-drain-on-push design means `processQueues` has already fully
+ * drained the queue by the time control returns to any caller that could
+ * push again. There is no window for two unrelated messages to contend for
+ * the pull loop's ordering.
+ *
+ * In other words, "message B follows message A for the same pair" can only
+ * ever be a causal-reply shape, never a race -- and `correction_invalid_
+ * state_assumed` (above) and `correction_after_full_content_request`
+ * (below) are exactly that shape, exercised via the two distinct
+ * production call sites that emit a KNOWN CORRECTION
+ * (`invalidStateAssumed`, sync.ts:1318,1389, and `requestFullContent`,
+ * sync.ts:1006-1014). Those two scenarios are the only reachable
+ * instances of this property, and they already cover it. This is a
+ * settled finding: no additional differential scenario is needed here,
+ * and none should be added without a new, concrete mechanism that
+ * violates the auto-drain guarantee above. */
 
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
@@ -725,5 +728,4 @@ export const scenarios: Scenario[] = [
   knownStateTriggersSend,
   knownStateTriggersDeferredLoad,
   correctionAfterFullContentRequest,
-  correctionOrderingInterleaved,
 ];
