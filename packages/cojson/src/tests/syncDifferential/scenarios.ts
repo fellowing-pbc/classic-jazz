@@ -436,6 +436,68 @@ export const loadPeerHasAllContent: Scenario = {
   },
 };
 
+/** 10. Known-state merge triggers immediate send: a third peer announces its
+ * own (empty) known state to the server via a bare, unprompted `known`
+ * message for each CoValue — NOT a `load` message. This is structurally
+ * distinct from `basic_two_peer_sync`'s third-peer cold-load (which exercises
+ * `handleLoad`'s overwrite semantics, `peer.setKnownState`): here the server
+ * already holds both CoValues in memory (`coValue.isAvailable()`), so the
+ * incoming `known` message routes through `handleKnownState`'s
+ * `combineWith`-merge branch (sync.ts:1027,1038) and fires an immediate
+ * `sendNewContent` off the merge itself — with no `load` round-trip anywhere
+ * in the exchange. */
+export const knownStateTriggersSend: Scenario = {
+  name: "known_state_merge_triggers_immediate_send",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    const clientB = makeNode("clientB");
+    connect(server, clientA);
+    connect(server, clientB);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(server, clientA);
+
+    // clientB is already connected but has never asked about Group/Map. A
+    // cold-loading peer normally issues an explicit LOAD here (exercising
+    // handleLoad's overwrite semantics, `peer.setKnownState` -- see
+    // `basic_two_peer_sync`). Instead, clientB announces its own (empty)
+    // state via a bare, unprompted KNOWN message for each CoValue -- exactly
+    // what a peer's "here's what I currently have" announcement looks like on
+    // the wire. Server already holds both in memory, so `handleKnownState`'s
+    // `combineWith`-merge branch (sync.ts:1027,1038) fires directly off the
+    // incoming KNOWN and immediately pushes full content back -- no LOAD
+    // round-trip anywhere in the exchange.
+    const serverPeerFromClientB =
+      clientB.node.syncManager.peers[server.node.currentSessionID];
+    if (!serverPeerFromClientB) {
+      throw new Error("clientB has no peer state for server");
+    }
+    for (const id of [group.core.id, map.core.id]) {
+      serverPeerFromClientB.pushOutgoingMessage({
+        action: "known",
+        id,
+        header: false,
+        sessions: {},
+      });
+    }
+
+    await waitFor(() => {
+      const core = clientB.node.getCoValue(map.core.id);
+      if (!core.isAvailable()) throw new Error("map not yet on clientB");
+    });
+    await stabilize([server, clientA, clientB], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, clientA, clientB),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -446,4 +508,5 @@ export const scenarios: Scenario[] = [
   storageBackedResponse,
   loadForwardsToPeers,
   loadPeerHasAllContent,
+  knownStateTriggersSend,
 ];
