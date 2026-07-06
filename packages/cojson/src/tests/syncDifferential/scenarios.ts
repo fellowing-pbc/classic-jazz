@@ -1307,7 +1307,7 @@ export const peerReconciliationFillsEntries: Scenario = {
 
 /** 20. `syncContent`'s per-peer fan-out loop (sync.ts:1538-1574) only ever
  * runs on the node that performs a genuinely LOCAL transaction: it is wired
- * up in `coValueCore.makeNewTransaction` (coValueCore.ts:2000) as
+ * up in `coValueCore.makeTransaction` (coValueCore.ts:2000) as
  * `this.node.syncManager.syncLocalTransaction(...)`, which feeds THAT node's
  * own `LocalTransactionsSyncQueue` -> `syncContent`, iterating THAT node's
  * own `getPeers(coValue.id)`. It is a structurally similar but entirely
