@@ -66,6 +66,17 @@ export type ScenarioResult = {
   coValues: Record<string, CoValueCore>;
   /** named nodes: label -> node (the peers whose state we snapshot) */
   nodes: Record<string, LocalNode>;
+  /**
+   * Labels (keys of `coValues`) that are deliberately, permanently NOT
+   * expected to converge -- e.g. a CoValue one node rejected outright (a
+   * corrupted signature, a permission violation) and so never holds the
+   * same known-state as its peers. Still included in `coValues` so its id
+   * gets a stable trace label instead of leaking a random per-run id into
+   * the golden fixture (which would fail the determinism meta-test); still
+   * recorded in `convergence` for visibility; just excluded from the
+   * all-scenarios-converge gate (`converged`).
+   */
+  excludedFromConvergence?: string[];
 };
 
 export type Scenario = {
@@ -219,6 +230,7 @@ function normalizeIfKnown(
 function checkConvergence(
   nodes: Record<string, NodeSnapshot>,
   coValueLabels: string[],
+  excludedFromConvergence: string[] = [],
 ): { convergence: Record<string, boolean>; converged: boolean } {
   const convergence: Record<string, boolean> = {};
   let converged = true;
@@ -234,7 +246,9 @@ function checkConvergence(
     // Converged if every node that holds it agrees (or nobody holds it).
     const allEqual = states.every((s) => s === states[0]);
     convergence[label] = allEqual;
-    if (!allEqual) converged = false;
+    if (!allEqual && !excludedFromConvergence.includes(label)) {
+      converged = false;
+    }
   }
 
   return { convergence, converged };
@@ -266,7 +280,11 @@ export async function captureScenario(
     );
   }
 
-  const { convergence, converged } = checkConvergence(nodes, coValueLabels);
+  const { convergence, converged } = checkConvergence(
+    nodes,
+    coValueLabels,
+    result.excludedFromConvergence,
+  );
 
   // Tear the scenario's nodes down so they stop emitting into the shared
   // process-global message log — critical for isolation when the same scenario

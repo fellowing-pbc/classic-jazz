@@ -14,8 +14,12 @@
  *
  * TEST-ONLY. No production import.
  */
+import { expectMap } from "../../coValue.js";
 import type { RawCoMap } from "../../coValues/coMap.js";
+import type { Signature } from "../../crypto/crypto.js";
 import { emptyKnownState } from "../../knownState.js";
+import type { JsonValue } from "../../jsonValue.js";
+import type { Stringified } from "../../jsonStringify.js";
 import { CO_VALUE_PRIORITY } from "../../priority.js";
 import { fillCoMapWithLargeData, waitFor } from "../testUtils.js";
 import type { Scenario } from "./harness.js";
@@ -796,6 +800,134 @@ export const contentMissingDependencies: Scenario = {
  * and none should be added without a new, concrete mechanism that
  * violates the auto-drain guarantee above. */
 
+/** 14. A corrupted-signature transaction on ONE session of one CoValue
+ * (`badMap`) is rejected -- and that specific coValue/session is marked
+ * errored for the peer that sent it, via `markErrored` (sync.ts:1335-1359)
+ * -- without preventing a DIFFERENT, legitimately-signed CoValue
+ * (`goodMap`) from continuing to sync normally in the same overall
+ * exchange.
+ *
+ * Corrupting the signature is done directly via the local, public
+ * `tryAddTransactions` API (not by hand-crafting message CONTENTS -- the
+ * write API cannot itself produce an invalid signature, so this bypasses it
+ * with `skipVerify: true` to force-store a real transaction re-signed with
+ * garbage directly into the server's own copy of badMap's session log,
+ * simulating e.g. a corrupted disk/replication write landing on the
+ * server). That corruption alone is inert, though: `tryAddTransactions` is
+ * the ingestion primitive `handleNewContent` calls internally -- it does
+ * not itself push anything to other peers (only content actually RECEIVED
+ * over the wire triggers the relay-to-subscribed-peers loop at the bottom
+ * of `handleNewContent`). So, exactly as `content_missing_dependencies_
+ * deferred` does for a differently-shaped gap, the now-corrupted session
+ * log is handed to a fresh peer (clientB, which has never touched badMap)
+ * via the established `peerStateFor`/`pushOutgoingMessage` hand-delivery
+ * technique -- reusing server's own `newContentSince` output verbatim, not
+ * a fabricated message. This is what lets clientB's real `handleNewContent`
+ * (with a real peer) verify it, fail, and call `markErrored` for real. */
+export const contentInvalidSessionRejectedOthersContinue: Scenario = {
+  name: "content_invalid_session_rejected_others_continue",
+  run: async () => {
+    const server = makeNode("server");
+    const clientA = makeNode("clientA");
+    const clientB = makeNode("clientB");
+    connect(server, clientA);
+    connect(server, clientB);
+
+    const group = clientA.node.createGroup();
+    group.addMember("everyone", "reader");
+
+    const goodMap = group.createMap();
+    goodMap.set("hello", "world", "trusting");
+
+    const badMap = group.createMap();
+    badMap.set("k1", "v1", "trusting");
+    await settle(server, clientA);
+
+    // Corrupt badMap's session directly on the server: append another
+    // transaction to clientA's real, already-populated session but signed
+    // with garbage, forced past verification with `skipVerify: true` (the
+    // normal write API can't produce an invalid signature at all).
+    const badMapOnServer = server.node.expectCoValueLoaded(badMap.core.id);
+    const validTx = badMapOnServer.getValidSortedTransactions()[0]!;
+    const corruptedSignature = "signature_zCORRUPTED" as Signature;
+    const injectionError = badMapOnServer.tryAddTransactions(
+      validTx.txID.sessionID,
+      [
+        {
+          privacy: "trusting",
+          madeAt: Date.now(),
+          changes: "[]" as Stringified<JsonValue[]>,
+        },
+      ],
+      corruptedSignature,
+      true, // skipVerify: force the corrupted signature into the log
+    );
+    if (injectionError) {
+      throw new Error(
+        `expected skipVerify injection to succeed, got: ${JSON.stringify(injectionError)}`,
+      );
+    }
+
+    // Hand-deliver server's now-corrupted badMap content to clientB, which
+    // has never touched it -- exactly the technique
+    // `content_missing_dependencies_deferred` uses, just with a corrupted
+    // source instead of a partial one.
+    const badMapContent = badMapOnServer.newContentSince(
+      emptyKnownState(badMap.core.id),
+    );
+    const serverPeerToClientB = peerStateFor(server, clientB);
+    for (const msg of badMapContent ?? []) {
+      serverPeerToClientB.pushOutgoingMessage(msg);
+    }
+
+    await waitFor(() => {
+      const core = clientB.node.getCoValue(badMap.core.id);
+      if (!core.isErroredInPeer(server.node.currentSessionID)) {
+        throw new Error("badMap not yet marked errored on clientB");
+      }
+    });
+
+    // goodMap, entirely unrelated, must still sync normally to clientB in
+    // the same exchange -- via a normal load, unaffected by badMap's state.
+    await waitFor(async () => {
+      const core = await clientB.node.loadCoValueCore(goodMap.core.id);
+      if (!core.isAvailable()) throw new Error("goodMap not yet on clientB");
+      const content = expectMap(core.getCurrentContent());
+      if (content.get("hello") !== "world") {
+        throw new Error("goodMap content incomplete");
+      }
+    });
+    // badMap stays permanently unsynced on clientB (it errored, by design),
+    // so `stabilize`'s internal `waitForAllCoValuesSync` -- which sweeps
+    // every coValue clientB has ever touched, not just the ones passed here
+    // -- would otherwise block for its full default timeout waiting on a
+    // sync that can never complete. A short override is enough: group and
+    // goodMap converge almost immediately, and that's all this scenario's
+    // convergence check cares about.
+    await stabilize(
+      [server, clientA, clientB],
+      [group.core.id, goodMap.core.id],
+      2_000,
+    );
+
+    return {
+      // BadMap is included so its id gets a stable trace label (rather than
+      // leaking a random per-run id into the golden fixture) -- but it is
+      // excluded from the convergence gate below: it is DELIBERATELY left
+      // divergent across nodes (server has the corrupted extra transaction,
+      // clientA has only the original one, clientB rejected the session
+      // outright), which is exactly the isolation this scenario proves.
+      coValues: {
+        Group: group.core,
+        GoodMap: goodMap.core,
+        BadMap: badMap.core,
+      },
+      nodes: nodeMap(server, clientA, clientB),
+      excludedFromConvergence: ["BadMap"],
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -810,4 +942,5 @@ export const scenarios: Scenario[] = [
   knownStateTriggersDeferredLoad,
   correctionAfterFullContentRequest,
   contentMissingDependencies,
+  contentInvalidSessionRejectedOthersContinue,
 ];
