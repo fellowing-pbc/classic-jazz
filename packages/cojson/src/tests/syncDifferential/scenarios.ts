@@ -1305,6 +1305,105 @@ export const peerReconciliationFillsEntries: Scenario = {
   },
 };
 
+/** 20. `syncContent`'s per-peer fan-out loop (sync.ts:1538-1574) only ever
+ * runs on the node that performs a genuinely LOCAL transaction: it is wired
+ * up in `coValueCore.makeNewTransaction` (coValueCore.ts:2000) as
+ * `this.node.syncManager.syncLocalTransaction(...)`, which feeds THAT node's
+ * own `LocalTransactionsSyncQueue` -> `syncContent`, iterating THAT node's
+ * own `getPeers(coValue.id)`. It is a structurally similar but entirely
+ * distinct loop from the one inside `handleNewContent` that forwards
+ * already-received content on to other peers (`sendNewContent`/
+ * `sendLoadRequest`) -- that second loop is what
+ * `content_fanout_direct_vs_load_request` already exercises.
+ *
+ * The plan's initial idea -- create `group`/`map` via `clients[0]` (`clientA`)
+ * and call the write "on server" -- does NOT reach `syncContent`'s
+ * multi-peer loop at all: in this star topology `clientA`'s own peer set is
+ * just `[server]` (clients are never connected to each other), so `clientA`
+ * authoring its own transaction only ever drives `syncContent` with ONE
+ * peer. The visible 3-way fan-out once `server` relays that content on to
+ * `clientB`/`clientC`/`clientD` runs through `handleNewContent`'s forwarding
+ * loop, not `syncContent` -- confirmed by `syncLocalTransaction`'s single
+ * call site, which fires only for the node performing the mutating call.
+ *
+ * So `group`/`map` are created on `server` itself -- the one node genuinely
+ * connected to all 4 clients -- so the local write below runs `syncContent`
+ * on the node that actually has a 4-peer fan-out to perform. That alone is
+ * still not sufficient, though: `syncContent`'s loop also skips any
+ * client-role peer that isn't already `isCoValueSubscribedToPeer` -- and
+ * right after creation none of the 4 clients have asked about the map yet,
+ * so a write at that point would be silently skipped for all of them. Each
+ * client therefore explicitly loads the map first (establishing that
+ * subscription), and only THEN does the second write happen, so its
+ * `syncContent` call is a real single-call, 4-peer fan-out: confirmed in the
+ * captured trace by four back-to-back `server -> clientX | CONTENT`
+ * messages for `Map` (`New: 1`, the lone "update" transaction) immediately
+ * following `server`'s local `set("update", ...)`, none of them preceded by
+ * a LOAD from that client. */
+export const localTransactionFanoutMultiPeer: Scenario = {
+  name: "local_transaction_fanout_multi_peer",
+  run: async () => {
+    const server = makeNode("server");
+    const clients = [
+      makeNode("clientA"),
+      makeNode("clientB"),
+      makeNode("clientC"),
+      makeNode("clientD"),
+    ];
+    for (const client of clients) {
+      connect(server, client);
+    }
+
+    // Created on `server` (not a client) so the local write below runs
+    // `syncContent` on the node that actually has 4 connected peers -- see
+    // the comment above for why creating it on a client would not exercise
+    // the multi-peer loop at all.
+    const group = server.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(server, ...clients);
+
+    // Every client loads (and thereby subscribes to) the map BEFORE the
+    // second write below. `syncContent`'s subscription check
+    // (`peer.role === "client" && !peer.isCoValueSubscribedToPeer(...)`)
+    // skips any client-role peer that isn't already subscribed -- without
+    // this step none of the 4 clients would be subscribed yet, and the
+    // second write's `syncContent` call would silently skip every one of
+    // them instead of fanning out to them directly (confirmed by an earlier
+    // attempt without this step: the "update" transaction never appeared as
+    // a direct multi-peer push, only bundled into each client's own later
+    // on-demand LOAD response).
+    for (const client of clients) {
+      await waitFor(async () => {
+        const core = await client.node.loadCoValueCore(map.core.id);
+        if (!core.isAvailable()) throw new Error("map not yet loaded");
+      });
+    }
+    await settle(server, ...clients);
+
+    // One local write on server must fan out correctly to all 4 subscribed
+    // peers in a single syncContent call.
+    map.set("update", "fanned-out", "trusting");
+    for (const client of clients) {
+      await waitFor(async () => {
+        const core = await client.node.loadCoValueCore(map.core.id);
+        if (!core.isAvailable()) throw new Error("not yet synced");
+        const content = expectMap(core.getCurrentContent());
+        if (content.get("update") !== "fanned-out") {
+          throw new Error("update not yet received");
+        }
+      });
+    }
+    await stabilize([server, ...clients], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(server, ...clients),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -1325,4 +1424,5 @@ export const scenarios: Scenario[] = [
   colistConcurrentAppend,
   reconcileHashMismatch,
   peerReconciliationFillsEntries,
+  localTransactionFanoutMultiPeer,
 ];
