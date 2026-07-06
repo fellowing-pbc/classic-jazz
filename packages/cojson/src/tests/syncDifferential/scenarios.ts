@@ -928,6 +928,87 @@ export const contentInvalidSessionRejectedOthersContinue: Scenario = {
   },
 };
 
+/** 15. `handleNewContent`'s fan-out loop (sync.ts:1448-1464) iterates
+ * `this.getPeers(coValue.id)` and, per peer, either forwards the new content
+ * directly (if the peer `isCoValueSubscribedToPeer`, i.e. relay already has a
+ * per-CoValue known-state entry for it -- set the moment that peer has ever
+ * sent/received a load, known-state, or content message about this id) or, for
+ * a "server"-role peer that ISN'T subscribed, enqueues a low-priority LOAD
+ * request instead.
+ *
+ * Investigated: contrary to a natural reading of "getPeers(coValue.id)" as a
+ * per-CoValue subscriber set, `getPeers` (sync.ts:212) is NOT filtered by
+ * subscription to `id` at all -- it is `getServerPeers(id).concat(
+ * getClientPeers())`, and by default (no `serverPeerSelector` configured)
+ * both of those simply return every currently-connected peer of that role,
+ * full stop. The `id` parameter only matters if a node opts into peer
+ * sharding. So the loop DOES reach every connected peer on every piece of
+ * new content, including ones that have never asked about this specific
+ * CoValue -- the subscribed/not-subscribed branch inside the loop body is
+ * what actually differentiates behavior, not which peers get visited.
+ *
+ * That means the scenario needs no trick to reach the "not subscribed server
+ * peer" arm: `relay` has two peers -- `upstream` (server role, from relay's
+ * side) and `writer` (client role) -- and `upstream` is connected but has
+ * never exchanged a single message about `map`/`group` before `writer`
+ * pushes its content to `relay`. So the very first time `relay` runs this
+ * loop for that content, `upstream` is simply not yet in `relay`'s
+ * per-CoValue known-state map, hits the `else if (peer.role === "server")`
+ * arm, and gets `sendLoadRequest(coValue, "low-priority")` -- a proactive
+ * LOAD from relay to upstream, immediately, well before upstream ever asks
+ * for anything. This is confirmed in the captured trace: the very first
+ * messages for `Group`/`Map` from `relay` are `relay -> upstream | LOAD`,
+ * not `relay -> upstream | CONTENT`, while the same fan-out loop's other arm
+ * (peer `writer`, already subscribed because it's the content's source) is
+ * exercised by the initial `writer -> relay` push itself.
+ *
+ * That low-priority LOAD is itself enough to converge `upstream` -- no
+ * `upstream -> relay | LOAD` ever appears in the trace. `upstream` receives
+ * `relay`'s LOAD (which carries relay's known state), has nothing yet, so
+ * replies with `KNOWN ... sessions: empty`; relay's known-state-merge path
+ * (the same mechanism as `known_state_merge_triggers_immediate_send`) then
+ * sees upstream needs everything and pushes `CONTENT` unprompted. All of
+ * this happens reactively during `settle(relay, writer)`, so by the time the
+ * scenario reaches the explicit `upstream.node.loadCoValueCore(...)` call,
+ * the CoValue is already locally available on `upstream` and that call
+ * resolves without touching the wire at all -- it is present only as an
+ * explicit convergence check for the golden snapshot, not as the thing that
+ * produces the interesting trace segment. */
+export const contentFanoutDirectVsLoadRequest: Scenario = {
+  name: "content_fanout_direct_vs_load_request",
+  run: async () => {
+    const upstream = makeNode("upstream");
+    const relay = makeNode("relay");
+    connect(upstream, relay);
+
+    // Connect the writer to relay AFTER the upstream link is established,
+    // and create the CoValue only after both connections exist, so relay's
+    // "upstream" server peer has never been told about this id (not
+    // subscribed) before content for it arrives from `writer`.
+    const writer = makeNode("writer");
+    connect(relay, writer);
+
+    const group = writer.node.createGroup();
+    group.addMember("everyone", "reader");
+    const map = group.createMap();
+    map.set("hello", "world", "trusting");
+    await settle(relay, writer);
+
+    // upstream never asked for this CoValue -- relay's fan-out to upstream
+    // must be a low-priority load request, not a direct content forward.
+    await waitFor(async () => {
+      const core = await upstream.node.loadCoValueCore(map.core.id);
+      if (!core.isAvailable()) throw new Error("not yet loaded on upstream");
+    });
+    await stabilize([upstream, relay, writer], [group.core.id, map.core.id]);
+
+    return {
+      coValues: { Group: group.core, Map: map.core },
+      nodes: nodeMap(upstream, relay, writer),
+    };
+  },
+};
+
 export const scenarios: Scenario[] = [
   basicTwoPeerSync,
   reconnectWithDataLoss,
@@ -943,4 +1024,5 @@ export const scenarios: Scenario[] = [
   correctionAfterFullContentRequest,
   contentMissingDependencies,
   contentInvalidSessionRejectedOthersContinue,
+  contentFanoutDirectVsLoadRequest,
 ];

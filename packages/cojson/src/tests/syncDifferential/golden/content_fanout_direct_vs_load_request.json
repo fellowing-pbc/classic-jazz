@@ -1,0 +1,200 @@
+{
+  "scenario": "content_fanout_direct_vs_load_request",
+  "trace": [
+    "writer -> relay | CONTENT Group header: true new: After: 0 New: 6",
+    "relay -> writer | KNOWN Group sessions: header/6",
+    "writer -> relay | KNOWN Group sessions: header/6",
+    "relay -> upstream | LOAD Group sessions: header/6",
+    "upstream -> relay | KNOWN Group sessions: empty",
+    "relay -> upstream | CONTENT Group header: true new: After: 0 New: 6",
+    "upstream -> relay | KNOWN Group sessions: header/6",
+    "writer -> relay | CONTENT Map header: true new: After: 0 New: 1",
+    "relay -> writer | KNOWN Map sessions: header/1",
+    "writer -> relay | KNOWN Map sessions: header/1",
+    "relay -> upstream | LOAD Map sessions: header/1",
+    "upstream -> relay | KNOWN Map sessions: empty",
+    "relay -> upstream | CONTENT Map header: true new: After: 0 New: 1",
+    "upstream -> relay | KNOWN Map sessions: header/1"
+  ],
+  "nodes": {
+    "relay": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "writer": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "writer": 1
+          }
+        }
+      },
+      "peers": {
+        "upstream": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            }
+          }
+        },
+        "writer": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "upstream": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "writer": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "writer": 1
+          }
+        }
+      },
+      "peers": {
+        "relay": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "writer": {
+      "core": {
+        "Group": {
+          "header": true,
+          "sessions": {
+            "writer": 6
+          }
+        },
+        "Map": {
+          "header": true,
+          "sessions": {
+            "writer": 1
+          }
+        }
+      },
+      "peers": {
+        "relay": {
+          "Group": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 6
+              }
+            }
+          },
+          "Map": {
+            "confirmed": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            },
+            "optimistic": {
+              "header": true,
+              "sessions": {
+                "writer": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "convergence": {
+    "Group": true,
+    "Map": true
+  },
+  "converged": true
+}
