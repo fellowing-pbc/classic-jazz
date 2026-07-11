@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "next": "15.5.8",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

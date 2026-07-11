@@ -1,5 +1,5 @@
 {
-  "name": "cojson-core-napi",
+  "name": "@fellowing/cojson-core-napi",
   "version": "0.20.19",
   "description": "Node.js N-API bindings for the cojson-core Rust library, providing high-performance.",
   "main": "index.js",
@@ -18,7 +18,7 @@
   ],
   "napi": {
     "binaryName": "cojson-core-napi",
-    "packageName": "cojson-core-napi",
+    "packageName": "@fellowing/cojson-core-napi",
     "targets": [
       "x86_64-apple-darwin",
       "x86_64-unknown-linux-gnu",
@@ -100,12 +100,12 @@
     "arrowParens": "always"
   },
   "optionalDependencies": {
-    "cojson-core-napi-darwin-x64": "workspace:*",
-    "cojson-core-napi-linux-x64-gnu": "workspace:*",
-    "cojson-core-napi-linux-x64-musl": "workspace:*",
-    "cojson-core-napi-linux-arm64-gnu": "workspace:*",
-    "cojson-core-napi-linux-arm-gnueabihf": "workspace:*",
-    "cojson-core-napi-darwin-arm64": "workspace:*",
-    "cojson-core-napi-linux-arm64-musl": "workspace:*"
+    "@fellowing/cojson-core-napi-darwin-x64": "workspace:*",
+    "@fellowing/cojson-core-napi-linux-x64-gnu": "workspace:*",
+    "@fellowing/cojson-core-napi-linux-x64-musl": "workspace:*",
+    "@fellowing/cojson-core-napi-linux-arm64-gnu": "workspace:*",
+    "@fellowing/cojson-core-napi-linux-arm-gnueabihf": "workspace:*",
+    "@fellowing/cojson-core-napi-darwin-arm64": "workspace:*",
+    "@fellowing/cojson-core-napi-linux-arm64-musl": "workspace:*"
   }
 }

@@ -18,7 +18,7 @@
   },
   "packageManager": "pnpm@10.16.1",
   "dependencies": {
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "svelte-clerk": "^0.20.3",
     "zod": "^4.3.5"
   },

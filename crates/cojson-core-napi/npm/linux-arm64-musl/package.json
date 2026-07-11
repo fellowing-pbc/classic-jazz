@@ -1,5 +1,5 @@
 {
-  "name": "cojson-core-napi-linux-arm64-musl",
+  "name": "@fellowing/cojson-core-napi-linux-arm64-musl",
   "version": "0.20.19",
   "cpu": [
     "arm64"

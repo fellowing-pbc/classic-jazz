@@ -1,5 +1,5 @@
 {
-  "name": "cojson-transport-ws",
+  "name": "@fellowing/cojson-transport-ws",
   "type": "module",
   "version": "0.20.19",
   "main": "dist/index.js",
@@ -7,7 +7,7 @@
   "license": "MIT",
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "cojson": "workspace:*"
+    "cojson": "workspace:@fellowing/cojson@*"
   },
   "scripts": {
     "dev": "tsc --watch --sourceMap --outDir dist",

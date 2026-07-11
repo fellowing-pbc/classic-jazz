@@ -2,5 +2,6 @@
   "name": "cursor-docs",
   "license": "MIT",
   "version": "0.0.3",
-  "scripts": {}
+  "scripts": {},
+  "private": true
 }

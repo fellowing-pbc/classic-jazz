@@ -16,9 +16,9 @@
     "wrangler": "^4.37.0"
   },
   "dependencies": {
-    "cojson": "workspace:*",
-    "cojson-transport-ws": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@*",
     "hono": "^4.7.2",
-    "jazz-tools": "workspace:*"
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   }
 }

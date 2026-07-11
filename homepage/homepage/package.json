@@ -44,7 +44,7 @@
     "estree-util-value-to-estree": "^3.3.2",
     "github-slugger": "^2.0.0",
     "gsap": "^3.12.5",
-    "jazz-tools": "link:../../packages/jazz-tools",
+    "jazz-tools": "npm:@fellowing/jazz-tools@link:../../packages/jazz-tools",
     "lucide-react": "^0.436.0",
     "mdast-util-from-markdown": "^2.0.0",
     "mdast-util-mdx": "^3.0.0",

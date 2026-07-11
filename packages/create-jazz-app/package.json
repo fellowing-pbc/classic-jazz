@@ -35,5 +35,6 @@
     "build": "rm -rf ./dist && tsc --sourceMap --outDir dist && cp ../../pnpm-workspace.yaml ./dist/",
     "test": "vitest --run --root ../../ --project create-jazz-app",
     "test:watch": "vitest --watch --root ../../ --project create-jazz-app"
-  }
+  },
+  "private": true
 }

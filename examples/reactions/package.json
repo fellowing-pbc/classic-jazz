@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "hash-slash": "workspace:*",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "tailwindcss": "^4.1.10"

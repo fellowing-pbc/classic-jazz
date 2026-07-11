@@ -1,29 +1,29 @@
 {
-	"name": "jazz-sveltekit",
-	"private": true,
-	"version": "0.0.62",
-	"type": "module",
-	"packageManager": "pnpm@10.16.1",
-	"scripts": {
-		"dev": "vite dev",
-		"build": "pnpm check && vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
-	},
-	"devDependencies": {
-		"@sveltejs/adapter-auto": "^6.0.0",
-		"@sveltejs/kit": "catalog:svelte",
-		"@sveltejs/vite-plugin-svelte": "^6.0.0",
-		"svelte": "catalog:svelte",
-		"svelte-check": "^4.0.0",
-		"typescript": "catalog:default",
-		"vite": "^7.0.4",
-		"zod": "^4.1.13"
-	},
-	"dependencies": {
-		"jazz-sveltekit": "link:",
-		"jazz-tools": "workspace:*"
-	}
+  "name": "jazz-sveltekit",
+  "private": true,
+  "version": "0.0.62",
+  "type": "module",
+  "packageManager": "pnpm@10.16.1",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "pnpm check && vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^6.0.0",
+    "@sveltejs/kit": "catalog:svelte",
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "svelte": "catalog:svelte",
+    "svelte-check": "^4.0.0",
+    "typescript": "catalog:default",
+    "vite": "^7.0.4",
+    "zod": "^4.1.13"
+  },
+  "dependencies": {
+    "jazz-sveltekit": "link:",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
+  }
 }

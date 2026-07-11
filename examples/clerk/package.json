@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.4.1",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },

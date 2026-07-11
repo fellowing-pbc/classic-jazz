@@ -19,7 +19,7 @@
     "expo-clipboard": "~8.0.7",
     "expo-secure-store": "~15.0.7",
     "expo-sqlite": "~16.0.9",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:expo",
     "react-native-fast-encoder": "^0.3.1",
     "react-native-url-polyfill": "^3.0.0",
@@ -28,7 +28,7 @@
     "react-native-image-picker": "^8.2.1",
     "react-native-nitro-modules": "0.26.4",
     "readable-stream": "^4.7.0",
-    "cojson-core-rn": "workspace:*"
+    "cojson-core-rn": "workspace:@fellowing/cojson-core-rn@*"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

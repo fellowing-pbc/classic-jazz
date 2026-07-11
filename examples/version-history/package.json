@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@tailwindcss/forms": "^0.5.9",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },

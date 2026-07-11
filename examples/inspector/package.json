@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "clsx": "^2.0.0",
-    "cojson": "workspace:*",
-    "cojson-transport-ws": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@*",
     "hash-slash": "workspace:*",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "react-use": "^17.4.0"

@@ -29,11 +29,11 @@
     "@effect/printer-ansi": "^0.34.5",
     "@effect/schema": "^0.71.1",
     "@effect/typeclass": "^0.25.5",
-    "cojson": "workspace:0.20.19",
+    "cojson": "workspace:@fellowing/cojson@0.20.19",
     "cojson-storage-sqlite": "workspace:0.20.19",
-    "cojson-transport-ws": "workspace:0.20.19",
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@0.20.19",
     "effect": "^3.6.5",
-    "jazz-tools": "workspace:0.20.19",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@0.20.19",
     "jazz-webhook": "workspace:0.20.19",
     "ws": "^8.14.2"
   },
@@ -41,5 +41,6 @@
     "@types/node": "^22.16.5",
     "@types/ws": "8.5.10",
     "typescript": "catalog:default"
-  }
+  },
+  "private": true
 }

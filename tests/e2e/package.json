@@ -15,10 +15,10 @@
     "sync": "jazz-run sync"
   },
   "dependencies": {
-    "cojson": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
     "hash-slash": "workspace:*",
     "is-ci": "^3.0.1",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router": "^6.16.0",

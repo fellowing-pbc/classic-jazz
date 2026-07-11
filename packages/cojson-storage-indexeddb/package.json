@@ -1,12 +1,12 @@
 {
-  "name": "cojson-storage-indexeddb",
+  "name": "@fellowing/cojson-storage-indexeddb",
   "version": "0.20.19",
   "main": "dist/index.js",
   "type": "module",
   "types": "dist/index.d.ts",
   "license": "MIT",
   "dependencies": {
-    "cojson": "workspace:*"
+    "cojson": "workspace:@fellowing/cojson@*"
   },
   "devDependencies": {
     "typescript": "catalog:default",

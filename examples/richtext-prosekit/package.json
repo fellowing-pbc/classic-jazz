@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "prosekit": "^0.13.3",
     "react": "^19.1.10",
     "react-dom": "^19.1.10"
