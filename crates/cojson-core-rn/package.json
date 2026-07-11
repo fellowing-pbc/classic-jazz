@@ -1,5 +1,5 @@
 {
-  "name": "cojson-core-rn",
+  "name": "@fellowing/cojson-core-rn",
   "version": "0.20.19",
   "description": "cojson core for react native",
   "main": "./lib/module/index.js",

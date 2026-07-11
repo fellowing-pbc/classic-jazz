@@ -24,8 +24,8 @@
     }
   },
   "dependencies": {
-    "cojson": "workspace:*",
-    "jazz-tools": "workspace:*"
+    "cojson": "workspace:@fellowing/cojson@*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   },
   "devDependencies": {
     "@babel/plugin-syntax-jsx": "^7.25.0",
@@ -50,5 +50,6 @@
     "build": "pnpm typecheck && rm -rf ./dist && vite build",
     "test": "vitest run",
     "test:watch": "vitest"
-  }
+  },
+  "private": true
 }

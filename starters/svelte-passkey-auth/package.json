@@ -40,6 +40,6 @@
     "zod": "^4.1.11"
   },
   "dependencies": {
-    "jazz-tools": "workspace:*"
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   }
 }

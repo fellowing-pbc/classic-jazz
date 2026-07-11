@@ -40,5 +40,6 @@
     "lucide-react": "^0.525.0",
     "tailwindcss": "^4.1.11",
     "typescript": "catalog:default"
-  }
+  },
+  "private": true
 }

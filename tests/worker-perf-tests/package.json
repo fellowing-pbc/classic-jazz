@@ -17,9 +17,9 @@
     "@opentelemetry/exporter-prometheus": "^0.200.0",
     "@opentelemetry/sdk-metrics": "^2.0.0",
     "better-sqlite3": "^12.2.0",
-    "cojson": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
     "cojson-storage-sqlite": "workspace:*",
-    "cojson-transport-ws": "workspace:*",
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@*",
     "jazz-run": "workspace:*",
     "ws": "^8.18.3"
   },

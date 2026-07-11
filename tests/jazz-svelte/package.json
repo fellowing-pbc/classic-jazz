@@ -56,7 +56,8 @@
     "zod": "^4.1.11"
   },
   "dependencies": {
-    "cojson": "workspace:*",
-    "jazz-tools": "workspace:*"
-  }
+    "cojson": "workspace:@fellowing/cojson@*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
+  },
+  "private": true
 }

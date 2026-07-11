@@ -11,8 +11,8 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "cojson-storage-do-sqlite": "workspace:*",
-    "jazz-tools": "workspace:*"
+    "cojson-storage-do-sqlite": "workspace:@fellowing/cojson-storage-do-sqlite@*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.19",

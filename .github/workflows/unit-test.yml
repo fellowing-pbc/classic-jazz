@@ -35,4 +35,4 @@ jobs:
         run: pnpm exec playwright install
 
       - name: Unit Tests
-        run: pnpm test:ci
+        run: pnpm test:ci --no-file-parallelism

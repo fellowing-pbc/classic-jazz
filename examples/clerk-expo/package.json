@@ -21,7 +21,7 @@
     "expo-secure-store": "15.0.2",
     "expo-sqlite": "16.0.3",
     "expo-web-browser": "14.2.0",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:expo",
     "react-native": "0.81.0",
     "react-native-get-random-values": "^1.11.0",

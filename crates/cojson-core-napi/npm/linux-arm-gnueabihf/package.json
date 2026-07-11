@@ -1,5 +1,5 @@
 {
-  "name": "cojson-core-napi-linux-arm-gnueabihf",
+  "name": "@fellowing/cojson-core-napi-linux-arm-gnueabihf",
   "version": "0.20.19",
   "cpu": [
     "arm"

@@ -1,5 +1,5 @@
 {
-  "name": "cojson-core-napi-darwin-arm64",
+  "name": "@fellowing/cojson-core-napi-darwin-arm64",
   "version": "0.20.19",
   "cpu": [
     "arm64"

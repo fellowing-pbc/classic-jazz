@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.7.4",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },

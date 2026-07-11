@@ -11,11 +11,11 @@
     "typescript": "catalog:default"
   },
   "dependencies": {
-    "cojson": "workspace:*",
-    "cojson-storage-indexeddb": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
+    "cojson-storage-indexeddb": "workspace:@fellowing/cojson-storage-indexeddb@*",
     "cojson-storage-sqlite": "workspace:*",
-    "cojson-transport-ws": "workspace:*",
-    "jazz-tools": "workspace:*",
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "ws": "^8.14.2",

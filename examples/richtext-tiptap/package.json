@@ -21,7 +21,7 @@
     "@tiptap/react": "catalog:tiptap",
     "@tiptap/starter-kit": "catalog:tiptap",
     "clsx": "^2.1.1",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "lucide-react": "^0.509.0",
     "react": "catalog:react",
     "react-dom": "catalog:react"

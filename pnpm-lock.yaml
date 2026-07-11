@@ -138,7 +138,7 @@ importers:
         specifier: workspace:*
         version: link:packages/jazz-run
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:packages/jazz-tools
       lefthook:
         specifier: ^1.8.2
@@ -165,19 +165,19 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../packages/cojson
       cojson-core-napi:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-napi@*
         version: link:../crates/cojson-core-napi
       cojson-core-wasm:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-wasm@*
         version: link:../crates/cojson-core-wasm
       cronometro:
         specifier: ^5.3.0
         version: 5.3.0
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../packages/jazz-tools
       vitest:
         specifier: catalog:default
@@ -235,25 +235,25 @@ importers:
         specifier: catalog:default
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.3.0)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
     optionalDependencies:
-      cojson-core-napi-darwin-arm64:
+      '@fellowing/cojson-core-napi-darwin-arm64':
         specifier: workspace:*
         version: link:npm/darwin-arm64
-      cojson-core-napi-darwin-x64:
+      '@fellowing/cojson-core-napi-darwin-x64':
         specifier: workspace:*
         version: link:npm/darwin-x64
-      cojson-core-napi-linux-arm-gnueabihf:
+      '@fellowing/cojson-core-napi-linux-arm-gnueabihf':
         specifier: workspace:*
         version: link:npm/linux-arm-gnueabihf
-      cojson-core-napi-linux-arm64-gnu:
+      '@fellowing/cojson-core-napi-linux-arm64-gnu':
         specifier: workspace:*
         version: link:npm/linux-arm64-gnu
-      cojson-core-napi-linux-arm64-musl:
+      '@fellowing/cojson-core-napi-linux-arm64-musl':
         specifier: workspace:*
         version: link:npm/linux-arm64-musl
-      cojson-core-napi-linux-x64-gnu:
+      '@fellowing/cojson-core-napi-linux-x64-gnu':
         specifier: workspace:*
         version: link:npm/linux-x64-gnu
-      cojson-core-napi-linux-x64-musl:
+      '@fellowing/cojson-core-napi-linux-x64-musl':
         specifier: workspace:*
         version: link:npm/linux-x64-musl
 
@@ -377,7 +377,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.510.0
@@ -444,7 +444,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-svelte:
         specifier: ^0.463.0
@@ -514,7 +514,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/hash-slash
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.536.0
@@ -584,13 +584,13 @@ importers:
         specifier: 7.3.19
         version: 7.3.19(@react-navigation/native@7.1.14(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.5.0(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native-screens@4.18.0(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0)
       cojson-core-rn:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-rn@*
         version: link:../../crates/cojson-core-rn
       expo-image-manipulator:
         specifier: ^14.0.7
         version: 14.0.7(expo@54.0.23(@babel/core@7.27.1)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -687,7 +687,7 @@ importers:
         specifier: 11.4.1
         version: 11.4.1(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@20.0.1(typescript@6.0.2))(@react-native/metro-config@0.83.0(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))
       cojson-core-rn:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-rn@*
         version: link:../../crates/cojson-core-rn
       expo:
         specifier: catalog:expo
@@ -708,7 +708,7 @@ importers:
         specifier: ~16.0.9
         version: 16.0.9(expo@54.0.23(@babel/core@7.27.1)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@20.0.1(typescript@6.0.2))(@react-native/metro-config@0.83.0(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.27.1)(@react-native-community/cli@20.0.1(typescript@6.0.2))(@react-native/metro-config@0.83.0(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -751,7 +751,7 @@ importers:
         specifier: ^4.1.7
         version: 4.1.10(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       tailwindcss:
         specifier: ^4.1.7
@@ -812,7 +812,7 @@ importers:
         specifier: ^5.4.1
         version: 5.20.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -882,7 +882,7 @@ importers:
         specifier: 14.2.0
         version: 14.2.0(expo@54.0.23(@babel/core@7.27.1)(graphql@16.12.0)(react-native@0.81.0(@babel/core@7.27.1)(@react-native-community/cli@20.0.1(typescript@6.0.2))(@react-native/metro-config@0.83.0(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native@0.81.0(@babel/core@7.27.1)(@react-native-community/cli@20.0.1(typescript@6.0.2))(@react-native/metro-config@0.83.0(@babel/core@7.27.1))(@types/react@19.1.0)(react@19.1.0))
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -910,7 +910,7 @@ importers:
   examples/clerk-svelte:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       svelte-clerk:
         specifier: ^0.20.3
@@ -977,7 +977,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/community-jazz-vue
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       vue:
         specifier: ^3.5.11
@@ -1041,7 +1041,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/community-jazz-vue
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       vue:
         specifier: ^3.5.13
@@ -1078,7 +1078,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/community-jazz-vue
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       vue:
         specifier: ^3.5.11
@@ -1136,10 +1136,10 @@ importers:
   examples/durable-object:
     dependencies:
       cojson-storage-do-sqlite:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-storage-do-sqlite@*
         version: link:../../packages/cojson-storage-do-sqlite
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
     devDependencies:
       '@cloudflare/vitest-pool-workers':
@@ -1161,7 +1161,7 @@ importers:
         specifier: ^0.5.15
         version: 0.5.15(tailwindcss@4.1.10)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-svelte:
         specifier: ^0.463.0
@@ -1231,7 +1231,7 @@ importers:
   examples/filestream:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1280,7 +1280,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/hash-slash
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1332,7 +1332,7 @@ importers:
   examples/image-upload:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1378,16 +1378,16 @@ importers:
         specifier: ^2.0.0
         version: 2.1.1
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../../packages/cojson-transport-ws
       hash-slash:
         specifier: workspace:*
         version: link:../../packages/hash-slash
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1430,7 +1430,7 @@ importers:
   examples/jazz-nextjs:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       next:
         specifier: 15.5.8
@@ -1467,7 +1467,7 @@ importers:
         specifier: 'link:'
         version: 'link:'
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
     devDependencies:
       '@sveltejs/adapter-auto':
@@ -1501,7 +1501,7 @@ importers:
         specifier: ^9.7.5
         version: 9.7.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1553,7 +1553,7 @@ importers:
         specifier: ^5.4.1
         version: 5.20.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1620,7 +1620,7 @@ importers:
         specifier: ^10.1.1
         version: 10.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.536.0
@@ -1678,7 +1678,7 @@ importers:
   examples/organization:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.536.0
@@ -1751,10 +1751,10 @@ importers:
         specifier: 7.3.19
         version: 7.3.19(@react-navigation/native@7.1.14(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.28.5))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.5.0(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.28.5))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native-screens@4.18.0(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.28.5))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@19.1.0(typescript@6.0.2))(@react-native/metro-config@0.81.5(@babel/core@7.28.5))(@types/react@19.1.0)(react@19.1.0))(react@19.1.0)
       cojson-core-rn:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-rn@*
         version: link:../../crates/cojson-core-rn
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1845,7 +1845,7 @@ importers:
   examples/passphrase:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1885,7 +1885,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/hash-slash
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -1922,7 +1922,7 @@ importers:
   examples/richtext-prosekit:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       prosekit:
         specifier: ^0.13.3
@@ -1965,7 +1965,7 @@ importers:
   examples/richtext-prosemirror:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       prosemirror-example-setup:
         specifier: ^1.2.3
@@ -2056,7 +2056,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.509.0
@@ -2120,7 +2120,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.525.0
@@ -2208,7 +2208,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.485.0
@@ -2272,7 +2272,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       lucide-react:
         specifier: ^0.536.0
@@ -2336,7 +2336,7 @@ importers:
         specifier: ^3.7.4
         version: 3.7.4
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -2388,7 +2388,7 @@ importers:
         specifier: ^0.5.9
         version: 0.5.10(tailwindcss@4.1.10)
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -2463,13 +2463,13 @@ importers:
         specifier: 1.2.1
         version: 1.2.1
       cojson-core-napi:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-napi@*
         version: link:../../crates/cojson-core-napi
       cojson-core-rn:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-rn@*
         version: link:../../crates/cojson-core-rn
       cojson-core-wasm:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-wasm@*
         version: link:../../crates/cojson-core-wasm
       unicode-segmenter:
         specifier: ^0.12.0
@@ -2494,7 +2494,7 @@ importers:
   packages/cojson-storage-do-sqlite:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
     devDependencies:
       '@cloudflare/vitest-pool-workers':
@@ -2516,7 +2516,7 @@ importers:
   packages/cojson-storage-indexeddb:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
     devDependencies:
       typescript:
@@ -2532,7 +2532,7 @@ importers:
         specifier: ^12.5.0
         version: 12.5.0
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
     devDependencies:
       '@types/better-sqlite3':
@@ -2548,7 +2548,7 @@ importers:
         specifier: ^1.9.0
         version: 1.9.0
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
     devDependencies:
       '@opentelemetry/sdk-metrics':
@@ -2567,10 +2567,10 @@ importers:
   packages/community-jazz-vue:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../jazz-tools
     devDependencies:
       '@babel/plugin-syntax-jsx':
@@ -2679,19 +2679,19 @@ importers:
         specifier: ^0.25.5
         version: 0.25.8(effect@3.11.9)
       cojson:
-        specifier: workspace:0.20.19
+        specifier: workspace:@fellowing/cojson@0.20.19
         version: link:../cojson
       cojson-storage-sqlite:
         specifier: workspace:0.20.19
         version: link:../cojson-storage-sqlite
       cojson-transport-ws:
-        specifier: workspace:0.20.19
+        specifier: workspace:@fellowing/cojson-transport-ws@0.20.19
         version: link:../cojson-transport-ws
       effect:
         specifier: ^3.6.5
         version: 3.11.9
       jazz-tools:
-        specifier: workspace:0.20.19
+        specifier: workspace:@fellowing/jazz-tools@0.20.19
         version: link:../jazz-tools
       jazz-webhook:
         specifier: workspace:0.20.19
@@ -2740,13 +2740,13 @@ importers:
         specifier: ^2.0.0
         version: 2.1.1
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
       cojson-storage-indexeddb:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-storage-indexeddb@*
         version: link:../cojson-storage-indexeddb
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../cojson-transport-ws
       expo-file-system:
         specifier: '*'
@@ -2879,16 +2879,16 @@ importers:
   packages/jazz-webhook:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../cojson
       cojson-storage-sqlite:
         specifier: workspace:*
         version: link:../cojson-storage-sqlite
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../cojson-transport-ws
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../jazz-tools
     devDependencies:
       '@types/node':
@@ -2956,7 +2956,7 @@ importers:
   starters/react-passkey-auth:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -3005,7 +3005,7 @@ importers:
   starters/svelte-passkey-auth:
     dependencies:
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
     devDependencies:
       '@playwright/test':
@@ -3078,10 +3078,10 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-core-rn:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-core-rn@*
         version: link:../../crates/cojson-core-rn
       expo:
         specifier: catalog:expo
@@ -3118,19 +3118,19 @@ importers:
         specifier: ^3.10.1
         version: 3.10.1(@swc/helpers@0.5.17)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-storage-indexeddb:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-storage-indexeddb@*
         version: link:../../packages/cojson-storage-indexeddb
       cojson-storage-sqlite:
         specifier: workspace:*
         version: link:../../packages/cojson-storage-sqlite
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../../packages/cojson-transport-ws
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -3155,7 +3155,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/jazz-run
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       npm-run-all:
         specifier: ^4.1.5
@@ -3207,16 +3207,16 @@ importers:
   tests/cloudflare-workers:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../../packages/cojson-transport-ws
       hono:
         specifier: ^4.7.2
         version: 4.7.2
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
     devDependencies:
       '@cloudflare/workers-types':
@@ -3235,7 +3235,7 @@ importers:
   tests/e2e:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       hash-slash:
         specifier: workspace:*
@@ -3244,7 +3244,7 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       react:
         specifier: 19.1.0
@@ -3290,10 +3290,10 @@ importers:
   tests/jazz-svelte:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
     devDependencies:
       '@sveltejs/adapter-vercel':
@@ -3345,13 +3345,13 @@ importers:
   tests/vercel-functions:
     dependencies:
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../../packages/cojson-transport-ws
       jazz-tools:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/jazz-tools@*
         version: link:../../packages/jazz-tools
       next:
         specifier: 15.5.8
@@ -3394,13 +3394,13 @@ importers:
         specifier: ^12.2.0
         version: 12.5.0
       cojson:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson@*
         version: link:../../packages/cojson
       cojson-storage-sqlite:
         specifier: workspace:*
         version: link:../../packages/cojson-storage-sqlite
       cojson-transport-ws:
-        specifier: workspace:*
+        specifier: workspace:@fellowing/cojson-transport-ws@*
         version: link:../../packages/cojson-transport-ws
       jazz-run:
         specifier: workspace:*

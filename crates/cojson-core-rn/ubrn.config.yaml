@@ -5,6 +5,10 @@ rust:
 
 
 ios:
+  # Pin the pre-rename framework name: ubrn otherwise derives it from the npm
+  # package name (@fellowing/cojson-core-rn -> FellowingCojsonCoreRnFramework),
+  # silently orphaning the podspec's vendored_frameworks and the CI upload path.
+  frameworkName: CojsonCoreRnFramework
   targets:
     - aarch64-apple-ios
     - aarch64-apple-ios-sim

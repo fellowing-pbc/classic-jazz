@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@react-spring/web": "^9.7.5",
-    "jazz-tools": "workspace:*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },

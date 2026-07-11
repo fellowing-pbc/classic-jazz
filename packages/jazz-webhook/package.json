@@ -21,15 +21,16 @@
     }
   },
   "dependencies": {
-    "cojson": "workspace:*",
+    "cojson": "workspace:@fellowing/cojson@*",
     "cojson-storage-sqlite": "workspace:*",
-    "cojson-transport-ws": "workspace:*",
-    "jazz-tools": "workspace:*"
+    "cojson-transport-ws": "workspace:@fellowing/cojson-transport-ws@*",
+    "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   },
   "devDependencies": {
     "@types/node": "^22.16.5",
     "@types/ws": "8.5.10",
     "typescript": "catalog:default",
     "vitest": "catalog:default"
-  }
+  },
+  "private": true
 }
