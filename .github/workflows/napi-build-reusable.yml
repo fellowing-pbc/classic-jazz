@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Linting
-        run: pnpm exec turbo lint --filter=cojson-core-napi
+        run: pnpm exec turbo lint --filter=@fellowing/cojson-core-napi
   build:
     strategy:
       fail-fast: false
