@@ -67,7 +67,7 @@ jobs:
   #         app-file: ./examples/chat-rn-expo/ios/build/chatrnexpo.app
 
   e2e-tests-android:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: [build-rn]
     steps:
       - name: Checkout

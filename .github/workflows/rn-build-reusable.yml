@@ -29,7 +29,7 @@ env:
 jobs:
   build-android:
     name: Build Android artifacts
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: ${{ !inputs.disableAndroid }}
     steps:
       - name: Checkout

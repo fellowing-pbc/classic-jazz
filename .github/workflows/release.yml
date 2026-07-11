@@ -18,7 +18,7 @@ jobs:
   # Step 1: Prepare release PR (does not publish)
   release:
     name: Prepare Release PR
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
       hasChangesetsBackport: ${{ steps.changesets-backport.outputs.hasChangesets }}
@@ -73,7 +73,7 @@ jobs:
   # Step 3: Publish packages and NAPI binaries to npm
   publish:
     name: Publish to npm
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: [build_napi, build_rn, release]
     # Only publish if there are no pending changesets
     if: ${{ needs.release.outputs.hasChangesets != 'true' && needs.release.outputs.hasChangesetsBackport != 'true' }}
