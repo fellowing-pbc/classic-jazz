@@ -36,7 +36,12 @@ const RENAME = new Set([
   "cojson-core-napi",
   ...NAPI_PLATFORMS,
 ]);
-const SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
+const SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+];
 
 const files = execSync("git ls-files '*package.json'", { encoding: "utf8" })
   .trim()
@@ -87,9 +92,13 @@ for (const f of files) {
 // changesets fixed group: swap renamed members to scoped names
 const csPath = ".changeset/config.json";
 const cs = JSON.parse(fs.readFileSync(csPath, "utf8"));
-cs.fixed = cs.fixed.map((group) => group.map((n) => (RENAME.has(n) ? SCOPE + n : n)));
+cs.fixed = cs.fixed.map((group) =>
+  group.map((n) => (RENAME.has(n) ? SCOPE + n : n)),
+);
 fs.writeFileSync(csPath, JSON.stringify(cs, null, 2) + "\n");
 
 console.log(`renamed (${log.renamed.length}):\n  ` + log.renamed.join("\n  "));
-console.log(`privatized (${log.privatized.length}): ` + log.privatized.join(", "));
+console.log(
+  `privatized (${log.privatized.length}): ` + log.privatized.join(", "),
+);
 console.log(`dep-edge files touched: ${log.edgeFiles.size}`);
