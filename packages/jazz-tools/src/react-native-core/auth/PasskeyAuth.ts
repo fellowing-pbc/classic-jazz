@@ -274,7 +274,7 @@ export class ReactNativePasskeyAuth {
         },
         user: {
           id: userId,
-          name: `${username} (${new Date().toLocaleString()})`,
+          name: username,
           displayName: username,
         },
         pubKeyCredParams: [
