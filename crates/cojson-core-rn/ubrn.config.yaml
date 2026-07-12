@@ -1,4 +1,12 @@
 ---
+# Pin ALL package-name-derived identifiers to their pre-rename values. ubrn
+# otherwise derives them from package.json name (@fellowing/cojson-core-rn ->
+# "fellowing-cojson-core-rn"), which regenerates the Kotlin loadLibrary call,
+# the cpp adapter filename, CMake target, and C++ namespaces out of sync with
+# the committed sources - the -fellowing.0 tarball shipped mixed names and
+# was unusable on both platforms.
+name: cojson-core-rn
+
 rust:
   directory: .
   manifestPath: rust/Cargo.toml
