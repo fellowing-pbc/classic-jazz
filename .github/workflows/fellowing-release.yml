@@ -1,0 +1,94 @@
+name: Fellowing Release
+
+# Fellowing's replacement for release.yml (which stays disabled): a manual,
+# environment-gated publish of the 15 @fellowing/* packages at
+# <jazz-base>-fellowing.N. Versioning is set-version.cjs, not changesets
+# pre-mode (which can only bump forward). No tags are pushed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Full version to publish, e.g. 0.20.19-fellowing.0"
+        required: true
+        type: string
+
+concurrency: fellowing-release
+
+jobs:
+  build_napi:
+    name: Build NAPI
+    uses: ./.github/workflows/napi-build-reusable.yml
+    with:
+      concurrency: fellowing-release-napi
+      disableTest: true
+
+  build_rn:
+    name: Build React Native
+    uses: ./.github/workflows/rn-build-reusable.yml
+    with:
+      concurrency: fellowing-release-rn
+
+  publish:
+    needs: [build_napi, build_rn]
+    runs-on: ubuntu-latest
+    environment: npm-publish
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Source Code
+        uses: ./.github/actions/source-code/
+
+      - name: Set version ${{ inputs.version }}
+        run: node scripts-fellowing/set-version.cjs "${{ inputs.version }}"
+
+      - name: Pnpm Build
+        run: pnpm turbo build --filter="./packages/*"
+
+      # Regenerates the napi loader (index.js) AFTER set-version so its baked
+      # version check matches the published platform packages.
+      - name: Build NAPI
+        run: pnpm turbo build:napi
+
+      - name: Download NAPI Artifacts (binaries) from build_napi workflow
+        uses: actions/download-artifact@v5
+        with:
+          path: crates/cojson-core-napi/artifacts
+
+      - name: Move binaries into the platform packages' npm directories
+        run: pnpm artifacts
+        working-directory: crates/cojson-core-napi/artifacts
+
+      - name: Download React Native Android artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: cojson-core-rn-android
+          path: crates/cojson-core-rn
+
+      - name: Download React Native iOS artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: cojson-core-rn-ios
+          path: crates/cojson-core-rn
+
+      # cojson-core-wasm publishes its committed public/ artifacts, same as
+      # upstream's release flow - no wasm build step.
+
+      - name: Guard against hollow native artifacts
+        run: |
+          NODE_COUNT=$(find crates/cojson-core-napi/npm -name '*.node' | wc -l)
+          echo "napi .node binaries: $NODE_COUNT (want 7)"
+          test "$NODE_COUNT" -eq 7
+          XC_KB=$(du -sk crates/cojson-core-rn/CojsonCoreRnFramework.xcframework | cut -f1)
+          echo "xcframework size: ${XC_KB}KB (want > 10000)"
+          test "$XC_KB" -gt 10000
+          ls -R crates/cojson-core-rn/android/src/main/jniLibs > /dev/null
+
+      - name: Publish to npm
+        run: |
+          pnpm config set "//registry.npmjs.org/:_authToken" "$NPM_TOKEN"
+          pnpm -r publish --no-git-checks
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
