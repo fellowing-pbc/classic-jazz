@@ -19,7 +19,7 @@ runs:
         pnpm --version
 
     - name: Install Node.js
-      uses: useblacksmith/setup-node@v5
+      uses: actions/setup-node@v4
       with:
         node-version-file: '.node-version'
         cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
@@ -30,7 +30,7 @@ runs:
       run: |
         echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-    - uses: useblacksmith/cache@v5
+    - uses: actions/cache@v4
       if: inputs.cache == 'true'
       name: Setup pnpm cache
       with:
