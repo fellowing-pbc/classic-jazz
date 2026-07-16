@@ -18,7 +18,10 @@ import { KvStore, KvStoreContext } from "./storage/kv-store-context.js";
 import { ReactNativeSessionProvider } from "./ReactNativeSessionProvider.js";
 
 import { SQLiteDatabaseDriverAsync } from "cojson";
-import { WebSocketPeerWithReconnection } from "cojson-transport-ws";
+import {
+  AnyWebSocketConstructor,
+  WebSocketPeerWithReconnection,
+} from "cojson-transport-ws";
 import { RNCrypto } from "cojson/crypto/RNCrypto";
 
 export type BaseReactNativeContextOptions = {
@@ -35,6 +38,19 @@ class ReactNativeWebSocketPeerWithReconnection extends WebSocketPeerWithReconnec
       callback(state.isConnected ?? false),
     );
   }
+}
+
+let syncWebSocketConstructor: AnyWebSocketConstructor | undefined;
+
+/**
+ * Inject the WebSocket constructor used for the sync connection (e.g. to add
+ * auth headers per dial). Call before the Jazz context is created — same
+ * contract as setPasskeyModule.
+ */
+export function setSyncWebSocketConstructor(
+  constructor: AnyWebSocketConstructor | undefined,
+): void {
+  syncWebSocketConstructor = constructor;
 }
 
 async function setupPeers(options: BaseReactNativeContextOptions) {
@@ -64,6 +80,7 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
   const wsPeer = new ReactNativeWebSocketPeerWithReconnection({
     peer: options.sync.peer,
     reconnectionTimeout: options.reconnectionTimeout,
+    WebSocketConstructor: syncWebSocketConstructor,
     addPeer: (peer) => {
       if (node) {
         node.syncManager.addPeer(peer);
