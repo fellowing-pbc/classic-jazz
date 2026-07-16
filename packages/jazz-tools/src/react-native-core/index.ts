@@ -14,7 +14,11 @@ export { SQLiteDatabaseDriverAsync } from "cojson";
 
 export { parseInviteLink } from "jazz-tools";
 
-export { createInviteLink, setSyncWebSocketConstructor, setupKvStore } from "./platform.js";
+export {
+  createInviteLink,
+  setSyncWebSocketConstructor,
+  setupKvStore,
+} from "./platform.js";
 export {
   ReactNativeContextManager,
   type JazzContextManagerProps,
