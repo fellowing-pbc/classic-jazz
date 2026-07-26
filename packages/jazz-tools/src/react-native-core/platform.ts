@@ -27,6 +27,17 @@ import { RNCrypto } from "cojson/crypto/RNCrypto";
 export type BaseReactNativeContextOptions = {
   sync: SyncConfig;
   reconnectionTimeout?: number;
+  /**
+   * How long to wait for any inbound frame before treating the socket as dead
+   * and reconnecting (default 10s).
+   *
+   * This is the ceiling on the sync server's keepalive cadence, and on a mobile
+   * client that cadence is a battery cost: every keepalive frame wakes the JS
+   * thread and keeps the cellular modem out of its idle state. Raising this
+   * lets the server ping less often, at the price of taking longer to notice a
+   * genuinely dead socket.
+   */
+  pingTimeout?: number;
   storage?: SQLiteDatabaseDriverAsync | "disabled";
   authSecretStorage: AuthSecretStorage;
   experimental_clockSyncFromServerPings?: boolean;
@@ -53,6 +64,36 @@ export function setSyncWebSocketConstructor(
   syncWebSocketConstructor = constructor;
 }
 
+/**
+ * App-level gate on the sync connection, independent of the context/auth
+ * lifecycle. Both must want the network on for the socket to be dialed.
+ */
+let appWantsNetwork = true;
+const networkAppliers = new Set<() => void>();
+
+/**
+ * Enable or disable the sync connection at runtime, from outside the Jazz
+ * context.
+ *
+ * The motivating case is mobile backgrounding. When the OS suspends the app the
+ * socket stays open, so the server keeps sending keepalive frames, the kernel
+ * keeps ACKing them, and the radio keeps waking — for the whole time the app is
+ * suspended, with no JS running to benefit from it. Closing the socket on the
+ * way to the background removes that entirely; the app re-enables on resume and
+ * the reconnection layer dials again.
+ *
+ * Composes with `sync.when` rather than overriding it: this is an AND, so
+ * disabling here suspends the socket even under `when: "always"`, and enabling
+ * here does not force a connection that auth (`when: "signedUp"`) has gated
+ * off. Safe to call before any context exists — the state is remembered and
+ * applied when one is created.
+ */
+export function setSyncNetworkEnabled(enabled: boolean): void {
+  if (appWantsNetwork === enabled) return;
+  appWantsNetwork = enabled;
+  for (const apply of networkAppliers) apply();
+}
+
 async function setupPeers(options: BaseReactNativeContextOptions) {
   const crypto = await RNCrypto.create();
   let node: LocalNode | undefined = undefined;
@@ -67,6 +108,7 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
   if (options.sync.when === "never") {
     return {
       toggleNetwork: () => {},
+      disposeNetwork: () => {},
       addConnectionListener: () => () => {},
       connected: () => false,
       peers,
@@ -80,6 +122,7 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
   const wsPeer = new ReactNativeWebSocketPeerWithReconnection({
     peer: options.sync.peer,
     reconnectionTimeout: options.reconnectionTimeout,
+    pingTimeout: options.pingTimeout,
     WebSocketConstructor: syncWebSocketConstructor,
     addPeer: (peer) => {
       if (node) {
@@ -96,12 +139,26 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
     },
   });
 
-  function toggleNetwork(enabled: boolean) {
-    if (enabled) {
+  // What the context/auth lifecycle wants, gated against what the app wants
+  // (see setSyncNetworkEnabled). The socket is dialed only if both agree.
+  let contextWantsNetwork = false;
+
+  function applyNetwork() {
+    if (contextWantsNetwork && appWantsNetwork) {
       wsPeer.enable();
     } else {
       wsPeer.disable();
     }
+  }
+
+  function toggleNetwork(enabled: boolean) {
+    contextWantsNetwork = enabled;
+    applyNetwork();
+  }
+
+  networkAppliers.add(applyNetwork);
+  function disposeNetwork() {
+    networkAppliers.delete(applyNetwork);
   }
 
   function setNode(value: LocalNode) {
@@ -114,6 +171,7 @@ async function setupPeers(options: BaseReactNativeContextOptions) {
 
   return {
     toggleNetwork,
+    disposeNetwork,
     addConnectionListener(listener: (connected: boolean) => void) {
       wsPeer.subscribe(listener);
 
@@ -135,6 +193,7 @@ export async function createJazzReactNativeGuestContext(
 ) {
   const {
     toggleNetwork,
+    disposeNetwork,
     peers,
     syncWhen,
     setNode,
@@ -163,6 +222,7 @@ export async function createJazzReactNativeGuestContext(
     done: () => {
       // TODO: Sync all the covalues before closing the connection & context
       toggleNetwork(false);
+      disposeNetwork();
       context.done();
     },
     logOut: () => {
@@ -191,6 +251,7 @@ export async function createJazzReactNativeContext<
 >(options: ReactNativeContextOptions<S>) {
   const {
     toggleNetwork,
+    disposeNetwork,
     peers,
     syncWhen,
     setNode,
@@ -247,6 +308,7 @@ export async function createJazzReactNativeContext<
     done: () => {
       // TODO: Sync all the covalues before closing the connection & context
       toggleNetwork(false);
+      disposeNetwork();
       unsubscribeAuthUpdate();
       context.done();
     },

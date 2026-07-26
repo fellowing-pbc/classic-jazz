@@ -16,6 +16,7 @@ export { parseInviteLink } from "jazz-tools";
 
 export {
   createInviteLink,
+  setSyncNetworkEnabled,
   setSyncWebSocketConstructor,
   setupKvStore,
 } from "./platform.js";

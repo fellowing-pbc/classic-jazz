@@ -28,6 +28,7 @@ export type JazzContextManagerProps<
   onLogOut?: () => void;
   logOutReplacement?: () => void;
   storage?: BaseReactNativeContextOptions["storage"];
+  pingTimeout?: BaseReactNativeContextOptions["pingTimeout"];
   AccountSchema?: S;
   defaultProfileName?: string;
   onAnonymousAccountDiscarded?: (
@@ -49,6 +50,7 @@ export class ReactNativeContextManager<
       return createJazzReactNativeGuestContext({
         sync: props.sync,
         storage: props.storage,
+        pingTimeout: props.pingTimeout,
         authSecretStorage: this.authSecretStorage,
         experimental_clockSyncFromServerPings:
           props.experimental_clockSyncFromServerPings,
@@ -57,6 +59,7 @@ export class ReactNativeContextManager<
       return createJazzReactNativeContext<S>({
         sync: props.sync,
         storage: props.storage,
+        pingTimeout: props.pingTimeout,
         AccountSchema: props.AccountSchema,
         credentials: authProps?.credentials,
         newAccountProps: authProps?.newAccountProps,
