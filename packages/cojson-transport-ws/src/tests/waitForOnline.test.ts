@@ -13,8 +13,14 @@ type NetworkCallback = (connected: boolean) => void;
 class TestPeer extends WebSocketPeerWithReconnection {
   /** State replayed synchronously to each new subscriber, NetInfo-style. */
   replayState: boolean | undefined = undefined;
+  /** Synchronously known connectivity, browser-style (`navigator.onLine`). */
+  syncConnectivity: boolean | undefined = undefined;
   callbacks: NetworkCallback[] = [];
   unsubscribeCount = 0;
+
+  protected currentConnectivity(): boolean | undefined {
+    return this.syncConnectivity;
+  }
 
   onNetworkChange(callback: NetworkCallback): () => void {
     this.callbacks.push(callback);
@@ -79,6 +85,25 @@ describe("waitForOnline", () => {
     vi.useFakeTimers();
     const peer = makePeer();
     peer.replayState = false;
+
+    const promise = peer.wait(60_000);
+    expect(await settledImmediately(promise)).toBe(false);
+
+    peer.emitNetwork(true);
+    await expect(promise).resolves.toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  test("resolves early on a real edge when the platform reports connectivity synchronously but never replays it (browser)", async () => {
+    // Browser case: DOM `online`/`offline` events do not replay state, and the
+    // peer was already offline when the backoff began. The baseline comes from
+    // `currentConnectivity()` (navigator.onLine === false), so the first
+    // `online` event is a real false → true edge and must cut the backoff short
+    // rather than waiting out the whole timeout.
+    vi.useFakeTimers();
+    const peer = makePeer();
+    peer.replayState = undefined;
+    peer.syncConnectivity = false;
 
     const promise = peer.wait(60_000);
     expect(await settledImmediately(promise)).toBe(false);

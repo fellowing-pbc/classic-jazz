@@ -34,6 +34,14 @@ export type BaseBrowserContextOptions = {
 };
 
 class BrowserWebSocketPeerWithReconnection extends WebSocketPeerWithReconnection {
+  // DOM `online`/`offline` events do not replay current state on subscribe, so
+  // seed the online-edge baseline from `navigator.onLine`. Without this a peer
+  // that was already offline when the backoff began never sees a `false` before
+  // the `online` event and would wait out the whole timeout.
+  protected currentConnectivity(): boolean {
+    return navigator.onLine;
+  }
+
   onNetworkChange(callback: (connected: boolean) => void): () => void {
     const handler = () => callback(navigator.onLine);
     window.addEventListener("online", handler);

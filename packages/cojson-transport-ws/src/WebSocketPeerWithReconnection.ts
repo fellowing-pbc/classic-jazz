@@ -55,6 +55,20 @@ export class WebSocketPeerWithReconnection {
   }
 
   /**
+   * Synchronously known current connectivity, if the platform exposes it
+   * (the browser does, via `navigator.onLine`). This seeds the online-edge
+   * baseline in `waitForOnline`, so a platform whose listener does NOT replay
+   * state — DOM `online`/`offline` events, unlike NetInfo — still catches a
+   * genuine offline → online transition instead of waiting out the whole
+   * backoff. Return `undefined` when connectivity is only known
+   * asynchronously (NetInfo); the baseline is then taken from the first
+   * replayed callback.
+   */
+  protected currentConnectivity(): boolean | undefined {
+    return undefined;
+  }
+
+  /**
    * Wait out the reconnection backoff, cutting it short if the device comes
    * back online.
    *
@@ -77,24 +91,28 @@ export class WebSocketPeerWithReconnection {
    *    server, not the network, dropped the socket.
    *
    * So: settle exactly once, and only on a real offline → online edge. The
-   * first callback establishes the baseline and never resolves. If a platform
-   * doesn't replay state, the cost is that we wait out the (capped) timeout
-   * instead of reconnecting early — slow in a rare case, rather than a dial
-   * loop in a common one.
+   * baseline is seeded from `currentConnectivity()` where the platform reports
+   * it synchronously (the browser), and otherwise from the first replayed
+   * callback (NetInfo). A platform that neither replays state nor exposes it
+   * synchronously waits out the (capped) timeout instead of reconnecting early
+   * — slow in a rare case, rather than a dial loop in a common one.
    */
   private waitForOnline(timeout: number) {
     return new Promise<void>((resolve) => {
-      // These four are `let`, declared up front, on purpose. `settle` closes
-      // over `timer` and `unsubscribeNetworkChange`, and `onNetworkChange` can
-      // invoke its callback — and therefore `settle` — synchronously, before
-      // either has a value. Declaring them here makes that read `undefined`
-      // instead of a temporal-dead-zone ReferenceError. Biome's useConst
-      // suggestion here is the exact bug this function was written to fix;
-      // don't take it.
+      // `timer` and `unsubscribeNetworkChange` are declared up front, on
+      // purpose. `settle` closes over both, and `onNetworkChange` can invoke
+      // its callback — and therefore `settle` — synchronously, before either
+      // has a value. Declaring them here makes that read `undefined` instead of
+      // a temporal-dead-zone ReferenceError. The `biome-ignore`s below are load
+      // bearing: useConst's autofix collapses each to `const x = <init>` at the
+      // assignment site, moving the declaration below `settle` and reintroducing
+      // the exact TDZ this function was written to avoid.
       let settled = false;
+      // biome-ignore lint/style/useConst: must be declared before `settle` closes over it; autofix reintroduces a TDZ.
       let timer: ReturnType<typeof setTimeout> | undefined;
+      // biome-ignore lint/style/useConst: must be declared before `settle` closes over it; autofix reintroduces a TDZ.
       let unsubscribeNetworkChange: (() => void) | undefined;
-      let lastConnected: boolean | undefined;
+      let lastConnected: boolean | undefined = this.currentConnectivity();
 
       const settle = () => {
         if (settled) return;
