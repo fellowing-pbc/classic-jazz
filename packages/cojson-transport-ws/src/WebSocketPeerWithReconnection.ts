@@ -45,7 +45,21 @@ export class WebSocketPeerWithReconnection {
   connected = false;
 
   currentPeer: Peer | undefined = undefined;
-  private unsubscribeNetworkChange: (() => void) | undefined = undefined;
+
+  /**
+   * Settles the network wait of the currently suspended `startConnection`, if
+   * any. `disable()` calls it so that no backoff timer or platform network
+   * listener outlives the peer being switched off.
+   */
+  private cancelWaitForOnline: (() => void) | undefined = undefined;
+
+  /**
+   * Incremented on every `disable()`. A `startConnection` that was suspended
+   * in `waitForOnline` across a disable()/enable() cycle must not dial when it
+   * resumes — the enable() already dialed, and a stale continuation would
+   * create a second socket that nothing ever closes.
+   */
+  private dialGeneration = 0;
 
   // Basic implementation for environments that don't support network change events (e.g. Node.js)
   // Needs to be extended to handle platform specific APIs
@@ -110,13 +124,15 @@ export class WebSocketPeerWithReconnection {
       let settled = false;
       // biome-ignore lint/style/useConst: must be declared before `settle` closes over it; autofix reintroduces a TDZ.
       let timer: ReturnType<typeof setTimeout> | undefined;
-      // biome-ignore lint/style/useConst: must be declared before `settle` closes over it; autofix reintroduces a TDZ.
       let unsubscribeNetworkChange: (() => void) | undefined;
       let lastConnected: boolean | undefined = this.currentConnectivity();
 
       const settle = () => {
         if (settled) return;
         settled = true;
+        if (this.cancelWaitForOnline === settle) {
+          this.cancelWaitForOnline = undefined;
+        }
         if (timer !== undefined) clearTimeout(timer);
         unsubscribeNetworkChange?.();
         resolve();
@@ -129,8 +145,14 @@ export class WebSocketPeerWithReconnection {
       });
 
       // `settle` may already have run if a listener fired synchronously with an
-      // edge; guard so we don't arm a timer nobody will clear.
-      if (settled) return;
+      // edge. It ran before `unsubscribeNetworkChange` was assigned, so it
+      // could not unsubscribe — do that here, and don't arm a timer nobody
+      // will clear.
+      if (settled) {
+        unsubscribeNetworkChange();
+        return;
+      }
+      this.cancelWaitForOnline = settle;
       timer = setTimeout(settle, timeout);
     });
   }
@@ -166,6 +188,8 @@ export class WebSocketPeerWithReconnection {
   startConnection = async () => {
     if (!this.enabled) return;
 
+    const generation = this.dialGeneration;
+
     if (this.currentPeer) {
       this.removePeer(this.currentPeer);
       this.currentPeer.outgoing.close();
@@ -176,9 +200,11 @@ export class WebSocketPeerWithReconnection {
       // long session (or one whose `onSuccess` never fires — a server that
       // accepts and then closes with an auth code does exactly that, so
       // `reconnectionAttempts` never resets) would eventually wait for hours.
+      // A configured base above the cap is honoured as a fixed interval rather
+      // than being clamped below what the caller explicitly asked for.
       const timeout = Math.min(
         this.reconnectionTimeout * this.reconnectionAttempts,
-        MAX_RECONNECTION_TIMEOUT,
+        Math.max(MAX_RECONNECTION_TIMEOUT, this.reconnectionTimeout),
       );
 
       logger.debug(
@@ -188,7 +214,10 @@ export class WebSocketPeerWithReconnection {
       await this.waitForOnline(timeout);
     }
 
-    if (!this.enabled) return;
+    // The generation check catches a disable()/enable() cycle that happened
+    // while we were suspended above: enable() already dialed, and dialing here
+    // too would overwrite `currentPeer` and leak a live socket.
+    if (!this.enabled || generation !== this.dialGeneration) return;
 
     this.currentPeer = createWebSocketPeer({
       websocket: new this.WebSocketConstructor(this.peer),
@@ -232,10 +261,13 @@ export class WebSocketPeerWithReconnection {
     if (!this.enabled) return;
 
     this.enabled = false;
+    this.dialGeneration++;
 
     this.reconnectionAttempts = 0;
-    this.unsubscribeNetworkChange?.();
-    this.unsubscribeNetworkChange = undefined;
+    // Settle any suspended backoff wait now, so its timer and platform network
+    // listener don't outlive the disable. Its continuation re-checks `enabled`
+    // and the generation, so it won't dial.
+    this.cancelWaitForOnline?.();
 
     if (this.currentPeer) {
       this.removePeer(this.currentPeer);

@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { WebSocketPeerWithReconnection } from "../WebSocketPeerWithReconnection";
+import type { AnyWebSocketConstructor } from "../types";
 
 /**
  * The reconnection backoff is the only thing standing between a peer that
@@ -43,12 +44,26 @@ class TestPeer extends WebSocketPeerWithReconnection {
   }
 }
 
-function makePeer(reconnectionTimeout = 500): TestPeer {
+/** Inert socket standing in for the real thing when a dial must not go out. */
+class FakeWebSocket {
+  readyState = 0;
+  bufferedAmount = 0;
+  addEventListener() {}
+  removeEventListener() {}
+  send() {}
+  close() {}
+}
+
+function makePeer(
+  reconnectionTimeout = 500,
+  WebSocketConstructor?: AnyWebSocketConstructor,
+): TestPeer {
   return new TestPeer({
     peer: "wss://example.invalid",
     reconnectionTimeout,
     addPeer: vi.fn(),
     removePeer: vi.fn(),
+    WebSocketConstructor,
   });
 }
 
@@ -62,6 +77,12 @@ async function settledImmediately(promise: Promise<void>): Promise<boolean> {
   await Promise.resolve();
   return settled;
 }
+
+afterEach(() => {
+  // Restore on the failure path too — a mid-test assertion throw must not
+  // leave fake timers installed for the rest of the worker.
+  vi.useRealTimers();
+});
 
 describe("waitForOnline", () => {
   test("does not resolve on a replayed 'connected' state", async () => {
@@ -78,7 +99,6 @@ describe("waitForOnline", () => {
 
     await vi.advanceTimersByTimeAsync(5_000);
     await expect(promise).resolves.toBeUndefined();
-    vi.useRealTimers();
   });
 
   test("resolves early on a real offline → online edge", async () => {
@@ -91,7 +111,6 @@ describe("waitForOnline", () => {
 
     peer.emitNetwork(true);
     await expect(promise).resolves.toBeUndefined();
-    vi.useRealTimers();
   });
 
   test("resolves early on a real edge when the platform reports connectivity synchronously but never replays it (browser)", async () => {
@@ -110,7 +129,6 @@ describe("waitForOnline", () => {
 
     peer.emitNetwork(true);
     await expect(promise).resolves.toBeUndefined();
-    vi.useRealTimers();
   });
 
   test("ignores repeated 'connected' events with no intervening drop", async () => {
@@ -125,20 +143,24 @@ describe("waitForOnline", () => {
 
     await vi.advanceTimersByTimeAsync(5_000);
     await expect(promise).resolves.toBeUndefined();
-    vi.useRealTimers();
   });
 
-  test("survives a listener that fires synchronously during subscription", async () => {
-    // Regression: `handleTimeoutOrOnline` used to close over `timer` and
-    // `unsubscribeNetworkChange` before either was initialized, so a
-    // synchronous callback ran inside their temporal dead zone.
-    vi.useFakeTimers();
+  test("settles synchronously when the baseline is offline and the subscription replays 'connected'", async () => {
+    // Two generations of regression pinned by one input. The pre-rewrite code
+    // closed over `timer` and `unsubscribeNetworkChange` from inside a
+    // synchronous 'connected' callback before either initializer had run — a
+    // temporal-dead-zone ReferenceError inside the promise executor, which
+    // surfaces as a REJECTED promise (never a synchronous throw). And the
+    // first rewrite settled before the unsubscribe function was assigned,
+    // leaking the subscription. Baseline false + synchronous replay of true
+    // exercises both: the promise must resolve, and the listener must be gone.
     const peer = makePeer();
-    peer.replayState = false;
+    peer.syncConnectivity = false;
+    peer.replayState = true;
 
-    expect(() => peer.wait(1_000)).not.toThrow();
-    await vi.advanceTimersByTimeAsync(1_000);
-    vi.useRealTimers();
+    await expect(peer.wait(60_000)).resolves.toBeUndefined();
+    expect(peer.unsubscribeCount).toBe(1);
+    expect(peer.callbacks).toHaveLength(0);
   });
 
   test("unsubscribes exactly once, whether it resolves by timer or by edge", async () => {
@@ -163,8 +185,64 @@ describe("waitForOnline", () => {
     // A late event after settling must not resolve or unsubscribe again.
     byEdge.emitNetwork(true);
     expect(byEdge.unsubscribeCount).toBe(1);
+  });
 
-    vi.useRealTimers();
+  test("disable() settles a pending wait and tears down its timer and subscription", async () => {
+    vi.useFakeTimers();
+    const peer = makePeer();
+    peer.replayState = true;
+    peer.enabled = true;
+
+    const promise = peer.wait(30_000);
+    expect(peer.callbacks).toHaveLength(1);
+
+    peer.disable();
+    await expect(promise).resolves.toBeUndefined();
+    expect(peer.unsubscribeCount).toBe(1);
+    expect(peer.callbacks).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("startConnection lifecycle", () => {
+  test("a dial suspended in the backoff across disable()/enable() does not dial a second socket", async () => {
+    // The backgrounding race: socket drops, the reconnect loop suspends in its
+    // backoff wait, the app backgrounds (disable) and foregrounds (enable)
+    // before the wait is over. enable() dials immediately; the suspended
+    // continuation must then bail instead of dialing a second socket that
+    // overwrites `currentPeer` and leaks the first.
+    vi.useFakeTimers();
+    const dialed: FakeWebSocket[] = [];
+    class CountingWebSocket extends FakeWebSocket {
+      constructor(_url: string) {
+        super();
+        dialed.push(this);
+      }
+    }
+    const peer = makePeer(
+      500,
+      CountingWebSocket as unknown as AnyWebSocketConstructor,
+    );
+
+    peer.enabled = true;
+    peer.reconnectionAttempts = 0;
+    peer.currentPeer = {
+      outgoing: { close: vi.fn() },
+    } as unknown as typeof peer.currentPeer;
+
+    // Runs synchronously up to `await waitForOnline(500)` and suspends there.
+    const suspended = peer.startConnection();
+    expect(dialed).toHaveLength(0);
+
+    peer.disable();
+    peer.enable();
+    expect(dialed).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await suspended;
+
+    expect(dialed).toHaveLength(1);
+    peer.disable();
   });
 });
 
@@ -194,5 +272,30 @@ describe("reconnection backoff", () => {
     // 500ms × attempts, capped at 30s — without the cap the last two would be
     // 30s and 250s, and a peer that never reconnects would drift to hours.
     expect(waits).toEqual([500, 4_500, 30_000, 30_000]);
+  });
+
+  test("a base interval above the cap is honoured, not clamped below itself", async () => {
+    const peer = makePeer(60_000);
+    const waits: number[] = [];
+    vi.spyOn(
+      peer as unknown as { waitForOnline(t: number): Promise<void> },
+      "waitForOnline",
+    ).mockImplementation(async (timeout: number) => {
+      waits.push(timeout);
+      peer.enabled = false;
+    });
+
+    for (const attempts of [1, 3]) {
+      peer.reconnectionAttempts = attempts - 1;
+      peer.currentPeer = {
+        outgoing: { close: vi.fn() },
+      } as unknown as typeof peer.currentPeer;
+      peer.enabled = true;
+      await peer.startConnection();
+    }
+
+    // A caller asking for a 60s base gets a fixed 60s interval — the 30s cap
+    // exists to bound linear growth, not to override an explicit choice.
+    expect(waits).toEqual([60_000, 60_000]);
   });
 });

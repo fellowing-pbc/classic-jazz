@@ -83,7 +83,10 @@ export class ReactNativeContextManager<
     return (
       this.props.sync.when !== props.sync.when ||
       this.props.sync.peer !== props.sync.peer ||
-      this.props.guestMode !== props.guestMode
+      this.props.guestMode !== props.guestMode ||
+      // The provider lists pingTimeout in its memo deps, so honour that
+      // reactivity here too — otherwise a runtime change is silently ignored.
+      this.props.pingTimeout !== props.pingTimeout
     );
   }
 }
