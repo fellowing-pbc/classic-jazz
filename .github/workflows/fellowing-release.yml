@@ -1,9 +1,13 @@
 name: Fellowing Release
+run-name: Release ${{ inputs.version }}
 
 # Fellowing's replacement for release.yml (which stays disabled): a manual,
 # environment-gated publish of the 15 @fellowing/* packages at
 # <jazz-base>-fellowing.N. Versioning is set-version.cjs, not changesets
 # pre-mode (which can only bump forward). No tags are pushed.
+#
+# release.yml still references the NPM_TOKEN secret; that auth path is
+# defunct — publishing here uses OIDC trusted publishing (no token secret).
 
 on:
   workflow_dispatch:
@@ -12,6 +16,10 @@ on:
         description: "Full version to publish, e.g. 0.20.19-fellowing.0"
         required: true
         type: string
+
+# Everything except the publish job runs read-only; publish adds id-token.
+permissions:
+  contents: read
 
 concurrency: fellowing-release
 
@@ -33,6 +41,11 @@ jobs:
     needs: [build_napi, build_rn]
     runs-on: ubuntu-latest
     environment: npm-publish
+    # npm trusted publishing (OIDC): the job mints an id-token that pnpm
+    # exchanges for a short-lived publish token. No NPM_TOKEN secret.
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout
@@ -41,8 +54,13 @@ jobs:
       - name: Setup Source Code
         uses: ./.github/actions/source-code/
 
+      # inputs.version reaches the shell via env, never ${{ }} interpolation
+      # into run: — this job holds id-token: write, so template injection here
+      # would hand an attacker a valid npm publish token.
       - name: Set version ${{ inputs.version }}
-        run: node scripts-fellowing/set-version.cjs "${{ inputs.version }}"
+        run: node scripts-fellowing/set-version.cjs "$VERSION"
+        env:
+          VERSION: ${{ inputs.version }}
 
       - name: Pnpm Build
         run: pnpm turbo build --filter="./packages/*"
@@ -86,9 +104,21 @@ jobs:
           test "$XC_KB" -gt 10000
           ls -R crates/cojson-core-rn/android/src/main/jniLibs > /dev/null
 
+      # Packs all 15 packages without uploading: catches missing files or bad
+      # metadata before any package of this immutable version reaches the
+      # registry (publish is non-atomic across packages). Does not exercise
+      # the OIDC token exchange itself.
+      - name: Publish dry run
+        run: pnpm -r publish --dry-run --no-git-checks
+
+      # Auth comes from OIDC trusted publishing. A configured _authToken would
+      # take precedence and bypass the token exchange, so none is set.
       - name: Publish to npm
-        run: |
-          pnpm config set "//registry.npmjs.org/:_authToken" "$NPM_TOKEN"
-          pnpm -r publish --no-git-checks
+        run: pnpm -r publish --no-git-checks
+
+      # pnpm skips packages whose version already exists and exits green, so a
+      # fully-republished version is otherwise a silent no-op run.
+      - name: Verify publish
+        run: node scripts-fellowing/verify-publish.cjs "$VERSION"
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}

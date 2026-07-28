@@ -52,7 +52,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://https://github.com/garden-co/jazz.git"
+    "url": "git+https://github.com/fellowing-pbc/classic-jazz.git",
+    "directory": "crates/cojson-core-rn"
   },
   "author": "Antonio Musolino <antoniomusolino007@gmail.com> (https://github.com/antoniomuso)",
   "license": "MIT",

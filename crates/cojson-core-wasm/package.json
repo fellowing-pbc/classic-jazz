@@ -2,6 +2,11 @@
   "name": "@fellowing/cojson-core-wasm",
   "type": "module",
   "version": "0.20.19",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fellowing-pbc/classic-jazz.git",
+    "directory": "crates/cojson-core-wasm"
+  },
   "files": [
     "public/cojson_core_wasm.js",
     "public/cojson_core_wasm.d.ts",

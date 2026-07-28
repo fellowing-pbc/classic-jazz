@@ -1,6 +1,11 @@
 {
   "name": "@fellowing/cojson-core-napi-darwin-x64",
   "version": "0.20.19",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fellowing-pbc/classic-jazz.git",
+    "directory": "crates/cojson-core-napi/npm/darwin-x64"
+  },
   "cpu": [
     "x64"
   ],
