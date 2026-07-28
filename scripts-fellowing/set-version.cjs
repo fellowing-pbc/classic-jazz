@@ -11,12 +11,18 @@
  * Also:
  * - ensures publishConfig.access=public on every @fellowing/* package
  *   (scoped packages default to restricted on publish)
+ * - stamps the repository field (fork URL + per-package directory) — trusted
+ *   publishing's provenance validation rejects a mismatched repository.url,
+ *   and upstream merges can reintroduce garden-co URLs
  * - normalizes any pinned workspace ranges pointing at @fellowing/* packages
  *   to `@*` — a pin like `workspace:@fellowing/cojson@0.20.19` stops
  *   resolving once the workspace version is a prerelease
  */
 const fs = require("fs");
+const path = require("path");
 const { execSync } = require("child_process");
+
+const REPOSITORY_URL = "git+https://github.com/fellowing-pbc/classic-jazz.git";
 
 const version = process.argv[2];
 if (!version || !/^\d+\.\d+\.\d+-fellowing\.\d+$/.test(version)) {
@@ -45,6 +51,11 @@ for (const f of files) {
   if (j.name && j.name.startsWith("@fellowing/")) {
     j.version = version;
     j.publishConfig = { ...(j.publishConfig || {}), access: "public" };
+    j.repository = {
+      type: "git",
+      url: REPOSITORY_URL,
+      directory: path.dirname(f),
+    };
     stamped++;
     changed = true;
   }

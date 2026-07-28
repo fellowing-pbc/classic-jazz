@@ -4,6 +4,9 @@ name: Fellowing Release
 # environment-gated publish of the 15 @fellowing/* packages at
 # <jazz-base>-fellowing.N. Versioning is set-version.cjs, not changesets
 # pre-mode (which can only bump forward). No tags are pushed.
+#
+# release.yml still references the NPM_TOKEN secret; that auth path is
+# defunct — publishing here uses OIDC trusted publishing (no token secret).
 
 on:
   workflow_dispatch:
@@ -90,6 +93,13 @@ jobs:
           echo "xcframework size: ${XC_KB}KB (want > 10000)"
           test "$XC_KB" -gt 10000
           ls -R crates/cojson-core-rn/android/src/main/jniLibs > /dev/null
+
+      # Packs all 15 packages without uploading: catches missing files or bad
+      # metadata before any package of this immutable version reaches the
+      # registry (publish is non-atomic across packages). Does not exercise
+      # the OIDC token exchange itself.
+      - name: Publish dry run
+        run: pnpm -r publish --dry-run --no-git-checks
 
       # Auth comes from OIDC trusted publishing. A configured _authToken would
       # take precedence and bypass the token exchange, so none is set.
