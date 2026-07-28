@@ -32,6 +32,20 @@ if (!version || !/^\d+\.\d+\.\d+-fellowing\.\d+$/.test(version)) {
   process.exit(1);
 }
 
+// The tree carries the upstream jazz base it forked from; a version claiming
+// a different base would publish 15 immutable packages advertising an
+// upstream release this tree does not contain.
+const anchor = JSON.parse(
+  fs.readFileSync("packages/cojson/package.json", "utf8"),
+);
+const treeBase = anchor.version.replace(/-fellowing\.\d+$/, "");
+if (!version.startsWith(`${treeBase}-fellowing.`)) {
+  console.error(
+    `version base mismatch: tree carries ${treeBase} (packages/cojson), got ${version}`,
+  );
+  process.exit(1);
+}
+
 const files = execSync("git ls-files '*package.json'", { encoding: "utf8" })
   .trim()
   .split("\n");

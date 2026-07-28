@@ -1,4 +1,5 @@
 name: Fellowing Release
+run-name: Release ${{ inputs.version }}
 
 # Fellowing's replacement for release.yml (which stays disabled): a manual,
 # environment-gated publish of the 15 @fellowing/* packages at
@@ -15,6 +16,10 @@ on:
         description: "Full version to publish, e.g. 0.20.19-fellowing.0"
         required: true
         type: string
+
+# Everything except the publish job runs read-only; publish adds id-token.
+permissions:
+  contents: read
 
 concurrency: fellowing-release
 
@@ -49,8 +54,13 @@ jobs:
       - name: Setup Source Code
         uses: ./.github/actions/source-code/
 
+      # inputs.version reaches the shell via env, never ${{ }} interpolation
+      # into run: — this job holds id-token: write, so template injection here
+      # would hand an attacker a valid npm publish token.
       - name: Set version ${{ inputs.version }}
-        run: node scripts-fellowing/set-version.cjs "${{ inputs.version }}"
+        run: node scripts-fellowing/set-version.cjs "$VERSION"
+        env:
+          VERSION: ${{ inputs.version }}
 
       - name: Pnpm Build
         run: pnpm turbo build --filter="./packages/*"
@@ -105,3 +115,10 @@ jobs:
       # take precedence and bypass the token exchange, so none is set.
       - name: Publish to npm
         run: pnpm -r publish --no-git-checks
+
+      # pnpm skips packages whose version already exists and exits green, so a
+      # fully-republished version is otherwise a silent no-op run.
+      - name: Verify publish
+        run: node scripts-fellowing/verify-publish.cjs "$VERSION"
+        env:
+          VERSION: ${{ inputs.version }}
