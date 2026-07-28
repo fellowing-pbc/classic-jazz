@@ -39,6 +39,7 @@ export function JazzProviderCore<
   guestMode,
   sync,
   storage,
+  pingTimeout,
   AccountSchema,
   defaultProfileName,
   onLogOut,
@@ -73,6 +74,7 @@ export function JazzProviderCore<
       guestMode,
       sync,
       storage,
+      pingTimeout,
       defaultProfileName,
       onLogOut: onLogOutRefCallback,
       logOutReplacement: logOutReplacement
@@ -88,6 +90,7 @@ export function JazzProviderCore<
     sync.peer,
     sync.when,
     storage,
+    pingTimeout,
     experimental_clockSyncFromServerPings,
   ]);
 
