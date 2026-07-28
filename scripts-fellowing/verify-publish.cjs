@@ -26,7 +26,9 @@ const names = execSync("git ls-files '*package.json'", { encoding: "utf8" })
   .map((j) => j.name);
 
 if (names.length !== 15) {
-  console.error(`expected exactly 15 publishable packages, found ${names.length}`);
+  console.error(
+    `expected exactly 15 publishable packages, found ${names.length}`,
+  );
   process.exit(1);
 }
 
