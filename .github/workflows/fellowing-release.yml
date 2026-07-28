@@ -33,6 +33,11 @@ jobs:
     needs: [build_napi, build_rn]
     runs-on: ubuntu-latest
     environment: npm-publish
+    # npm trusted publishing (OIDC): the job mints an id-token that pnpm
+    # exchanges for a short-lived publish token. No NPM_TOKEN secret.
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout
@@ -86,9 +91,7 @@ jobs:
           test "$XC_KB" -gt 10000
           ls -R crates/cojson-core-rn/android/src/main/jniLibs > /dev/null
 
+      # Auth comes from OIDC trusted publishing. A configured _authToken would
+      # take precedence and bypass the token exchange, so none is set.
       - name: Publish to npm
-        run: |
-          pnpm config set "//registry.npmjs.org/:_authToken" "$NPM_TOKEN"
-          pnpm -r publish --no-git-checks
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm -r publish --no-git-checks

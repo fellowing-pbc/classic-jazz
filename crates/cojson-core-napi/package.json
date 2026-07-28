@@ -1,6 +1,11 @@
 {
   "name": "@fellowing/cojson-core-napi",
   "version": "0.20.19",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fellowing-pbc/classic-jazz.git",
+    "directory": "crates/cojson-core-napi"
+  },
   "description": "Node.js N-API bindings for the cojson-core Rust library, providing high-performance.",
   "main": "index.js",
   "license": "MIT",
