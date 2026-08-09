@@ -107,8 +107,9 @@ jobs:
 
       # pnpm publish delegates the upload to npm, and the OIDC token exchange
       # needs npm >= 11.5.1 — newer than the npm 10 bundled with Node 22.
+      # Pinned to 11: npm 12 requires a newer node than .node-version pins.
       - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       # Packs all 15 packages without uploading: catches missing files or bad
       # metadata before any package of this immutable version reaches the
