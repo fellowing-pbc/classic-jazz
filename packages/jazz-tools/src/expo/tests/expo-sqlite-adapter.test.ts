@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("expo-sqlite", () => ({
-  openDatabaseAsync: vi.fn().mockResolvedValue({
+  openDatabaseAsync: vi.fn(async () => ({
     execAsync: vi.fn(),
-  }),
+  })),
   deleteDatabaseAsync: vi.fn(),
 }));
 
+import { openDatabaseAsync } from "expo-sqlite";
 import { ExpoSQLiteAdapter } from "../storage/expo-sqlite-adapter.js";
 
 /**
@@ -51,6 +52,36 @@ function createFakeTransactionalDb() {
   };
 }
 
+function createStubDb(overrides: Record<string, unknown> = {}) {
+  return {
+    execAsync: vi.fn(async () => {}),
+    getAllAsync: vi.fn(async (): Promise<unknown[]> => []),
+    getFirstAsync: vi.fn(async (): Promise<unknown> => null),
+    runAsync: vi.fn(async () => {}),
+    withTransactionAsync: vi.fn(async (task: () => Promise<void>) => {
+      await task();
+    }),
+    ...overrides,
+  };
+}
+
+function asDb(db: unknown) {
+  return db as Parameters<typeof ExpoSQLiteAdapter.withDB>[0];
+}
+
+/**
+ * The rejection expo-modules-core produces on Android when the native
+ * `NativeDatabase` shared object was released while the JS wrapper survived
+ * (`UsingReleasedSharedObjectException`), as observed in Sentry.
+ */
+function releasedObjectError() {
+  return new Error(
+    "Call to function 'NativeDatabase.prepareAsync' has been rejected.\n" +
+      "→ Caused by: The 2nd argument cannot be cast to type expo.modules.sqlite.NativeStatement (received class java.lang.Integer)\n" +
+      "→ Caused by: Cannot use shared object that was already released",
+  );
+}
+
 describe("ExpoSQLiteAdapter", () => {
   describe("getInstance", () => {
     it("returns the same instance for the same database name", async () => {
@@ -84,9 +115,7 @@ describe("ExpoSQLiteAdapter", () => {
   describe("transaction", () => {
     it("serializes concurrent transactions on the same connection", async () => {
       const db = createFakeTransactionalDb();
-      const adapter = ExpoSQLiteAdapter.withDB(
-        db as unknown as Parameters<typeof ExpoSQLiteAdapter.withDB>[0],
-      );
+      const adapter = ExpoSQLiteAdapter.withDB(asDb(db));
 
       const order: string[] = [];
 
@@ -112,9 +141,7 @@ describe("ExpoSQLiteAdapter", () => {
 
     it("keeps processing transactions after one fails", async () => {
       const db = createFakeTransactionalDb();
-      const adapter = ExpoSQLiteAdapter.withDB(
-        db as unknown as Parameters<typeof ExpoSQLiteAdapter.withDB>[0],
-      );
+      const adapter = ExpoSQLiteAdapter.withDB(asDb(db));
 
       const failing = adapter.transaction(async () => {
         throw new Error("boom");
@@ -130,6 +157,158 @@ describe("ExpoSQLiteAdapter", () => {
         ([sql]) => sql === "ROLLBACK",
       );
       expect(rollbacks).toHaveLength(1);
+    });
+  });
+
+  describe("released shared object recovery", () => {
+    beforeEach(() => {
+      vi.mocked(openDatabaseAsync).mockReset();
+    });
+
+    it("reopens the database and retries once when the native object was released", async () => {
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb({
+        getAllAsync: vi.fn(async () => [{ id: 1 }]),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-retry");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT * FROM t")).resolves.toEqual([
+        { id: 1 },
+      ]);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+      // The reopened connection goes through full initialization again.
+      expect(freshDb.execAsync).toHaveBeenCalledWith(
+        "PRAGMA journal_mode = WAL",
+      );
+    });
+
+    it("does not reopen on errors other than a released shared object", async () => {
+      const db = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw new Error("no such table: unknown");
+        }),
+      });
+      vi.mocked(openDatabaseAsync).mockResolvedValueOnce(asDb(db));
+
+      const adapter = new ExpoSQLiteAdapter("plain-error");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT 1")).rejects.toThrow(
+        "no such table: unknown",
+      );
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries at most once per operation", async () => {
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const alsoDeadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(alsoDeadDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-twice");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT 1")).rejects.toThrow(
+        /already released/,
+      );
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+      expect(alsoDeadDb.getAllAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it("shares a single reopen across concurrent failing operations", async () => {
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb({
+        getAllAsync: vi.fn(async () => [{ ok: true }]),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-concurrent");
+      await adapter.initialize();
+
+      const [a, b] = await Promise.all([
+        adapter.query("SELECT 1"),
+        adapter.query("SELECT 2"),
+      ]);
+
+      expect(a).toEqual([{ ok: true }]);
+      expect(b).toEqual([{ ok: true }]);
+      // Initial open plus exactly one reopen, not one reopen per failing op.
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+    });
+
+    it("recovers on a later operation when the reopen itself fails", async () => {
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb({
+        getAllAsync: vi.fn(async () => [{ id: 7 }]),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockRejectedValueOnce(new Error("disk I/O error"))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-reopen-fails");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT 1")).rejects.toThrow("disk I/O error");
+      // The failed reopen must not leave the adapter permanently
+      // uninitialized: the next operation attempts the reopen again.
+      await expect(adapter.query("SELECT 1")).resolves.toEqual([{ id: 7 }]);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(3);
+    });
+
+    it("reruns the whole transaction on a reopened connection instead of retrying inside it", async () => {
+      const deadRun = vi.fn(async () => {
+        throw releasedObjectError();
+      });
+      const deadDb = createStubDb({ runAsync: deadRun });
+      const freshRun = vi.fn(async () => {});
+      const freshDb = createStubDb({ runAsync: freshRun });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-transaction");
+      await adapter.initialize();
+
+      const callback = vi.fn(async (tx: ExpoSQLiteAdapter) => {
+        await tx.run("INSERT INTO t VALUES (1)");
+      });
+      await adapter.transaction(callback);
+
+      expect(callback).toHaveBeenCalledTimes(2);
+      // The sub-adapter inside the transaction must not retry on the dead
+      // connection (a retry on a fresh one would run outside the transaction).
+      expect(deadRun).toHaveBeenCalledTimes(1);
+      expect(freshRun).toHaveBeenCalledTimes(1);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
     });
   });
 });
