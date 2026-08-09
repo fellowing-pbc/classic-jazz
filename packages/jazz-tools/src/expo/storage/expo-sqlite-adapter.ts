@@ -18,14 +18,26 @@ import { type SQLiteDatabaseDriverAsync } from "jazz-tools/react-native-core";
  * The Integer cast failure is the same condition surfacing during argument
  * marshaling — the wrapper's shared-object id no longer resolves to a live
  * native object — so it is matched as a fallback in case the root cause line
- * is dropped from the chain.
+ * is dropped from the chain. The `cause` chain is walked as well, in case a
+ * future expo-modules-core delivers the caused-by lines as nested errors
+ * instead of concatenating them into the message.
  */
 function isReleasedObjectError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    /already released/i.test(message) ||
-    (/cannot be cast/i.test(message) && message.includes("java.lang.Integer"))
-  );
+  for (
+    let current = error, depth = 0;
+    current != null && depth < 5;
+    current = (current as { cause?: unknown }).cause, depth++
+  ) {
+    const message =
+      current instanceof Error ? current.message : String(current);
+    if (
+      /already released/i.test(message) ||
+      (/cannot be cast/i.test(message) && message.includes("java.lang.Integer"))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
@@ -41,6 +53,15 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
    * the whole callback on the reopened connection.
    */
   private ownsConnection = true;
+  /**
+   * After a reopen attempt fails, further attempts are suppressed for this
+   * long: operations failing with a released-object error inside the window
+   * propagate the error without touching the database, so a hot loop of
+   * storage operations cannot hammer `openDatabaseAsync` while the
+   * underlying failure (e.g. disk I/O) persists.
+   */
+  private static readonly REOPEN_FAILURE_COOLDOWN_MS = 1_000;
+  private lastReopenFailureAt = 0;
   /**
    * Serializes transactions at the connection level. The adapter is shared
    * across providers/contexts (see `getInstance`), each with its own storage
@@ -132,7 +153,9 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
 
     try {
       await this.initialize();
+      this.lastReopenFailureAt = 0;
     } catch (error) {
+      this.lastReopenFailureAt = Date.now();
       if (this.db === null) {
         this.db = failed;
       }
@@ -154,7 +177,12 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
     try {
       return await op(db);
     } catch (error) {
-      if (!this.ownsConnection || !isReleasedObjectError(error)) {
+      if (
+        !this.ownsConnection ||
+        !isReleasedObjectError(error) ||
+        Date.now() - this.lastReopenFailureAt <
+          ExpoSQLiteAdapter.REOPEN_FAILURE_COOLDOWN_MS
+      ) {
         throw error;
       }
 
@@ -185,6 +213,13 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
     );
   }
 
+  /**
+   * Runs `callback` inside `withTransactionAsync`. If the connection's
+   * native object was released, the whole transaction is rerun once on a
+   * reopened connection — `callback` must tolerate executing twice. Its SQL
+   * is safe (nothing committed on the dead connection), but any JS side
+   * effects repeat.
+   */
   public transaction(callback: (tx: ExpoSQLiteAdapter) => unknown) {
     const run = () =>
       this.withReopenRetry((db) =>

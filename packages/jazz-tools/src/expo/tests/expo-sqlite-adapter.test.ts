@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("expo-sqlite", () => ({
   openDatabaseAsync: vi.fn(async () => ({
@@ -165,6 +165,10 @@ describe("ExpoSQLiteAdapter", () => {
       vi.mocked(openDatabaseAsync).mockReset();
     });
 
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it("reopens the database and retries once when the native object was released", async () => {
       const deadDb = createStubDb({
         getAllAsync: vi.fn(async () => {
@@ -189,6 +193,74 @@ describe("ExpoSQLiteAdapter", () => {
       expect(freshDb.execAsync).toHaveBeenCalledWith(
         "PRAGMA journal_mode = WAL",
       );
+    });
+
+    it("retries get once when the native object was released", async () => {
+      const deadDb = createStubDb({
+        getFirstAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb({
+        getFirstAsync: vi.fn(async () => ({ id: 3 })),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-get");
+      await adapter.initialize();
+
+      await expect(
+        adapter.get("SELECT * FROM t WHERE id = 3"),
+      ).resolves.toEqual({ id: 3 });
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries run once when the native object was released", async () => {
+      const deadDb = createStubDb({
+        runAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb();
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-run");
+      await adapter.initialize();
+
+      await expect(adapter.run("DELETE FROM t")).resolves.toBeUndefined();
+      expect(freshDb.runAsync).toHaveBeenCalledTimes(1);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+    });
+
+    it("detects the released object through a nested cause chain", async () => {
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw new Error(
+            "Call to function 'NativeDatabase.prepareAsync' has been rejected.",
+            {
+              cause: new Error(
+                "Cannot use shared object that was already released",
+              ),
+            },
+          );
+        }),
+      });
+      const freshDb = createStubDb({
+        getAllAsync: vi.fn(async () => [{ id: 2 }]),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-cause-chain");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT 1")).resolves.toEqual([{ id: 2 }]);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
     });
 
     it("does not reopen on errors other than a released shared object", async () => {
@@ -261,6 +333,7 @@ describe("ExpoSQLiteAdapter", () => {
     });
 
     it("recovers on a later operation when the reopen itself fails", async () => {
+      vi.useFakeTimers();
       const deadDb = createStubDb({
         getAllAsync: vi.fn(async () => {
           throw releasedObjectError();
@@ -279,8 +352,41 @@ describe("ExpoSQLiteAdapter", () => {
 
       await expect(adapter.query("SELECT 1")).rejects.toThrow("disk I/O error");
       // The failed reopen must not leave the adapter permanently
-      // uninitialized: the next operation attempts the reopen again.
+      // uninitialized: once the cooldown has passed, the next operation
+      // attempts the reopen again.
+      vi.advanceTimersByTime(1_000);
       await expect(adapter.query("SELECT 1")).resolves.toEqual([{ id: 7 }]);
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(3);
+    });
+
+    it("suppresses reopen attempts during the cooldown after a failed reopen", async () => {
+      vi.useFakeTimers();
+      const deadDb = createStubDb({
+        getAllAsync: vi.fn(async () => {
+          throw releasedObjectError();
+        }),
+      });
+      const freshDb = createStubDb({
+        getAllAsync: vi.fn(async () => [{ id: 9 }]),
+      });
+      vi.mocked(openDatabaseAsync)
+        .mockResolvedValueOnce(asDb(deadDb))
+        .mockRejectedValueOnce(new Error("disk I/O error"))
+        .mockResolvedValueOnce(asDb(freshDb));
+
+      const adapter = new ExpoSQLiteAdapter("released-cooldown");
+      await adapter.initialize();
+
+      await expect(adapter.query("SELECT 1")).rejects.toThrow("disk I/O error");
+      // Inside the cooldown the released-object error propagates untouched
+      // and no reopen is attempted.
+      await expect(adapter.query("SELECT 1")).rejects.toThrow(
+        /already released/,
+      );
+      expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(1_000);
+      await expect(adapter.query("SELECT 1")).resolves.toEqual([{ id: 9 }]);
       expect(openDatabaseAsync).toHaveBeenCalledTimes(3);
     });
 
