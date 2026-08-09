@@ -41,8 +41,9 @@ jobs:
     needs: [build_napi, build_rn]
     runs-on: ubuntu-latest
     environment: npm-publish
-    # npm trusted publishing (OIDC): the job mints an id-token that pnpm
-    # exchanges for a short-lived publish token. No NPM_TOKEN secret.
+    # npm trusted publishing (OIDC): the job mints an id-token that the npm CLI
+    # (which pnpm publish shells out to) exchanges for a short-lived publish
+    # token. No NPM_TOKEN secret.
     permissions:
       id-token: write
       contents: read
@@ -103,6 +104,11 @@ jobs:
           echo "xcframework size: ${XC_KB}KB (want > 10000)"
           test "$XC_KB" -gt 10000
           ls -R crates/cojson-core-rn/android/src/main/jniLibs > /dev/null
+
+      # pnpm publish delegates the upload to npm, and the OIDC token exchange
+      # needs npm >= 11.5.1 — newer than the npm 10 bundled with Node 22.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
 
       # Packs all 15 packages without uploading: catches missing files or bad
       # metadata before any package of this immutable version reaches the

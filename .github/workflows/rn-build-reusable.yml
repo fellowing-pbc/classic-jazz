@@ -50,8 +50,13 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
+      # Authenticated GitHub API calls: anonymous requests from shared runner
+      # IPs get rate-limited (403), and binstall's cargo-install fallback is
+      # disabled here.
       - name: Install cargo-ndk
         run: cargo binstall cargo-ndk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Android artifacts
         run: pnpm --filter ${{ env.PACKAGE_NAME }} run build:rn:android
