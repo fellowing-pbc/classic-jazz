@@ -63,14 +63,31 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
   private static readonly REOPEN_FAILURE_COOLDOWN_MS = 1_000;
   private lastReopenFailureAt = 0;
   /**
-   * Serializes transactions at the connection level. The adapter is shared
-   * across providers/contexts (see `getInstance`), each with its own storage
-   * client and transaction queue, and `withTransactionAsync` is not exclusive:
-   * without serialization here, a second BEGIN on the same connection fails
-   * with "cannot start a transaction within a transaction" and its ROLLBACK
-   * aborts the other caller's active transaction.
+   * Fences transactions at the connection level. The adapter is shared across
+   * providers/contexts (see `getInstance`), each with its own storage client
+   * and transaction queue, and `withTransactionAsync` is not exclusive:
+   *
+   * - A second BEGIN on the same connection fails with "cannot start a
+   *   transaction within a transaction", and its ROLLBACK aborts the other
+   *   caller's active transaction.
+   * - A COMMIT that lands while another caller's write is still in progress
+   *   fails with "cannot commit transaction - SQL statements in progress", and
+   *   the ROLLBACK that follows takes that write with it. expo-sqlite steps
+   *   and finalizes a statement in separate native calls, so an
+   *   `INSERT … RETURNING` stays in progress across several awaits.
+   *
+   * So a transaction waits for the last transaction and for every statement
+   * in flight, and a statement waits for the last transaction. Statements
+   * still run alongside each other.
    */
-  private txQueue: Promise<unknown> = Promise.resolve();
+  private lastTransaction: Promise<unknown> = Promise.resolve();
+  private statementsInFlight = new Set<Promise<unknown>>();
+  /**
+   * Set on a `withDB` sub-adapter once its transaction is about to COMMIT or
+   * ROLLBACK. A statement started on it after that would run outside the
+   * transaction, so it rejects instead.
+   */
+  private transactionEnded = false;
 
   static withDB(db: SQLiteDatabase): ExpoSQLiteAdapter {
     const adapter = new ExpoSQLiteAdapter();
@@ -191,8 +208,27 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
     }
   }
 
+  private runStatement<T>(op: (db: SQLiteDatabase) => Promise<T>): Promise<T> {
+    if (this.transactionEnded) {
+      return Promise.reject(new Error("Transaction already ended"));
+    }
+
+    const statement = this.lastTransaction.then(() => this.withReopenRetry(op));
+    const settle = () => this.statementsInFlight.delete(statement);
+    this.statementsInFlight.add(statement);
+    statement.then(settle, settle);
+    return statement;
+  }
+
+  private async endTransaction(): Promise<void> {
+    while (this.statementsInFlight.size > 0) {
+      await Promise.allSettled(this.statementsInFlight);
+    }
+    this.transactionEnded = true;
+  }
+
   public async query<T>(sql: string, params?: unknown[]): Promise<T[]> {
-    const result = await this.withReopenRetry((db) =>
+    const result = await this.runStatement((db) =>
       db.getAllAsync(sql, params?.map((p) => p as SQLiteBindValue) ?? []),
     );
 
@@ -200,7 +236,7 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
   }
 
   public async get<T>(sql: string, params?: unknown[]): Promise<T | undefined> {
-    const result = await this.withReopenRetry((db) =>
+    const result = await this.runStatement((db) =>
       db.getFirstAsync(sql, params?.map((p) => p as SQLiteBindValue) ?? []),
     );
 
@@ -208,28 +244,43 @@ export class ExpoSQLiteAdapter implements SQLiteDatabaseDriverAsync {
   }
 
   public async run(sql: string, params?: unknown[]) {
-    await this.withReopenRetry((db) =>
+    await this.runStatement((db) =>
       db.runAsync(sql, params?.map((p) => p as SQLiteBindValue) ?? []),
     );
   }
 
   /**
-   * Runs `callback` inside `withTransactionAsync`. If the connection's
-   * native object was released, the whole transaction is rerun once on a
-   * reopened connection — `callback` must tolerate executing twice. Its SQL
-   * is safe (nothing committed on the dead connection), but any JS side
-   * effects repeat.
+   * Runs `callback` inside `withTransactionAsync`, once the last transaction
+   * and every statement in flight have settled. `callback` must run its
+   * statements on `tx`: a statement on this adapter waits for the
+   * transaction to end. COMMIT, or ROLLBACK when `callback` rejects, waits
+   * for every statement `callback` started on `tx`, and a statement started
+   * on `tx` after that rejects.
+   *
+   * If the connection's native object was released, the whole transaction is
+   * rerun once on a reopened connection — `callback` must tolerate executing
+   * twice. Its SQL is safe (nothing committed on the dead connection), but
+   * any JS side effects repeat.
    */
   public transaction(callback: (tx: ExpoSQLiteAdapter) => unknown) {
+    const ready = Promise.allSettled([
+      this.lastTransaction,
+      ...this.statementsInFlight,
+    ]);
     const run = () =>
       this.withReopenRetry((db) =>
         db.withTransactionAsync(async () => {
-          await callback(ExpoSQLiteAdapter.withDB(db));
+          const tx = ExpoSQLiteAdapter.withDB(db);
+          try {
+            await callback(tx);
+          } finally {
+            await tx.endTransaction();
+          }
         }),
       );
 
-    const next = this.txQueue.then(run, run);
-    this.txQueue = next;
+    const next = ready.then(run);
+    this.lastTransaction = next.catch(() => {});
     return next;
   }
 

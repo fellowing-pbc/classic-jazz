@@ -1,3 +1,8 @@
+import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("expo-sqlite", () => ({
@@ -7,6 +12,13 @@ vi.mock("expo-sqlite", () => ({
   deleteDatabaseAsync: vi.fn(),
 }));
 
+import {
+  type CoID,
+  LocalNode,
+  type RawCoMap,
+  getSqliteStorageAsync,
+} from "cojson";
+import { WasmCrypto } from "cojson/crypto/WasmCrypto";
 import { openDatabaseAsync } from "expo-sqlite";
 import { ExpoSQLiteAdapter } from "../storage/expo-sqlite-adapter.js";
 
@@ -68,6 +80,117 @@ function createStubDb(overrides: Record<string, unknown> = {}) {
 function asDb(db: unknown) {
   return db as Parameters<typeof ExpoSQLiteAdapter.withDB>[0];
 }
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const RETURNING = /\bRETURNING\b/;
+
+/**
+ * Real SQLite (`node:sqlite`) behind the parts of expo-sqlite's
+ * `SQLiteDatabase` the adapter uses, with the same JS wrappers as
+ * expo-sqlite 57. Every native call is an async bridge round-trip, and a
+ * statement is stepped once on execute and finalized afterwards, so a write
+ * that returns rows (`INSERT … RETURNING`) is still in progress between the
+ * two. The hooks let a test hold a statement before its first step or before
+ * its finalize, as a slow bridge would.
+ */
+function createSQLiteBridge(
+  path: string,
+  hooks: {
+    beforeStep?: (source: string) => Promise<void> | void;
+    beforeFinalize?: (source: string) => Promise<void> | void;
+  } = {},
+) {
+  const db = new DatabaseSync(path);
+  const log: string[] = [];
+  const nativeCall = () =>
+    new Promise<void>((resolve) => setImmediate(resolve));
+
+  async function execute(
+    source: string,
+    params: SQLInputValue[],
+    readAll: boolean,
+  ) {
+    await nativeCall();
+    const statement = db.prepare(source);
+    let rows: Record<string, unknown>[] = [];
+    let cursor: Iterator<Record<string, unknown>> | undefined;
+    try {
+      await hooks.beforeStep?.(source);
+      await nativeCall();
+      log.push(`step ${source}`);
+      cursor = statement.iterate(...params);
+      const first = cursor.next();
+      if (!first.done) {
+        rows = [first.value];
+        if (readAll) {
+          await nativeCall();
+          for (let next = cursor.next(); !next.done; next = cursor.next()) {
+            rows.push(next.value);
+          }
+        }
+      }
+    } finally {
+      await hooks.beforeFinalize?.(source);
+      await nativeCall();
+      log.push(`finalize ${source}`);
+      cursor?.return?.();
+    }
+    return rows;
+  }
+
+  const bridge = {
+    log,
+    sqlite: db,
+    async execAsync(source: string) {
+      await nativeCall();
+      log.push(`exec ${source}`);
+      db.exec(source);
+    },
+    async getAllAsync(source: string, params: SQLInputValue[] = []) {
+      return execute(source, params, true);
+    },
+    async getFirstAsync(source: string, params: SQLInputValue[] = []) {
+      const [first] = await execute(source, params, false);
+      return first ?? null;
+    },
+    async runAsync(source: string, params: SQLInputValue[] = []) {
+      await execute(source, params, false);
+    },
+    async withTransactionAsync(task: () => Promise<void>) {
+      try {
+        await bridge.execAsync("BEGIN");
+        await task();
+        await bridge.execAsync("COMMIT");
+      } catch (e) {
+        await bridge.execAsync("ROLLBACK");
+        throw e;
+      }
+    },
+    async closeAsync() {
+      db.close();
+    },
+  };
+
+  return bridge;
+}
+
+const dbPaths: string[] = [];
+
+function newDbPath() {
+  const path = join(tmpdir(), `expo-sqlite-adapter-${randomUUID()}.db`);
+  dbPaths.push(path);
+  return path;
+}
+
+afterEach(() => {
+  for (const path of dbPaths.splice(0)) {
+    for (const suffix of ["", "-wal", "-shm"]) {
+      rmSync(path + suffix, { force: true });
+    }
+  }
+});
 
 /**
  * The rejection expo-modules-core produces on Android when the native
@@ -158,6 +281,165 @@ describe("ExpoSQLiteAdapter", () => {
       );
       expect(rollbacks).toHaveLength(1);
     });
+  });
+
+  describe("statements alongside transactions on the shared connection", () => {
+    beforeEach(() => {
+      vi.mocked(openDatabaseAsync).mockReset();
+    });
+
+    async function openAdapter(
+      name: string,
+      bridge: ReturnType<typeof createSQLiteBridge>,
+    ) {
+      vi.mocked(openDatabaseAsync).mockResolvedValueOnce(asDb(bridge));
+      const adapter = new ExpoSQLiteAdapter(name);
+      await adapter.initialize();
+      return adapter;
+    }
+
+    it.each(["statement first", "transaction first"])(
+      "commits a transaction while another caller's INSERT … RETURNING is in progress (%s)",
+      async (order) => {
+        // The RETURNING statement stays stepped but not finalized across a
+        // few bridge round-trips, long enough for a COMMIT to land in between.
+        const bridge = createSQLiteBridge(newDbPath(), {
+          beforeFinalize: (source) =>
+            RETURNING.test(source) ? delay(20) : undefined,
+        });
+        bridge.sqlite.exec(
+          "CREATE TABLE coValues (rowID INTEGER PRIMARY KEY, id TEXT UNIQUE);" +
+            "CREATE TABLE sessions (ses TEXT);",
+        );
+        const adapter = await openAdapter(`returning-${order}`, bridge);
+
+        const upsert = () =>
+          adapter.get(
+            "INSERT INTO coValues (id) VALUES (?) ON CONFLICT(id) DO NOTHING RETURNING rowID",
+            ["co_a"],
+          );
+        const write = () =>
+          adapter.transaction(async (tx) => {
+            await tx.run("INSERT INTO sessions (ses) VALUES (?)", ["s_a"]);
+          });
+
+        await Promise.all(
+          order === "statement first"
+            ? [upsert(), write()]
+            : [write(), upsert()],
+        );
+
+        expect(bridge.sqlite.prepare("SELECT id FROM coValues").all()).toEqual([
+          { id: "co_a" },
+        ]);
+        expect(bridge.sqlite.prepare("SELECT ses FROM sessions").all()).toEqual(
+          [{ ses: "s_a" }],
+        );
+      },
+      2_000,
+    );
+
+    it("runs no statement from a rejected callback after ROLLBACK", async () => {
+      const bridge = createSQLiteBridge(newDbPath(), {
+        // The first insert steps after its sibling has already failed.
+        beforeStep: (source) =>
+          source.includes("'late'") ? delay(20) : undefined,
+      });
+      bridge.sqlite.exec("CREATE TABLE sessions (ses TEXT)");
+      const adapter = await openAdapter("rejected-callback", bridge);
+
+      await expect(
+        adapter.transaction(async (tx) => {
+          await Promise.all([
+            (async () => {
+              await tx.run("INSERT INTO sessions (ses) VALUES ('late')");
+              // This branch keeps going after its sibling has failed.
+              await delay(0);
+              await tx.run("INSERT INTO sessions (ses) VALUES ('later')");
+            })(),
+            tx.run("INSERT INTO missing (ses) VALUES ('early')"),
+          ]);
+        }),
+      ).rejects.toThrow("no such table: missing");
+      // Give a statement that outlived the transaction time to run.
+      await delay(50);
+
+      const rollback = bridge.log.indexOf("exec ROLLBACK");
+      expect(rollback).toBeGreaterThan(-1);
+      expect(bridge.log.slice(rollback + 1)).toEqual([]);
+      expect(bridge.sqlite.prepare("SELECT ses FROM sessions").all()).toEqual(
+        [],
+      );
+    }, 2_000);
+
+    it("loads every CoValue from local storage on a cold start after the race", async () => {
+      const crypto = await WasmCrypto.create();
+      const agentSecret = crypto.newRandomAgentSecret();
+      const newSession = () =>
+        crypto.newRandomSessionID(crypto.getAgentID(agentSecret));
+      const path = newDbPath();
+
+      const adapter = new ExpoSQLiteAdapter("cold-start-race");
+      let otherCaller: Promise<unknown> | undefined;
+      const bridge = createSQLiteBridge(path, {
+        // While the first CoValue's upsert is in progress, another caller
+        // sharing the connection commits a transaction. This test checks
+        // what the race leaves in storage; the commit is covered above.
+        beforeFinalize: (source) => {
+          if (otherCaller || !RETURNING.test(source)) return;
+          otherCaller = adapter
+            .transaction(async (tx) => {
+              await tx.run("INSERT INTO other_writes (value) VALUES (1)");
+            })
+            .catch(() => {});
+          return delay(20);
+        },
+      });
+      bridge.sqlite.exec("CREATE TABLE other_writes (value INTEGER)");
+      vi.mocked(openDatabaseAsync).mockResolvedValueOnce(asDb(bridge));
+
+      const node = new LocalNode(agentSecret, newSession(), crypto);
+      node.setStorage(await getSqliteStorageAsync(adapter));
+
+      const createMap = async (count: number) => {
+        const core = node.createCoValue({
+          type: "comap",
+          ruleset: { type: "unsafeAllowAll" },
+          meta: null,
+          ...crypto.createdNowUnique(),
+        });
+        core.makeTransaction(
+          [{ op: "set", key: "count", value: count }],
+          "trusting",
+        );
+        await core.waitForSync();
+        return core.id as CoID<RawCoMap>;
+      };
+
+      const first = await createMap(1);
+      expect(otherCaller).toBeDefined();
+      await otherCaller;
+      const next = await createMap(2);
+
+      vi.mocked(openDatabaseAsync).mockResolvedValueOnce(
+        asDb(createSQLiteBridge(path)),
+      );
+      const coldNode = new LocalNode(agentSecret, newSession(), crypto);
+      coldNode.setStorage(
+        await getSqliteStorageAsync(new ExpoSQLiteAdapter("cold-start-race")),
+      );
+
+      const loadCount = async (id: CoID<RawCoMap>) => {
+        const map = await coldNode.load(id);
+        return map === "unavailable" ? map : map.get("count");
+      };
+      expect({
+        first: await loadCount(first),
+        next: await loadCount(next),
+        otherWrites: bridge.sqlite.prepare("SELECT * FROM other_writes").all()
+          .length,
+      }).toEqual({ first: 1, next: 2, otherWrites: 1 });
+    }, 10_000);
   });
 
   describe("released shared object recovery", () => {
