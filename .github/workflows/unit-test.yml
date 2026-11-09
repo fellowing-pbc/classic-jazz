@@ -32,7 +32,7 @@ jobs:
         run: pnpm exec turbo run build:napi --filter='./crates/*'
 
       - name: Install Playwright Browsers
-        run: pnpm exec playwright install
+        run: pnpm exec playwright install chromium
 
       - name: Unit Tests
         run: pnpm test:ci --no-file-parallelism

@@ -8,7 +8,7 @@ Jazz is a distributed database framework for building local-first applications. 
 
 - **Monorepo**: pnpm workspaces with Turbo build orchestration
 - **Languages**: TypeScript (primary), Rust (performance-critical CRDT code in `crates/`)
-- **Node.js**: 22.18.0+ required
+- **Node.js**: 26+ required
 - **Package Manager**: pnpm 10.16.1
 
 ### Key Domain Concepts

@@ -32,7 +32,7 @@ describe("Images upload", () => {
     });
 
     await userEvent.upload(
-      page.getByRole("textbox"),
+      page.elementLocator(input),
       "./src/fixtures/jazz-icon.png",
     );
 
