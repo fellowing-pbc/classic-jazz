@@ -8,7 +8,7 @@ packages:
   - 'crates/cojson-core-rn'
   - 'bench'
 
-minimumReleaseAge: 1440 # 24 hours
+minimumReleaseAge: 4320 # 3 days
 catalogs:
   default:
     "@biomejs/biome": 2.1.3
