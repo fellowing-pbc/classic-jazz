@@ -31,6 +31,8 @@ export default defineProject({
     name: "jazz-tools",
     include: ["src/**/*.test.{js,ts,tsx,svelte}"],
     setupFiles: ["./testSetup.ts"],
+    // Node's own Web Storage globals hide happy-dom's.
+    execArgv: ["--no-experimental-webstorage"],
     typecheck: {
       enabled: true,
       checker: "tsc",

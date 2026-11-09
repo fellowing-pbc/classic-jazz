@@ -9,6 +9,9 @@ catalogs:
     '@biomejs/biome':
       specifier: 2.1.3
       version: 2.1.3
+    '@playwright/test':
+      specifier: 1.64.1
+      version: 1.64.1
     '@vitest/browser-playwright':
       specifier: 4.0.16
       version: 4.0.16
@@ -18,6 +21,9 @@ catalogs:
     '@vitest/ui':
       specifier: 4.0.16
       version: 4.0.16
+    playwright:
+      specifier: 1.64.1
+      version: 1.64.1
     typescript:
       specifier: 6.0.2
       version: 6.0.2
@@ -117,14 +123,14 @@ importers:
         specifier: ^2.29.7
         version: 2.29.7(@types/node@24.3.0)
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@vitejs/plugin-react':
         specifier: ^4.5.1
         version: 4.5.1(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
       '@vitest/browser-playwright':
         specifier: catalog:default
-        version: 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
+        version: 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/coverage-v8':
         specifier: catalog:default
         version: 4.0.16(@vitest/browser@4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16))(vitest@4.0.16)
@@ -147,8 +153,8 @@ importers:
         specifier: ^0.0.60
         version: 0.0.60
       playwright:
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       turbo:
         specifier: ^2.3.1
         version: 2.3.3
@@ -369,7 +375,7 @@ importers:
         version: 1.2.3(@types/react@19.1.0)(react@19.1.0)
       better-auth:
         specifier: ^1.4.7
-        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
+        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -384,7 +390,7 @@ importers:
         version: 0.510.0(react@19.1.0)
       next:
         specifier: 15.5.8
-        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -405,8 +411,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.1.10
@@ -427,7 +433,7 @@ importers:
         version: link:../../packages/jazz-run
       react-email:
         specifier: ^4.0.11
-        version: 4.0.13(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 4.0.13(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       tailwindcss:
         specifier: ^4
         version: 4.1.10
@@ -439,7 +445,7 @@ importers:
     dependencies:
       better-auth:
         specifier: ^1.4.7
-        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
+        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -530,8 +536,8 @@ importers:
         version: 1.0.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -825,8 +831,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@types/react':
         specifier: 19.1.0
         version: 19.1.0
@@ -920,8 +926,8 @@ importers:
         version: 4.3.5
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@sveltejs/adapter-auto':
         specifier: ^3.3.1
         version: 3.3.1(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))
@@ -1055,10 +1061,10 @@ importers:
         version: 1.9.4
       '@clerk/testing':
         specifier: ^1.10.8
-        version: 1.11.0(@playwright/test@1.50.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 1.11.0(@playwright/test@1.64.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@vitejs/plugin-vue':
         specifier: ^5.2.1
         version: 5.2.4(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vue@3.5.13(typescript@6.0.2))
@@ -1293,8 +1299,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/forms':
         specifier: ^0.5.10
         version: 0.5.10(tailwindcss@4.1.10)
@@ -1400,8 +1406,8 @@ importers:
         version: 17.6.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -1434,7 +1440,7 @@ importers:
         version: link:../../packages/jazz-tools
       next:
         specifier: 15.5.8
-        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1645,8 +1651,8 @@ importers:
         version: 1.1.2(@types/react-dom@19.1.0(@types/react@19.1.0))(@types/react@19.1.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -1700,8 +1706,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/forms':
         specifier: ^0.5.10
         version: 0.5.10(tailwindcss@4.1.10)
@@ -1996,8 +2002,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -2072,8 +2078,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -2127,7 +2133,7 @@ importers:
         version: 0.525.0(react@19.1.0)
       next:
         specifier: 15.5.8
-        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2151,8 +2157,8 @@ importers:
         version: 4.1.11
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@types/node':
         specifier: ^20
         version: 20.17.46
@@ -2349,8 +2355,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.11
@@ -2735,7 +2741,7 @@ importers:
         version: 3.19.0
       better-auth:
         specifier: ^1.4.7
-        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.38.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.38.2)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.38.2)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
+        version: 1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.38.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.38.2)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.38.2)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2))
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
@@ -2855,8 +2861,8 @@ importers:
         specifier: ^8.1.0
         version: 8.1.0
       playwright:
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       queueueue:
         specifier: ^4.1.2
         version: 4.1.2
@@ -2939,7 +2945,7 @@ importers:
         version: 0.525.0(react@19.1.0)
       next:
         specifier: 15.5.8
-        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2969,8 +2975,8 @@ importers:
         specifier: catalog:default
         version: 2.1.3
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@tailwindcss/postcss':
         specifier: ^4.1.10
         version: 4.1.10
@@ -3009,8 +3015,8 @@ importers:
         version: link:../../packages/jazz-tools
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@sveltejs/adapter-auto':
         specifier: ^6.0.1
         version: 6.0.1(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))
@@ -3174,8 +3180,8 @@ importers:
         version: 6.28.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@types/node':
         specifier: ^22.0.0
         version: 22.16.5
@@ -3260,8 +3266,8 @@ importers:
         version: 6.28.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@playwright/test':
-        specifier: ^1.50.1
-        version: 1.50.1
+        specifier: catalog:default
+        version: 1.64.1
       '@types/node':
         specifier: ^22.5.1
         version: 22.15.18
@@ -3355,7 +3361,7 @@ importers:
         version: link:../../packages/jazz-tools
       next:
         specifier: 15.5.8
-        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -7828,9 +7834,9 @@ packages:
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@playwright/test@1.50.1':
-    resolution: {integrity: sha512-Jii3aBg+CEDpgnuDxEp/h7BimHcUTDlpEtce89xEumlJ5ef2hqepZ+PWp1DDpYC/VO9fmWVI1IlEaoI5fK9FXQ==}
-    engines: {node: '>=18'}
+  '@playwright/test@1.64.1':
+    resolution: {integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==}
+    engines: {node: '>=20'}
     hasBin: true
 
   '@polka/url@1.0.0-next.28':
@@ -13172,11 +13178,6 @@ packages:
   fs.realpath@1.0.0:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
 
-  fsevents@2.3.2:
-    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
-    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
-    os: [darwin]
-
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -16014,14 +16015,14 @@ packages:
   platform@1.3.6:
     resolution: {integrity: sha512-fnWVljUchTro6RiCFvCXBbNhJc2NijN7oIQxbwsyL0buWJPG85v81ehlHI9fXrJsMNgTofEoWIQeClKpgxFLrg==}
 
-  playwright-core@1.50.1:
-    resolution: {integrity: sha512-ra9fsNWayuYumt+NiM069M6OkcRb1FZSK8bgi66AtpFoWkg2+y0bJSNmkFrWhMbEBbVKC/EruAHH3g0zmtwGmQ==}
-    engines: {node: '>=18'}
+  playwright-core@1.64.1:
+    resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
+    engines: {node: '>=20'}
     hasBin: true
 
-  playwright@1.50.1:
-    resolution: {integrity: sha512-G8rwsOQJ63XG6BbKj2w5rHeavFjy5zynBA9zsJMMtBoe/Uf757oG12NXz6e6OirF7RCrTVAKFXbLmn1RbL7Qaw==}
-    engines: {node: '>=18'}
+  playwright@1.64.1:
+    resolution: {integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==}
+    engines: {node: '>=20'}
     hasBin: true
 
   plist@3.1.0:
@@ -22822,14 +22823,14 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
-  '@clerk/testing@1.11.0(@playwright/test@1.50.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+  '@clerk/testing@1.11.0(@playwright/test@1.64.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@clerk/backend': 2.9.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@clerk/shared': 3.21.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@clerk/types': 4.78.0
       dotenv: 17.2.1
     optionalDependencies:
-      '@playwright/test': 1.50.1
+      '@playwright/test': 1.64.1
     transitivePeerDependencies:
       - react
       - react-dom
@@ -26053,9 +26054,9 @@ snapshots:
 
   '@pkgr/core@0.2.9': {}
 
-  '@playwright/test@1.50.1':
+  '@playwright/test@1.64.1':
     dependencies:
-      playwright: 1.50.1
+      playwright: 1.64.1
 
   '@polka/url@1.0.0-next.28': {}
 
@@ -29836,11 +29837,11 @@ snapshots:
       vite: 6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
       vue: 3.5.13(typescript@6.0.2)
 
-  '@vitest/browser-playwright@4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
     dependencies:
       '@vitest/browser': 4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/mocker': 4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      playwright: 1.50.1
+      playwright: 1.64.1
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.3.0)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
     transitivePeerDependencies:
@@ -29850,11 +29851,11 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
     dependencies:
       '@vitest/browser': 4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/mocker': 4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      playwright: 1.50.1
+      playwright: 1.64.1
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@20.17.46)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
     transitivePeerDependencies:
@@ -29864,11 +29865,11 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))(vitest@4.0.16)':
     dependencies:
       '@vitest/browser': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))(vitest@4.0.16)
       '@vitest/mocker': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))
-      playwright: 1.50.1
+      playwright: 1.64.1
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@22.16.5)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1)
     transitivePeerDependencies:
@@ -29878,11 +29879,11 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
     dependencies:
       '@vitest/browser': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/mocker': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      playwright: 1.50.1
+      playwright: 1.64.1
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@22.16.5)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
     transitivePeerDependencies:
@@ -29892,11 +29893,11 @@ snapshots:
       - vite
     optional: true
 
-  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
+  '@vitest/browser-playwright@4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)':
     dependencies:
       '@vitest/browser': 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/mocker': 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      playwright: 1.50.1
+      playwright: 1.64.1
       tinyrainbow: 3.0.3
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.3.0)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
     transitivePeerDependencies:
@@ -29905,7 +29906,7 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/browser@3.2.4(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@3.2.4)(webdriverio@8.41.0)':
+  '@vitest/browser@3.2.4(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@3.2.4)(webdriverio@8.41.0)':
     dependencies:
       '@testing-library/dom': 10.4.0
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.0)
@@ -29917,7 +29918,7 @@ snapshots:
       vitest: 3.2.4(@types/debug@4.1.12)(@types/node@24.3.0)(@vitest/browser@3.2.4)(@vitest/ui@3.2.4)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
       ws: 8.18.3
     optionalDependencies:
-      playwright: 1.50.1
+      playwright: 1.64.1
       webdriverio: 8.41.0
     transitivePeerDependencies:
       - bufferutil
@@ -31231,7 +31232,7 @@ snapshots:
 
   before-after-hook@4.0.0: {}
 
-  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.38.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.38.2)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.38.2)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
+  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.38.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.38.2)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.38.2)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
     dependencies:
       '@better-auth/core': 1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
       '@better-auth/telemetry': 1.4.7(@better-auth/core@1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))
@@ -31247,7 +31248,7 @@ snapshots:
       zod: 4.1.13
     optionalDependencies:
       '@sveltejs/kit': 2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.38.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.38.2)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       solid-js: 1.9.5
@@ -31255,7 +31256,7 @@ snapshots:
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.3.0)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
       vue: 3.5.13(typescript@6.0.2)
 
-  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
+  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
     dependencies:
       '@better-auth/core': 1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
       '@better-auth/telemetry': 1.4.7(@better-auth/core@1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))
@@ -31271,7 +31272,7 @@ snapshots:
       zod: 4.1.13
     optionalDependencies:
       '@sveltejs/kit': 2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       solid-js: 1.9.5
@@ -31279,7 +31280,7 @@ snapshots:
       vitest: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@20.17.46)(@vitest/browser-playwright@4.0.16)(@vitest/ui@4.0.16)(happy-dom@20.0.7)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)
       vue: 3.5.13(typescript@6.0.2)
 
-  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
+  better-auth@1.4.7(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(next@15.5.8(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(solid-js@1.9.5)(svelte@5.46.4)(vitest@4.0.16)(vue@3.5.13(typescript@6.0.2)):
     dependencies:
       '@better-auth/core': 1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
       '@better-auth/telemetry': 1.4.7(@better-auth/core@1.4.7(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))
@@ -31295,7 +31296,7 @@ snapshots:
       zod: 4.1.13
     optionalDependencies:
       '@sveltejs/kit': 2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.46.4)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1)))(svelte@5.46.4)(typescript@6.0.2)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))
-      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       solid-js: 1.9.5
@@ -34014,9 +34015,6 @@ snapshots:
       universalify: 2.0.1
 
   fs.realpath@1.0.0: {}
-
-  fsevents@2.3.2:
-    optional: true
 
   fsevents@2.3.3:
     optional: true
@@ -36920,7 +36918,7 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
-  next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  next@15.5.7(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@next/env': 15.5.7
       '@swc/helpers': 0.5.15
@@ -36939,14 +36937,14 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 15.5.7
       '@next/swc-win32-x64-msvc': 15.5.7
       '@opentelemetry/api': 1.9.0
-      '@playwright/test': 1.50.1
+      '@playwright/test': 1.64.1
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.34.3
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  next@15.5.8(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@next/env': 15.5.8
       '@swc/helpers': 0.5.15
@@ -36965,7 +36963,7 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 15.5.7
       '@next/swc-win32-x64-msvc': 15.5.7
       '@opentelemetry/api': 1.9.0
-      '@playwright/test': 1.50.1
+      '@playwright/test': 1.64.1
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.34.3
     transitivePeerDependencies:
@@ -37574,13 +37572,11 @@ snapshots:
 
   platform@1.3.6: {}
 
-  playwright-core@1.50.1: {}
+  playwright-core@1.64.1: {}
 
-  playwright@1.50.1:
+  playwright@1.64.1:
     dependencies:
-      playwright-core: 1.50.1
-    optionalDependencies:
-      fsevents: 2.3.2
+      playwright-core: 1.64.1
 
   plist@3.1.0:
     dependencies:
@@ -38143,7 +38139,7 @@ snapshots:
       react: 19.1.0
       scheduler: 0.26.0
 
-  react-email@4.0.13(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  react-email@4.0.13(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@babel/parser': 7.27.2
       '@babel/traverse': 7.27.1
@@ -38155,7 +38151,7 @@ snapshots:
       glob: 11.0.2
       log-symbols: 7.0.0
       mime-types: 3.0.1
-      next: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.50.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.5.7(@opentelemetry/api@1.9.0)(@playwright/test@1.64.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       normalize-path: 3.0.0
       ora: 8.2.0
       socket.io: 4.8.1
@@ -41102,7 +41098,7 @@ snapshots:
     optionalDependencies:
       '@types/debug': 4.1.12
       '@types/node': 24.3.0
-      '@vitest/browser': 3.2.4(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@3.2.4)(webdriverio@8.41.0)
+      '@vitest/browser': 3.2.4(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@3.2.4)(webdriverio@8.41.0)
       '@vitest/ui': 3.2.4(vitest@3.2.4)
       happy-dom: 20.0.7
       jsdom: 25.0.1
@@ -41145,7 +41141,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 20.17.46
-      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@20.17.46)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@20.17.46)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/ui': 4.0.16(vitest@4.0.16)
       happy-dom: 20.0.7
       jsdom: 25.0.1
@@ -41188,7 +41184,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 22.16.5
-      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.6.1))(vitest@4.0.16)
       '@vitest/ui': 4.0.16(vitest@4.0.16)
       happy-dom: 20.0.7
       jsdom: 25.0.1
@@ -41230,7 +41226,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 22.16.5
-      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@22.16.5)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@22.16.5)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/ui': 4.0.16(vitest@4.0.16)
       happy-dom: 20.0.7
       jsdom: 25.0.1
@@ -41272,7 +41268,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.3.0
-      '@vitest/browser-playwright': 4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.10.3(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/ui': 4.0.16(vitest@4.0.16)
       happy-dom: 20.0.7
       jsdom: 25.0.1
@@ -41314,7 +41310,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.3.0
-      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.50.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.10.4(@types/node@24.3.0)(typescript@6.0.2))(playwright@1.64.1)(vite@6.3.5(@types/node@24.3.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.1))(vitest@4.0.16)
       '@vitest/ui': 4.0.16(vitest@4.0.16)
       happy-dom: 20.0.7
       jsdom: 25.0.1
