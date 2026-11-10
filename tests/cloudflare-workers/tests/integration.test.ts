@@ -33,9 +33,11 @@ describe("Cloudflare Workers Integration Test", () => {
       }, 10000);
     });
 
-    onTestFinished(() => {
-      // Ensure server is killed after all tests
+    onTestFinished(async () => {
+      // Ensure server is killed after all tests. Wrangler exits non-zero on
+      // SIGTERM, which is the expected end here.
       server.kill();
+      await server.catch(() => {});
     });
     return { server, url };
   }
