@@ -25,7 +25,7 @@
     "jazz-run": "workspace:*",
     "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "lefthook": "^1.8.2",
-    "pkg-pr-new": "^0.0.60",
+    "pkg-pr-new": "^0.0.93",
     "playwright": "catalog:default",
     "turbo": "^2.3.1",
     "typedoc": "^0.25.13",

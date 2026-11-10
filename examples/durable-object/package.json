@@ -15,9 +15,9 @@
     "jazz-tools": "workspace:@fellowing/jazz-tools@*"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.19",
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
     "typescript": "catalog:default",
-    "vitest": "~3.2.4",
+    "vitest": "~4.1.12",
     "wrangler": "^4.42.0"
   }
 }

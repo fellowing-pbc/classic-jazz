@@ -13,12 +13,12 @@
     "bench": "node --experimental-strip-types src/cli/cli.ts"
   },
   "dependencies": {
-    "@faker-js/faker": "^9.7.0",
+    "@faker-js/faker": "^10.6.0",
     "jazz-tools": "workspace:@fellowing/jazz-tools@*",
     "npm-run-all": "^4.1.5",
     "jazz-run": "workspace:*",
-    "react-router": "^6.16.0",
-    "react-router-dom": "^6.16.0",
+    "react-router": "^7.18.5",
+    "react-router-dom": "^7.18.5",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
