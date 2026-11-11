@@ -499,6 +499,14 @@ describe("JazzRequestError handling", () => {
               "type"
             ],
             "message": "Invalid input: expected \\"success\\""
+          },
+          {
+            "code": "invalid_type",
+            "expected": "nonoptional",
+            "path": [
+              "payload"
+            ],
+            "message": "Invalid input: expected nonoptional, received undefined"
           }
         ]],
           "message": "Response payload is not valid",

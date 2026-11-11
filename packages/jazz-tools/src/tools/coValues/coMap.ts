@@ -120,7 +120,13 @@ export class CoMap extends CoValueBase implements CoValue {
   /** @category Type Helpers */
   declare [TypeSym]: "CoMap";
   static {
-    this.prototype[TypeSym] = "CoMap";
+    // Non-enumerable, so strict object schemas don't see it as an unknown key.
+    Object.defineProperty(this.prototype, TypeSym, {
+      value: "CoMap",
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
   }
 
   /**

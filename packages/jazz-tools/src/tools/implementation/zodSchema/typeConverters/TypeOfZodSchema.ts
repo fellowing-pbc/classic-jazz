@@ -1,11 +1,11 @@
 import { JsonValue } from "cojson";
 import { z } from "../zodReExport.js";
 
-// Copied from https://github.com/colinhacks/zod/blob/7e7e3461aceecf3633e158df50d6bc852e7cdf45/packages/zod/src/v4/core/schemas.ts#L1591,
+// Copied from https://github.com/colinhacks/zod/blob/v4.6.7/packages/zod/src/v4/core/schemas.ts#L1942,
 // since this type is not exported by Zod
 type OptionalInSchema = {
   _zod: {
-    optin: "optional";
+    optin: "optional" | "defaulted";
   };
 };
 
