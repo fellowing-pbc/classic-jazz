@@ -1,4 +1,5 @@
 import { beforeEach, describe, test, expect, vi } from "vitest";
+import type { ZodError } from "zod/v4";
 import { co, z } from "../exports.js";
 import {
   getDefaultValidationMode,
@@ -216,6 +217,24 @@ describe("runtime validation", () => {
     expectValidationError(() => metrics.$jazz.set("tags", ["", "beta"]));
 
     expectValidationError(() => metrics.$jazz.set("coordinates", [10.5, 20]));
+  });
+
+  test("rejects an oversized array on its size bound before parsing its elements", () => {
+    const Tags = co.map({
+      tags: z.array(z.string()).max(10),
+    });
+    const oversized = Array.from({ length: 100_000 }, (_, i) => i);
+
+    let issues: ZodError["issues"] = [];
+    try {
+      // @ts-expect-error - numbers in a string array
+      Tags.create({ tags: oversized }, { validation: "strict" });
+    } catch (error) {
+      issues = (error as ZodError).issues;
+    }
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: "too_big", path: ["tags"] });
   });
 
   test("validates unions and discriminated unions", () => {
