@@ -21,8 +21,8 @@
     "qrcode": "^1.5.3",
     "react": "catalog:react",
     "react-dom": "catalog:react",
-    "react-router": "^6.16.0",
-    "react-router-dom": "^6.16.0",
+    "react-router": "^7.18.5",
+    "react-router-dom": "^7.18.5",
     "tailwind-merge": "^1.14.0",
     "tailwindcss-animate": "^1.0.7",
     "uniqolor": "^1.1.0"

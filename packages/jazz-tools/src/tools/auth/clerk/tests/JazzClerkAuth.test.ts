@@ -332,7 +332,7 @@ describe("JazzClerkAuth", () => {
       triggerUserChange(null);
 
       // 3. Trigger event with new Clerk user (no Jazz credentials yet)
-      const mockUserUpdate = vi.fn((data) => {
+      const mockUserUpdate = vi.fn(async (data) => {
         triggerUserChange({
           ...data,
           update: mockUserUpdate,

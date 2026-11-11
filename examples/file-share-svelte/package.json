@@ -17,7 +17,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
-    "@sveltejs/adapter-vercel": "^5.5.0",
+    "@sveltejs/adapter-vercel": "^6.3.5",
     "@sveltejs/kit": "catalog:svelte",
     "@sveltejs/vite-plugin-svelte": "catalog:svelte",
     "@types/is-ci": "^3.0.4",
