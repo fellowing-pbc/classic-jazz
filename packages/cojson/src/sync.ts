@@ -1622,6 +1622,13 @@ export class SyncManager {
       return;
     }
 
+    const coValue = this.local.getCoValue(id);
+
+    // No peer has the coValue, so there is nothing to upload
+    if (coValue.loadingState === "unavailable") {
+      return;
+    }
+
     if (peerState.isCoValueSubscribedToPeer(id)) {
       const isAlreadySynced = this.syncState.isSynced(peerState, id);
 
@@ -1634,20 +1641,35 @@ export class SyncManager {
     }
 
     return new Promise((resolve, reject) => {
-      const unsubscribe = this.syncState.subscribeToPeerUpdates(
+      const stopWaiting = () => {
+        unsubscribeFromUpload();
+        unsubscribeFromLoad?.();
+        clearTimeout(timeoutId);
+      };
+
+      const unsubscribeFromUpload = this.syncState.subscribeToPeerUpdates(
         peerId,
         id,
         (_knownState, syncState) => {
           if (syncState.uploaded) {
             resolve(true);
-            unsubscribe?.();
-            clearTimeout(timeoutId);
+            stopWaiting();
           }
         },
       );
 
+      // A coValue with content can't become unavailable,
+      // so only a load still in flight needs watching
+      const unsubscribeFromLoad = coValue.isAvailable()
+        ? undefined
+        : coValue.subscribe((core) => {
+            if (core.loadingState === "unavailable") {
+              resolve(true);
+              stopWaiting();
+            }
+          }, false);
+
       const timeoutId = setTimeout(() => {
-        const coValue = this.local.getCoValue(id);
         const erroredInPeer = coValue.getErroredInPeerError(peerId);
         const knownState = coValue.knownState().sessions;
         const peerKnownState = peerState.getKnownState(id)?.sessions ?? {};
@@ -1661,7 +1683,7 @@ export class SyncManager {
         }
 
         reject(new Error(errorMessage));
-        unsubscribe?.();
+        stopWaiting();
       }, timeout);
     });
   }
