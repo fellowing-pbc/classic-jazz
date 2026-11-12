@@ -397,8 +397,7 @@ export class CoMapSchema<
   }
 
   withMigration(migration: CoMapMigration<Shape>): this {
-    // @ts-expect-error avoid exposing 'migrate' at the type level
-    this.coValueClass.prototype.migrate = migration;
+    setMigration(this.coValueClass, migration);
     return this;
   }
 
@@ -635,14 +634,27 @@ export class CoMapSchema<
     >;
 
     if (shouldCopyMigration) {
-      // @ts-expect-error avoid exposing 'migrate' at the type level
-      copy.coValueClass.prototype.migrate = this.coValueClass.prototype.migrate;
+      setMigration(
+        copy.coValueClass,
+        Reflect.get(this.coValueClass.prototype, "migrate"),
+      );
     }
 
     copy.#permissions = permissions ?? this.#permissions;
     copy.resolveQuery = (resolveQuery ?? this.resolveQuery) as ResolveQuery;
     return copy;
   }
+}
+
+// 'migrate' stays off the CoMap type, and non-enumerable so strict object
+// schemas don't see it as an unknown key.
+function setMigration(coValueClass: typeof CoMap, migration: unknown): void {
+  Object.defineProperty(coValueClass.prototype, "migrate", {
+    value: migration,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
 }
 
 export function createCoreCoMapSchema<

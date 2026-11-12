@@ -1152,5 +1152,34 @@ describe("co.discriminatedUnion", () => {
         expectValidationError(() => (dog.$jazz.set as any)("type", "cat"));
       }
     });
+
+    test("accepts an option whose schema has a migration", () => {
+      const Dog = co.map({ type: z.literal("dog") }).withMigration(() => {});
+      const Cat = co.map({ type: z.literal("cat") });
+      const Person = co.map({ pet: co.discriminatedUnion("type", [Dog, Cat]) });
+
+      expect(() =>
+        Person.create(
+          { pet: Dog.create({ type: "dog" }) },
+          { validation: "strict" },
+        ),
+      ).not.toThrow();
+    });
+
+    test("accepts an option whose schema copies a migration", () => {
+      const Dog = co
+        .map({ type: z.literal("dog") })
+        .withMigration(() => {})
+        .withPermissions({});
+      const Cat = co.map({ type: z.literal("cat") });
+      const Person = co.map({ pet: co.discriminatedUnion("type", [Dog, Cat]) });
+
+      expect(() =>
+        Person.create(
+          { pet: Dog.create({ type: "dog" }) },
+          { validation: "strict" },
+        ),
+      ).not.toThrow();
+    });
   });
 });

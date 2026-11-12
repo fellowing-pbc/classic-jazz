@@ -61,6 +61,18 @@ describe("CoMap", async () => {
       Person.create(init);
     });
 
+    test("optional and default fields of a plain object can be omitted", () => {
+      const Person = co.map({
+        settings: z.object({
+          theme: z.string(),
+          nickname: z.string().optional(),
+          fontSize: z.number().default(14),
+        }),
+      });
+
+      Person.create({ settings: { theme: "dark" } });
+    });
+
     test("has the owner property", () => {
       const Person = co.map({
         name: z.string(),
