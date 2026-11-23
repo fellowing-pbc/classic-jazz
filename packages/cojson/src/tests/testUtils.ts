@@ -5,7 +5,7 @@ import {
   MeterProvider,
   MetricReader,
 } from "@opentelemetry/sdk-metrics";
-import { assert, expect, onTestFinished, vi } from "vitest";
+import { type Mock, assert, expect, onTestFinished, vi } from "vitest";
 import { ControlledAccount, ControlledAgent } from "../coValues/account.js";
 import { WasmCrypto } from "../crypto/WasmCrypto.js";
 import {
@@ -925,7 +925,7 @@ export function createTrackedMessageChannel(opts: {
  */
 export function createMockWorkerWithAccept(
   onPortReceived: (port: MessagePortLike) => Promise<void>,
-) {
+): { postMessage: Mock } {
   return {
     postMessage: vi.fn().mockImplementation((data, transfer) => {
       if (data?.type === "jazz:port" && transfer?.[0]) {

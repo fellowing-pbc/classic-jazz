@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import "@testing-library/svelte/vitest";
 import { render as renderSvelte } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import AuthProvider from "../svelte.svelte";

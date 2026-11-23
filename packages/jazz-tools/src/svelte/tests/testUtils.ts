@@ -1,3 +1,4 @@
+import "@testing-library/svelte/vitest";
 import { render as renderSvelte } from "@testing-library/svelte";
 import { Account, AnonymousJazzAgent } from "jazz-tools";
 import { TestJazzContextManager } from "jazz-tools/testing";

@@ -13,8 +13,12 @@ export default defineProject({
       // Exclude dist files from processing
       exclude: ["**/dist/**"],
     }),
+    // The Svelte tests import @testing-library/svelte/vitest themselves.
+    // Its setup swaps the shared event wrapper for Svelte's, which breaks
+    // the React tests in this project.
     svelteTesting({
       resolveBrowser: false,
+      autoCleanup: false,
     }),
   ],
   resolve: {

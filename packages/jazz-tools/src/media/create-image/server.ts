@@ -1,5 +1,5 @@
 import { Account, FileStream, Group } from "jazz-tools";
-import type sharp from "sharp";
+import type { FormatEnum } from "sharp";
 import { createImageFactory } from "../create-image-factory";
 
 export type SharpImageType =
@@ -17,7 +17,7 @@ export type SharpImageType =
   | Float32Array
   | Float64Array;
 
-let sharpModule: typeof import("sharp");
+let sharpModule: typeof import("sharp").default;
 
 async function getSharp() {
   if (!sharpModule) {
@@ -62,12 +62,9 @@ export const createImage = createImageFactory<SharpImageType, Blob>(
   },
 );
 
-function formatToMimeType(format: keyof sharp.FormatEnum | undefined) {
+function formatToMimeType(format: keyof FormatEnum | undefined) {
   const formatToTypeMap: Record<
-    Extract<
-      keyof sharp.FormatEnum,
-      "avif" | "gif" | "jpeg" | "jpg" | "png" | "webp"
-    >,
+    "avif" | "gif" | "jpeg" | "jpg" | "png" | "webp",
     string
   > = {
     avif: "image/avif",

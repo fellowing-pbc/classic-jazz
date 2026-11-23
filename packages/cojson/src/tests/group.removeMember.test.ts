@@ -168,7 +168,7 @@ describe("Group.removeMember", () => {
 
       const loadedGroup = await loadCoValueOrFail(client.node, group.id);
 
-      expect(async () => {
+      await expect(async () => {
         loadedGroup.removeMember(
           await loadCoValueOrFail(client.node, reader.accountID),
         );
@@ -176,7 +176,7 @@ describe("Group.removeMember", () => {
         `Failed to revoke role to ${reader.accountID} (role of current account is ${member})`,
       );
 
-      expect(async () => {
+      await expect(async () => {
         loadedGroup.removeMember(
           await loadCoValueOrFail(client.node, writeOnly.accountID),
         );
@@ -184,7 +184,7 @@ describe("Group.removeMember", () => {
         `Failed to revoke role to ${writeOnly.accountID} (role of current account is ${member})`,
       );
 
-      expect(async () => {
+      await expect(async () => {
         loadedGroup.removeMember(
           await loadCoValueOrFail(client.node, writer.accountID),
         );
@@ -192,7 +192,7 @@ describe("Group.removeMember", () => {
         `Failed to revoke role to ${writer.accountID} (role of current account is ${member})`,
       );
 
-      expect(async () => {
+      await expect(async () => {
         loadedGroup.removeMember(
           await loadCoValueOrFail(client.node, admin.accountID),
         );
@@ -200,7 +200,7 @@ describe("Group.removeMember", () => {
         `Failed to revoke role to ${admin.accountID} (role of current account is ${member})`,
       );
 
-      expect(async () => {
+      await expect(async () => {
         loadedGroup.removeMember(
           await loadCoValueOrFail(client.node, manager.accountID),
         );

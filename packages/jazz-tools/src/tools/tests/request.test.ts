@@ -21,19 +21,19 @@ import { createJazzTestAccount, linkAccounts } from "../testing.js";
 
 const server = setupServer();
 
-beforeAll(() =>
-  server.listen({
-    onUnhandledFrame({ frame, defaults }) {
-      if (
-        frame instanceof HttpNetworkFrame &&
-        frame.data.request.url.includes("application/wasm")
-      ) {
-        return;
-      }
-      defaults.warn();
-    },
-  }),
-);
+const ignoreWasmRequests: Parameters<typeof server.listen>[0] = {
+  onUnhandledFrame({ frame, defaults }) {
+    if (
+      frame instanceof HttpNetworkFrame &&
+      frame.data.request.url.includes("application/wasm")
+    ) {
+      return;
+    }
+    defaults.warn();
+  },
+};
+
+beforeAll(() => server.listen(ignoreWasmRequests));
 afterEach(() => server.resetHandlers());
 afterEach(() => vi.restoreAllMocks());
 afterAll(() => server.close());
@@ -898,9 +898,7 @@ describe("JazzRequestError handling", () => {
         ),
       ).rejects.toThrow("fetch failed");
 
-      server.listen({
-        onUnhandledRequest: ignoreWasmRequests,
-      });
+      server.listen(ignoreWasmRequests);
     });
   });
 
