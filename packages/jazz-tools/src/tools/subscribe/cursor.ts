@@ -1,9 +1,9 @@
-import { base58 } from "@scure/base";
 import { cojsonInternals, RawCoID, Stringified } from "cojson";
 import { CoValueCursor, DecodedCoValueCursor } from "./types.js";
 import { z } from "zod/v4";
 import type { RefsToResolve } from "../coValues/deepLoading.js";
 import { isSubsetOfRefsToResolve } from "./utils.js";
+import { decodeBase58, encodeBase58 } from "./cursorBase58.js";
 
 const cursorSchema = z.object({
   version: z.literal(1),
@@ -46,7 +46,7 @@ export const encodeCursor = (
   },
 ): CoValueCursor => {
   const textEncoder = new TextEncoder();
-  return `cursor_z${base58.encode(
+  return `cursor_z${encodeBase58(
     textEncoder.encode(
       cojsonInternals.stableStringify({
         ...decodedCursor,
@@ -73,7 +73,7 @@ export const decodeAndValidateCursor = ({
   try {
     maybeDecodedCursor = cojsonInternals.parseJSON(
       textDecoder.decode(
-        base58.decode(cursor.replace(/^cursor_z/, "")),
+        decodeBase58(cursor.replace(/^cursor_z/, "")),
       ) as Stringified<DecodedCoValueCursor>,
     );
   } catch {
