@@ -35,7 +35,7 @@ describe("BrowserPasskeyAuth", () => {
         get: vi.fn(),
       },
     };
-    global.navigator = mockNavigator;
+    vi.stubGlobal("navigator", mockNavigator);
     mockAuthenticate.mockReset();
   });
 

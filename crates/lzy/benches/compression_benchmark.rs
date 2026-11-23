@@ -1,5 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use lzy::{compress, decompress};
+use std::hint::black_box;
 use std::fs;
 use std::time::Duration;
 

@@ -1,5 +1,5 @@
 import { base58 } from "@scure/base";
-import { md5 } from "@noble/hashes/legacy";
+import { md5 } from "@noble/hashes/legacy.js";
 import { Histogram, ValueType, metrics } from "@opentelemetry/api";
 import { PeerState } from "./PeerState.js";
 import { SyncStateManager } from "./SyncStateManager.js";

@@ -252,4 +252,34 @@ describe("`encodeCursor` and `decodeAndValidateCursor`", () => {
       }),
     ).toThrowError(new CursorError("Invalid cursor string"));
   });
+
+  it("decodes a cursor over 2048 bytes written in the existing base58 format", () => {
+    const decodedCursor = buildCursor({
+      frontiers: Object.fromEntries(
+        Array.from({ length: 60 }, (_, index) => [
+          `co_z${String(index).padStart(30, "1")}`,
+          { [`co_z${"1".repeat(30)}_session_z${"1".repeat(12)}`]: 1 },
+        ]),
+      ),
+    });
+    const bytes = new TextEncoder().encode(JSON.stringify(decodedCursor));
+    expect(bytes.length).toBeGreaterThan(2048);
+
+    const alphabet =
+      "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let value = bytes.reduce((acc, byte) => acc * 256n + BigInt(byte), 0n);
+    let encoded = "";
+    while (value > 0n) {
+      encoded = alphabet[Number(value % 58n)] + encoded;
+      value /= 58n;
+    }
+
+    const decoded = decodeAndValidateCursor({
+      cursor: `cursor_z${encoded}` as CoValueCursor,
+      rootId,
+      resolve: {},
+    });
+
+    expect(decoded).toEqual(decodedCursor);
+  });
 });

@@ -23,9 +23,9 @@
     "build": "rm -rf ./dist && tsc --sourceMap --outDir dist"
   },
   "devDependencies": {
-    "@opentelemetry/sdk-metrics": "^2.0.0",
-    "@types/ws": "8.5.10",
+    "@opentelemetry/sdk-metrics": "^3.1.1",
+    "@types/ws": "^8.18.2",
     "typescript": "catalog:default",
-    "ws": "^8.14.2"
+    "ws": "^8.23.0"
   }
 }

@@ -134,8 +134,9 @@ export function instantiateRefEncodedWithInit<V extends CoValue>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Schema = JsonEncoded | RefEncoded<CoValue> | EncodedAs<any>;
 
-export type SchemaFor<Field> = LoadedAndRequired<Field> extends CoValue
-  ? RefEncoded<LoadedAndRequired<Field>>
-  : LoadedAndRequired<Field> extends JsonValue
-    ? JsonEncoded
-    : EncodedAs<LoadedAndRequired<Field>>;
+export type SchemaFor<Field> =
+  LoadedAndRequired<Field> extends CoValue
+    ? RefEncoded<LoadedAndRequired<Field>>
+    : LoadedAndRequired<Field> extends JsonValue
+      ? JsonEncoded
+      : EncodedAs<LoadedAndRequired<Field>>;

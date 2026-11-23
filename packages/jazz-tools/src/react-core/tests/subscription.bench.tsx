@@ -2,7 +2,7 @@
 
 import { cojsonInternals } from "cojson";
 import { co, z } from "jazz-tools";
-import { describe, bench } from "vitest";
+import { describe, test } from "vitest";
 import {
   useAccountSubscription,
   useSubscriptionSelector,
@@ -10,9 +10,11 @@ import {
   CoValueSubscription,
 } from "../index.js";
 import { createJazzTestAccount, setupJazzTestSync } from "../testing.js";
-import { render } from "./testUtils.js";
+import { cleanup, render } from "./testUtils.js";
 
 cojsonInternals.setCoValueLoadingRetryDelay(300);
+
+const unmount = { afterEach: cleanup };
 
 await setupJazzTestSync();
 await createJazzTestAccount({
@@ -85,20 +87,14 @@ const UseAccountSubscription = () => {
   );
 };
 
-describe("1000 value loads", () => {
-  bench(
-    "useAccountSubscription + useSubscriptionSelector",
-    () => {
+test("1000 value loads", async ({ bench }) => {
+  await bench.compare(
+    bench("useAccountSubscription + useSubscriptionSelector", unmount, () => {
       render(<UseAccountSubscription />);
-    },
-    { iterations: 50 },
-  );
-
-  bench(
-    "useAccountWithSelector",
-    () => {
+    }),
+    bench("useAccountWithSelector", unmount, () => {
       render(<UseAccountWithSelector />);
-    },
+    }),
     { iterations: 50 },
   );
 });
@@ -266,14 +262,6 @@ describe("deeply resolved coMaps", async () => {
     );
   };
 
-  bench(
-    "useAccountSubscription + useSubscriptionSelector",
-    () => {
-      render(<SingleSubscription />);
-    },
-    { iterations: 200 },
-  );
-
   const MultipleSubscriptionTasks = ({
     taskListType,
   }: {
@@ -326,11 +314,15 @@ describe("deeply resolved coMaps", async () => {
     );
   };
 
-  bench(
-    "useAccountWithSelector",
-    () => {
-      render(<MultipleSubscription />);
-    },
-    { iterations: 200 },
-  );
+  test("renders", async ({ bench }) => {
+    await bench.compare(
+      bench("useAccountSubscription + useSubscriptionSelector", unmount, () => {
+        render(<SingleSubscription />);
+      }),
+      bench("useAccountWithSelector", unmount, () => {
+        render(<MultipleSubscription />);
+      }),
+      { iterations: 200 },
+    );
+  });
 });

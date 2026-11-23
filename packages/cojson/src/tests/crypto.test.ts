@@ -1,6 +1,6 @@
-import { xsalsa20poly1305 } from "@noble/ciphers/salsa";
-import { x25519 } from "@noble/curves/ed25519";
-import { blake3 } from "@noble/hashes/blake3";
+import { xsalsa20poly1305 } from "@noble/ciphers/salsa.js";
+import { x25519 } from "@noble/curves/ed25519.js";
+import { blake3 } from "@noble/hashes/blake3.js";
 import { base58, base64url } from "@scure/base";
 import { expect, test, vi } from "vitest";
 import { shortHashLength } from "../crypto/crypto.js";

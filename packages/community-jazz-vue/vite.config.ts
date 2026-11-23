@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
-    dts({ include: ["src/**/*.ts", "src/**/*.vue"], outDir: "dist" }),
+    dts({ include: ["src/**/*.ts", "src/**/*.vue"], outDirs: "dist" }),
     depsExternal(),
   ],
   build: {

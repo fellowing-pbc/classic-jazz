@@ -6,11 +6,11 @@
   "types": "dist/index.d.ts",
   "license": "MIT",
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^13.2.0",
     "cojson": "workspace:@fellowing/cojson@*"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/better-sqlite3": "^9.6.0",
     "typescript": "catalog:default"
   },
   "scripts": {

@@ -142,6 +142,5 @@ export function makeRefs<Keys extends string | number>(
   });
 }
 
-export type RefIfCoValue<V> = LoadedAndRequired<V> extends CoValue
-  ? Ref<LoadedAndRequired<V>>
-  : never;
+export type RefIfCoValue<V> =
+  LoadedAndRequired<V> extends CoValue ? Ref<LoadedAndRequired<V>> : never;

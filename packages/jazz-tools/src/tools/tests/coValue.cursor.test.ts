@@ -276,6 +276,25 @@ describe("Creating and loading CoValues with cursors", () => {
       const cursor2 = person.$jazz.createCursor();
       expect(cursor1).not.toBe(cursor2);
     });
+
+    test("creates and decodes a cursor for a resolved list of 30 maps", async () => {
+      const Items = co.list(co.map({ value: z.number() }));
+      const items = Items.create(
+        Array.from({ length: 30 }, (_, value) => ({ value })),
+      );
+      const loaded = await items.$jazz.ensureLoaded({
+        resolve: { $each: true },
+      });
+
+      const cursor = loaded.$jazz.createCursor();
+      const decoded = decodeAndValidateCursor({
+        cursor,
+        rootId: items.$jazz.id,
+        resolve: { $each: true },
+      });
+
+      expect(Object.keys(decoded.frontiers)).toHaveLength(31);
+    });
   });
 
   describe("load() with cursor", () => {

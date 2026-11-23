@@ -42,7 +42,7 @@ beforeEach(async () => {
   });
 });
 
-function ErrorFallback(props: { error: Error }) {
+function ErrorFallback(props: { error: unknown }) {
   return <div>Error: {getJazzErrorType(props.error)}</div>;
 }
 

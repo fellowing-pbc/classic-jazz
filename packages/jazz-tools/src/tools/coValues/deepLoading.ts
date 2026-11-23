@@ -194,32 +194,33 @@ type CoMapLikeLoaded<
   Depth,
   DepthLimit extends number,
   CurrentDepth extends number[],
-> = IsUnion<LoadedAndRequired<V>> extends true
-  ? // Trigger conditional type distributivity to deeply resolve each member of the union separately
-    // Otherwise, deeply loaded values will resolve to `never`
-    V extends V
-    ? CoMapLikeLoaded<
-        V,
-        Pick<Depth, keyof V & keyof Depth>,
-        DepthLimit,
-        CurrentDepth
-      >
-    : never
-  : {
-      readonly [Key in keyof Omit<Depth, "$onError">]-?: Key extends CoKeys<V>
-        ? LoadedAndRequired<V[Key]> extends CoValue
-          ?
-              | DeeplyLoaded<
-                  LoadedAndRequired<V[Key]>,
-                  Depth[Key],
-                  DepthLimit,
-                  [0, ...CurrentDepth]
-                >
-              | (undefined extends V[Key] ? undefined : never)
-              | OnErrorResolvedValue<V[Key], Depth[Key]>
-          : never
-        : never;
-    } & V;
+> =
+  IsUnion<LoadedAndRequired<V>> extends true
+    ? // Trigger conditional type distributivity to deeply resolve each member of the union separately
+      // Otherwise, deeply loaded values will resolve to `never`
+      V extends V
+      ? CoMapLikeLoaded<
+          V,
+          Pick<Depth, keyof V & keyof Depth>,
+          DepthLimit,
+          CurrentDepth
+        >
+      : never
+    : {
+        readonly [Key in keyof Omit<Depth, "$onError">]-?: Key extends CoKeys<V>
+          ? LoadedAndRequired<V[Key]> extends CoValue
+            ?
+                | DeeplyLoaded<
+                    LoadedAndRequired<V[Key]>,
+                    Depth[Key],
+                    DepthLimit,
+                    [0, ...CurrentDepth]
+                  >
+                | (undefined extends V[Key] ? undefined : never)
+                | OnErrorResolvedValue<V[Key], Depth[Key]>
+            : never
+          : never;
+      } & V;
 
 export type DeeplyLoaded<
   V,

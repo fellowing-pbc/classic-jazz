@@ -361,7 +361,7 @@ test("Deep loading a record-like coMap", async () => {
       $each: { list: { $each: true } },
     },
   });
-  expectTypeOf(recordLoaded).branded.toEqualTypeOf<
+  expectTypeOf(recordLoaded).toEqualTypeOf<
     Settled<
       Loaded<typeof RecordLike> & {
         readonly [key: string]: Loaded<typeof TestMap> & {

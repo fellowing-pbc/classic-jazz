@@ -1,4 +1,5 @@
 import { http } from "msw";
+import { HttpNetworkFrame } from "msw/experimental";
 import { setupServer } from "msw/node";
 import { assert, describe, expect, it, vi } from "vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
@@ -20,18 +21,19 @@ import { createJazzTestAccount, linkAccounts } from "../testing.js";
 
 const server = setupServer();
 
-const ignoreWasmRequests = (request: Request, print: any) => {
-  if (request.url.includes("application/wasm")) {
-    return;
-  }
-  print.warning();
+const ignoreWasmRequests: Parameters<typeof server.listen>[0] = {
+  onUnhandledFrame({ frame, defaults }) {
+    if (
+      frame instanceof HttpNetworkFrame &&
+      frame.data.request.url.includes("application/wasm")
+    ) {
+      return;
+    }
+    defaults.warn();
+  },
 };
 
-beforeAll(() =>
-  server.listen({
-    onUnhandledRequest: ignoreWasmRequests,
-  }),
-);
+beforeAll(() => server.listen(ignoreWasmRequests));
 afterEach(() => server.resetHandlers());
 afterEach(() => vi.restoreAllMocks());
 afterAll(() => server.close());
@@ -896,9 +898,7 @@ describe("JazzRequestError handling", () => {
         ),
       ).rejects.toThrow("fetch failed");
 
-      server.listen({
-        onUnhandledRequest: ignoreWasmRequests,
-      });
+      server.listen(ignoreWasmRequests);
     });
   });
 

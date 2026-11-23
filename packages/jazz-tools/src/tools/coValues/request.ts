@@ -89,9 +89,8 @@ interface RequestOptions<
   >;
 }
 
-type AsNullablePayload<T extends MessageShape> = T extends Record<string, never>
-  ? undefined
-  : never;
+type AsNullablePayload<T extends MessageShape> =
+  T extends Record<string, never> ? undefined : never;
 type MessageValuePayload<T extends MessageShape> =
   | Simplify<CoMapSchemaInit<T>>
   | AsNullablePayload<T>;
