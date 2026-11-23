@@ -315,14 +315,14 @@ export class RawGroup<
 
   // Not using class field initializers because they run after that the CoMap constructor
   // calls processNewTransactions, which would reset the parentGroupsChanges map
-  private declare parentGroupsChanges: Map<
+  declare private parentGroupsChanges: Map<
     CoID<RawGroup>,
     TimeBasedEntry<ParentGroupReferenceRole>
   >;
 
   // Cache for key-for-key revelations: maps encrypted keyID to set of encrypting keyIDs
   // This avoids iterating through all keys in getUncachedReadKey and findValidParentKeys
-  private declare keyRevelations: Map<KeyID, Set<KeyID>>;
+  declare private keyRevelations: Map<KeyID, Set<KeyID>>;
 
   protected resetInternalState() {
     super.resetInternalState();

@@ -2,7 +2,7 @@
 
 import { cojsonInternals } from "cojson";
 import { co, z } from "jazz-tools";
-import { describe, bench } from "vitest";
+import { describe, test } from "vitest";
 import {
   useAccountSubscription,
   useSubscriptionSelector,
@@ -85,20 +85,14 @@ const UseAccountSubscription = () => {
   );
 };
 
-describe("1000 value loads", () => {
-  bench(
-    "useAccountSubscription + useSubscriptionSelector",
-    () => {
+test("1000 value loads", async ({ bench }) => {
+  await bench.compare(
+    bench("useAccountSubscription + useSubscriptionSelector", () => {
       render(<UseAccountSubscription />);
-    },
-    { iterations: 50 },
-  );
-
-  bench(
-    "useAccountWithSelector",
-    () => {
+    }),
+    bench("useAccountWithSelector", () => {
       render(<UseAccountWithSelector />);
-    },
+    }),
     { iterations: 50 },
   );
 });
@@ -266,14 +260,6 @@ describe("deeply resolved coMaps", async () => {
     );
   };
 
-  bench(
-    "useAccountSubscription + useSubscriptionSelector",
-    () => {
-      render(<SingleSubscription />);
-    },
-    { iterations: 200 },
-  );
-
   const MultipleSubscriptionTasks = ({
     taskListType,
   }: {
@@ -326,11 +312,15 @@ describe("deeply resolved coMaps", async () => {
     );
   };
 
-  bench(
-    "useAccountWithSelector",
-    () => {
-      render(<MultipleSubscription />);
-    },
-    { iterations: 200 },
-  );
+  test("renders", async ({ bench }) => {
+    await bench.compare(
+      bench("useAccountSubscription + useSubscriptionSelector", () => {
+        render(<SingleSubscription />);
+      }),
+      bench("useAccountWithSelector", () => {
+        render(<MultipleSubscription />);
+      }),
+      { iterations: 200 },
+    );
+  });
 });

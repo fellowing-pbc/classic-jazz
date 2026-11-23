@@ -38,11 +38,8 @@ import { assertCoValueSchema } from "../implementation/zodSchema/schemaInvariant
 import { base58 } from "@scure/base";
 import { CoreCoValueSchema } from "../implementation/zodSchema/schemaTypes/CoValueSchema.js";
 
-type SnapshotRefInner<T extends SnapshotRef> = T extends SnapshotRef<
-  infer Inner
->
-  ? Inner
-  : never;
+type SnapshotRefInner<T extends SnapshotRef> =
+  T extends SnapshotRef<infer Inner> ? Inner : never;
 
 const textEncoder = new TextEncoder();
 

@@ -211,9 +211,10 @@ describe("CoMap.Record", () => {
         },
       });
 
-      type Expect = LoadedAndRequired<typeof loadedPerson> extends never
-        ? "error: is never"
-        : "ok";
+      type Expect =
+        LoadedAndRequired<typeof loadedPerson> extends never
+          ? "error: is never"
+          : "ok";
 
       expectTypeOf("ok" as const).toEqualTypeOf<Expect>();
 
@@ -250,9 +251,10 @@ describe("CoMap.Record", () => {
         },
       });
 
-      type Expect = LoadedAndRequired<typeof loadedPerson> extends never
-        ? "error: is never"
-        : "ok";
+      type Expect =
+        LoadedAndRequired<typeof loadedPerson> extends never
+          ? "error: is never"
+          : "ok";
 
       expectTypeOf("ok" as const).toEqualTypeOf<Expect>();
 
@@ -283,9 +285,10 @@ describe("CoMap.Record", () => {
 
       const loadedPerson = await Person.load(person.$jazz.id);
 
-      type Expect = LoadedAndRequired<typeof loadedPerson> extends never
-        ? "error: is never"
-        : "ok";
+      type Expect =
+        LoadedAndRequired<typeof loadedPerson> extends never
+          ? "error: is never"
+          : "ok";
 
       expectTypeOf("ok" as const).toEqualTypeOf<Expect>();
 

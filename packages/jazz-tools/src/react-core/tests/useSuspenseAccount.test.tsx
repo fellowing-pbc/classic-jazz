@@ -29,7 +29,7 @@ beforeEach(async () => {
 
 cojsonInternals.setCoValueLoadingRetryDelay(10);
 
-function ErrorFallback(props: { error: Error }) {
+function ErrorFallback(props: { error: unknown }) {
   return <div>Error: {getJazzErrorType(props.error)}</div>;
 }
 

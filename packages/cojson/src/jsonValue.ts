@@ -12,11 +12,12 @@ type ExcludeNull<T> = T extends null ? never : T;
 type IsFunction<T> = T extends (...args: any[]) => any ? true : false;
 type ContainsSymbolKeys<T> = keyof ExcludeNull<T> extends symbol ? true : false;
 
-export type CoJsonValue<T> = IsFunction<T> extends true
-  ? "Functions are not allowed"
-  : ContainsSymbolKeys<T> extends true
-    ? "Only string or number keys are allowed"
-    : JsonValue | CoJsonObjectWithIndex<T> | CoJsonArray<T>;
+export type CoJsonValue<T> =
+  IsFunction<T> extends true
+    ? "Functions are not allowed"
+    : ContainsSymbolKeys<T> extends true
+      ? "Only string or number keys are allowed"
+      : JsonValue | CoJsonObjectWithIndex<T> | CoJsonArray<T>;
 export type CoJsonArray<T> = CoJsonValue<T>[] | readonly CoJsonValue<T>[];
 
 /**

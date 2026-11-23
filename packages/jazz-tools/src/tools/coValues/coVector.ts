@@ -43,8 +43,8 @@ export class CoVector
   }
 
   protected static requiredDimensionsCount: number | undefined = undefined;
-  private declare _isVectorLoaded: boolean;
-  private declare _requiredDimensionsCount: number;
+  declare private _isVectorLoaded: boolean;
+  declare private _requiredDimensionsCount: number;
 
   static coValueSchema?: CoreCoVectorSchema;
 

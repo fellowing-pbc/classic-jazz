@@ -1,4 +1,5 @@
 import { http } from "msw";
+import { HttpNetworkFrame } from "msw/experimental";
 import { setupServer } from "msw/node";
 import { assert, describe, expect, it, vi } from "vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
@@ -20,16 +21,17 @@ import { createJazzTestAccount, linkAccounts } from "../testing.js";
 
 const server = setupServer();
 
-const ignoreWasmRequests = (request: Request, print: any) => {
-  if (request.url.includes("application/wasm")) {
-    return;
-  }
-  print.warning();
-};
-
 beforeAll(() =>
   server.listen({
-    onUnhandledRequest: ignoreWasmRequests,
+    onUnhandledFrame({ frame, defaults }) {
+      if (
+        frame instanceof HttpNetworkFrame &&
+        frame.data.request.url.includes("application/wasm")
+      ) {
+        return;
+      }
+      defaults.warn();
+    },
   }),
 );
 afterEach(() => server.resetHandlers());
