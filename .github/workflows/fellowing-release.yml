@@ -114,11 +114,14 @@ jobs:
 
       # Auth comes from OIDC trusted publishing. A configured _authToken would
       # take precedence and bypass the token exchange, so none is set.
+      # --report-summary writes pnpm-publish-summary.json, listing the packages
+      # this run actually published, for the next step.
       - name: Publish to npm
-        run: pnpm -r publish --no-git-checks
+        run: pnpm -r publish --no-git-checks --report-summary
 
       # pnpm skips packages whose version already exists and exits green, so a
-      # fully-republished version is otherwise a silent no-op run.
+      # fully-republished version is otherwise a silent no-op run. Checks the
+      # summary, not the registry, which can lag the publish by tens of minutes.
       - name: Verify publish
         run: node scripts-fellowing/verify-publish.cjs "$VERSION"
         env:
