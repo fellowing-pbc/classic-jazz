@@ -364,7 +364,7 @@ export class RawGroup<
   // This avoids iterating through all keys in getUncachedReadKey and findValidParentKeys
   declare private keyRevelations: Map<KeyID, Set<KeyID>>;
 
-  private declare revocationCheckScheduled: boolean;
+  declare private revocationCheckScheduled: boolean;
 
   protected resetInternalState() {
     super.resetInternalState();
