@@ -251,6 +251,46 @@ function rotateReadKeyIfNeeded(group: RawGroup) {
   }
 }
 
+/**
+ * A member who revokes themself can't rotate the read key, so they keep the one
+ * sealed to them. An admin or manager rotates it when it sees that.
+ */
+function revokedMemberHoldsReadKey(group: RawGroup) {
+  const readKeyId = group.get("readKey");
+
+  if (!readKeyId || canRead(group, EVERYONE)) {
+    return false;
+  }
+
+  const myRole = group.myRole();
+
+  if (myRole !== "admin" && myRole !== "manager") {
+    return false;
+  }
+
+  return group
+    .getMemberKeys()
+    .some(
+      (memberKey) =>
+        group.get(memberKey) === "revoked" &&
+        group.get(`${readKeyId}_for_${memberKey}`) !== undefined,
+    );
+}
+
+function rotateReadKeyIfRevokedMemberHoldsIt(group: RawGroup) {
+  if (group.isTimeTravelEntity() || !revokedMemberHoldsReadKey(group)) {
+    return;
+  }
+
+  try {
+    group.rotateReadKey();
+  } catch (error) {
+    logger.warn("Can't rotate the read key away from a revoked member", {
+      err: error,
+    });
+  }
+}
+
 class TimeBasedEntry<T> {
   changes: { madeAt: number; value: T }[] = [];
 
@@ -324,6 +364,8 @@ export class RawGroup<
   // This avoids iterating through all keys in getUncachedReadKey and findValidParentKeys
   private declare keyRevelations: Map<KeyID, Set<KeyID>>;
 
+  private declare revocationCheckScheduled: boolean;
+
   protected resetInternalState() {
     super.resetInternalState();
     this.parentGroupsChanges = new Map();
@@ -367,9 +409,26 @@ export class RawGroup<
           );
         } else if (isKeyForKeyField(change.key)) {
           this.updateKeyRevelationsCache(change.key);
+        } else if (change.value === "revoked") {
+          this.scheduleRevocationCheck();
         }
       }
     }
+  }
+
+  private scheduleRevocationCheck() {
+    if (this.revocationCheckScheduled) {
+      return;
+    }
+    this.revocationCheckScheduled = true;
+
+    queueMicrotask(() => {
+      this.revocationCheckScheduled = false;
+
+      if (this.core.isCompletelyDownloaded()) {
+        rotateReadKeyIfRevokedMemberHoldsIt(this);
+      }
+    });
   }
 
   private updateKeyRevelationsCache(key: string): void {
@@ -411,6 +470,7 @@ export class RawGroup<
 
     const runMigrations = () => {
       // rotateReadKeyIfNeeded(this);
+      rotateReadKeyIfRevokedMemberHoldsIt(this);
       healMissingKeyForEveryone(this);
       healMissingGroupSealer(this);
     };
