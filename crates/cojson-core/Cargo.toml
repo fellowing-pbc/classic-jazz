@@ -9,8 +9,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 bs58 = "0.5.1"
-base64 = "0.22.1"
-thiserror = "1.0"
+base64 = "0.23.1"
+thiserror = "2.0"
 blake3 = "1.8.2"
 crypto_secretbox = { version = "0.1.1", features = ["getrandom"] }
 salsa20 = "0.10.2"
