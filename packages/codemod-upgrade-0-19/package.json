@@ -21,7 +21,7 @@
     "access": "public"
   },
   "dependencies": {
-    "ts-morph": "^26.0.0"
+    "ts-morph": "^28.0.0"
   },
   "scripts": {
     "build": "tsdown && chmod +x dist/index.js",
@@ -30,7 +30,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "tsdown": "^0.11.9",
+    "tsdown": "^0.23.7",
     "typescript": "catalog:default"
   },
   "private": true

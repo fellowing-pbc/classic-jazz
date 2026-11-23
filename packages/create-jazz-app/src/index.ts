@@ -495,7 +495,7 @@ async function promptUser(
     if (!partialOptions.framework) {
       const answers = await inquirer.prompt([
         {
-          type: "list",
+          type: "select",
           name: "framework",
           message: chalk.cyan("Choose a framework:"),
           choices: Array.from(frameworks).map((framework) => ({
@@ -514,7 +514,7 @@ async function promptUser(
     }
 
     questions.push({
-      type: "list",
+      type: "select",
       name: "starter",
       message: chalk.cyan("Choose an authentication method:"),
       choices: choices.map(([key, value]) => ({
@@ -528,7 +528,7 @@ async function promptUser(
     const defaultPackageManager = getPkgManager();
 
     questions.push({
-      type: "list",
+      type: "select",
       name: "packageManager",
       message: chalk.cyan("Choose a package manager:"),
       choices: [

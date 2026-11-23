@@ -14,7 +14,6 @@ export function Input({ sizeStyle, intent, ...props }: InputProps) {
 const input = tv({
   base: "w-full rounded-md border pl-3.5 text-base text-gray-900",
   variants: {
-    base: "w-full rounded-md border px-2.5 py-1 shadow-sm h-[36px] font-medium text-stone-900 dark:text-white dark:bg-stone-925",
     intent: {
       default: "border-stone-500/50 focus:ring-stone-800/50",
       primary: "border-primary focus:ring-blue/50",
