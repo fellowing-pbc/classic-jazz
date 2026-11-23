@@ -271,7 +271,7 @@
     "@bam.tech/react-native-image-resizer": "*",
     "@op-engineering/op-sqlite": "*",
     "@react-native-community/netinfo": "*",
-    "better-auth": "^1.7.27",
+    "better-auth": "^1.4.7",
     "expo-file-system": "*",
     "expo-image-manipulator": "*",
     "expo-secure-store": "*",
