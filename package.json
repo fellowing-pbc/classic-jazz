@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:default",
-    "@changesets/cli": "^2.29.7",
+    "@changesets/cli": "^3.0.3",
     "@playwright/test": "catalog:default",
     "@vitejs/plugin-react": "^4.5.1",
     "@vitest/browser-playwright": "catalog:default",
@@ -24,11 +24,11 @@
     "happy-dom": "^17.4.4",
     "jazz-run": "workspace:*",
     "jazz-tools": "workspace:@fellowing/jazz-tools@*",
-    "lefthook": "^1.8.2",
-    "pkg-pr-new": "^0.0.93",
+    "lefthook": "^2.2.2",
+    "pkg-pr-new": "^0.0.94",
     "playwright": "catalog:default",
-    "turbo": "^2.3.1",
-    "typedoc": "^0.25.13",
+    "turbo": "^2.11.13",
+    "typedoc": "^0.28.20",
     "vitest": "catalog:default"
   },
   "scripts": {
@@ -74,7 +74,7 @@
       "form-data": ">=4.0.4",
       "happy-dom": ">=20.0.0",
       "rfc6902": ">=5.0.0",
-      "better-auth": "^1.4.7",
+      "better-auth": "^1.7.27",
       "undici@>=6 <6.29.1": "6.29.1",
       "undici@>=7 <7.30.2": "7.30.2",
       "ws@>=8 <8.22.1": "8.22.1",

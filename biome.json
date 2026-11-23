@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.1.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -30,6 +30,21 @@
     "enabled": true,
     "indentStyle": "space"
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "markdown": {
+    "formatter": {
+      "enabled": false
+    }
+  },
+  "yaml": {
+    "formatter": {
+      "enabled": false
+    }
+  },
   "assist": {
     "actions": {
       "source": {
@@ -40,7 +55,7 @@
   "linter": {
     "enabled": false,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "useExhaustiveDependencies": "off",
         "useImportExtensions": {
@@ -58,7 +73,7 @@
       "linter": {
         "enabled": true,
         "rules": {
-          "recommended": true
+          "preset": "recommended"
         }
       }
     },
@@ -67,7 +82,11 @@
       "linter": {
         "enabled": true,
         "rules": {
-          "recommended": false
+          "preset": "none"
+        },
+        "domains": {
+          "react": "none",
+          "reactNative": "none"
         }
       }
     },
@@ -79,7 +98,7 @@
       "linter": {
         "enabled": true,
         "rules": {
-          "recommended": true
+          "preset": "recommended"
         }
       }
     },
