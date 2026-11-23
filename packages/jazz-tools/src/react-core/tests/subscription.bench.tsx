@@ -10,9 +10,11 @@ import {
   CoValueSubscription,
 } from "../index.js";
 import { createJazzTestAccount, setupJazzTestSync } from "../testing.js";
-import { render } from "./testUtils.js";
+import { cleanup, render } from "./testUtils.js";
 
 cojsonInternals.setCoValueLoadingRetryDelay(300);
+
+const unmount = { afterEach: cleanup };
 
 await setupJazzTestSync();
 await createJazzTestAccount({
@@ -87,10 +89,10 @@ const UseAccountSubscription = () => {
 
 test("1000 value loads", async ({ bench }) => {
   await bench.compare(
-    bench("useAccountSubscription + useSubscriptionSelector", () => {
+    bench("useAccountSubscription + useSubscriptionSelector", unmount, () => {
       render(<UseAccountSubscription />);
     }),
-    bench("useAccountWithSelector", () => {
+    bench("useAccountWithSelector", unmount, () => {
       render(<UseAccountWithSelector />);
     }),
     { iterations: 50 },
@@ -314,10 +316,10 @@ describe("deeply resolved coMaps", async () => {
 
   test("renders", async ({ bench }) => {
     await bench.compare(
-      bench("useAccountSubscription + useSubscriptionSelector", () => {
+      bench("useAccountSubscription + useSubscriptionSelector", unmount, () => {
         render(<SingleSubscription />);
       }),
-      bench("useAccountWithSelector", () => {
+      bench("useAccountWithSelector", unmount, () => {
         render(<MultipleSubscription />);
       }),
       { iterations: 200 },
