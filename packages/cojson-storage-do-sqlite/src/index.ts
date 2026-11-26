@@ -18,11 +18,7 @@ export class DurableObjectSqlDriver implements SQLiteDatabaseDriver {
   }
 
   get<T>(sql: string, params: unknown[]): T | undefined {
-    const res = this.storage.sql.exec(sql, ...params);
-    if (res.rowsRead === 0) {
-      return undefined;
-    }
-    return res.one() as T;
+    return this.storage.sql.exec(sql, ...params).toArray()[0] as T | undefined;
   }
 
   transaction(callback: () => unknown) {
