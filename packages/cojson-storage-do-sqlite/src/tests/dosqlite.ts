@@ -10,7 +10,10 @@ import {
 import { WasmCrypto } from "cojson/crypto/WasmCrypto";
 
 import { toSimplifiedMessages } from "./messagesTestUtils.js";
-import { getDurableObjectSqlStorage } from "../index.js";
+import {
+  DurableObjectSqlDriver,
+  getDurableObjectSqlStorage,
+} from "../index.js";
 
 const Crypto = await WasmCrypto.create();
 
@@ -720,6 +723,88 @@ export class DoSqlStoreTest extends DurableObject {
       messageRes1,
     };
   }
+
+  /**
+   * A client that already synced a CoValue can send its header again with new
+   * transactions. Storage keeps the existing row and stores the transactions.
+   */
+  async repeatHeaderTest() {
+    const agentSecret = Crypto.newRandomAgentSecret();
+
+    const node1 = new LocalNode(
+      agentSecret,
+      Crypto.newRandomSessionID(Crypto.getAgentID(agentSecret)),
+      Crypto,
+    );
+
+    const group = node1.createGroup();
+    const map = group.createMap();
+    map.set("hello", "world");
+
+    const storage1 = getDurableObjectSqlStorage(this.ctx.storage);
+    const noCorrection = () => undefined;
+
+    for (const msg of [
+      ...(group.core.newContentSince(undefined) ?? []),
+      ...(map.core.newContentSince(undefined) ?? []),
+    ]) {
+      storage1.store(msg, noCorrection);
+    }
+
+    const storedState = structuredClone(map.core.knownState());
+
+    map.set("hello", "again");
+
+    const [update] = map.core.newContentSince(storedState) ?? [];
+    if (!update) {
+      throw new Error("No new content to store");
+    }
+
+    let storeError: string | null = null;
+    try {
+      storage1.store(
+        { ...update, header: map.core.verified.header },
+        noCorrection,
+      );
+    } catch (error) {
+      storeError = error instanceof Error ? error.message : String(error);
+    }
+
+    const node2 = new LocalNode(
+      agentSecret,
+      Crypto.newRandomSessionID(Crypto.getAgentID(agentSecret)),
+      Crypto,
+    );
+    node2.setStorage(getDurableObjectSqlStorage(this.ctx.storage));
+
+    const map2 = await node2.load(map.id);
+    if (map2 === "unavailable") {
+      throw new Error("Map is unavailable");
+    }
+
+    return {
+      storeError,
+      map2Hello: map2.get("hello"),
+    };
+  }
+
+  async getNoMatchTest() {
+    const driver = new DurableObjectSqlDriver(this.ctx.storage);
+    driver.run("CREATE TABLE scanned (name TEXT)", []);
+    driver.run("INSERT INTO scanned (name) VALUES (?)", ["present"]);
+
+    try {
+      const row = driver.get("SELECT name FROM scanned WHERE name = ?", [
+        "missing",
+      ]);
+      return { row: row ?? null, error: null };
+    } catch (error) {
+      return {
+        row: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 }
 
 export default class EntryPoint extends WorkerEntrypoint {
@@ -768,6 +853,12 @@ export default class EntryPoint extends WorkerEntrypoint {
       return Response.json(res);
     } else if (path === "/large-covalue-upload") {
       const res = await stub.largeCoValueUploadTest();
+      return Response.json(res);
+    } else if (path === "/repeat-header") {
+      const res = await stub.repeatHeaderTest();
+      return Response.json(res);
+    } else if (path === "/get-no-match") {
+      const res = await stub.getNoMatchTest();
       return Response.json(res);
     } else {
       return new Response("Invalid test method", { status: 400 });

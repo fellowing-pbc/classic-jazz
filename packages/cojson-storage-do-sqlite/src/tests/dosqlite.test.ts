@@ -336,4 +336,33 @@ describe("Cloudflare DurableObject SQL storage", () => {
       ]
     `);
   });
+
+  test("should store new transactions sent with a header storage already has", async () => {
+    const doId = randomUUID();
+    const res = await fetch(`${url}repeat-header`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ doId }),
+    });
+
+    expect(await res.json()).toEqual({
+      storeError: null,
+      map2Hello: "again",
+    });
+  });
+
+  test("get returns undefined when a query reads rows but returns none", async () => {
+    const doId = randomUUID();
+    const res = await fetch(`${url}get-no-match`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ doId }),
+    });
+
+    expect(await res.json()).toEqual({ row: null, error: null });
+  });
 });
